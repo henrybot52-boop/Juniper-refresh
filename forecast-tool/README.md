@@ -22,6 +22,7 @@ Click **Load sample data** in the header to try the tool without a real extract.
 | **Dashboard** | KPIs (total cost, hours, labor, subs/expenses, unbilled, latest-period spend, 3-month average burn), cost-by-period chart with cumulative line, cost-mix breakdown, top-25 projects table. |
 | **Pivot Explorer** | Group by any combination of the 30+ dimensions (project, task, PM, cost center, expenditure type, employee…), spread any metric across periods, or show all cost columns. Export to CSV. |
 | **Forecast** | Pick a level (Project, Project + Top Task, PM, Cost Center, BU/Division, Expenditure Type), a method, look-back window, horizon and a monthly adjustment %. Enter a **Budget / EAC** per row to get remaining budget, % used, runway in months and a projected depletion period. Actuals-vs-forecast chart per group. Export to CSV. |
+| **Project Plan** | Single-project weekly control sheet. Rows are items (Top Task + Employee/Vendor by default — adjustable), columns are weeks. Each cell shows the **actual** charged that week next to an editable **forecast** cell (hours for people, cost for subs/expenses). Red cells flag weekly overruns. Summary columns give actuals to date, plan to date, variance, plan to go, EAC in hours and dollars (using a burdened rate derived from actuals, overridable per person), and overrun vs your saved **original forecast**. Click an item to see every charge behind it. Paste hour blocks straight from Excel. |
 | **Settings** | Period source (Period Name vs GL/Transaction Date month), currency, decimals, what counts as "billed". |
 
 ## Forecast methods (all adjustable)
@@ -33,6 +34,26 @@ Click **Load sample data** in the header to try the tool without a real extract.
 - A **monthly adjust %** compounds on top of any method (e.g. `-5` ramps spend down 5% per month).
 - Option to exclude the latest period from burn-rate calcs since a weekly extract usually contains a partial month.
 - Every dimension can be filtered (multi-select with search) before forecasting.
+
+## Project Plan workflow (hours per employee per week)
+
+1. Open the **Project Plan** tab and pick a project. Set the week-ending day
+   (default Friday) and how many weeks ahead you want to plan.
+2. Enter forecast hours per person per week — type, tab through, or paste a
+   block straight from an Excel staffing plan. Use *Copy actual hours into past
+   plan cells* to seed history.
+3. Click **Save current plan as original forecast**. That snapshot becomes the
+   baseline: from then on the tool shows overrun vs original per item (hours
+   and dollars) while you keep revising the current forecast each week.
+4. Each week, upload the new extract — actuals fill in, red cells show where
+   someone burned more than forecast, and the chart compares actual vs current
+   forecast vs original.
+5. Rates: EAC cost uses each person's burdened rate derived from their actuals
+   (total cost ÷ hours, so fringe and oncost are included); override any rate
+   in the Rate column. Sub/expense items are planned in dollars instead of hours.
+
+Plans and baselines are saved per project *and* per row-level, so a Top
+Task + Employee plan and an Employee-only plan can coexist.
 
 ## Persistence
 

@@ -80,6 +80,25 @@
   .banner{padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px}
   .banner.info{background:#173049;border:1px solid #1d4f74}
   .banner.warn{background:#3a2e12;border:1px solid #6b5418;color:#fde68a}
+  /* project plan grid */
+  #ppTable td.wk{padding:3px 5px;text-align:right}
+  #ppTable .wk-act{display:block;font-size:10.5px;color:#8aa0bd;text-align:right;min-height:13px}
+  input.plan-in{width:56px;padding:2px 5px;text-align:right;background:#16243a;border:1px solid #31476b;border-radius:4px;font-size:12px;color:var(--text)}
+  input.plan-in:focus{outline:1px solid var(--accent)}
+  input.rate-in{width:64px;padding:2px 5px;text-align:right;background:#16243a;border:1px solid #31476b;border-radius:4px;font-size:12px;color:var(--text)}
+  #ppTable td.over{background:#42222a}
+  #ppTable td.over input.plan-in{border-color:#7a3a44}
+  #ppTable th.fut,#ppTable td.fut-h{color:#7dd3fc}
+  #ppTable th:first-child,#ppTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:2;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+  #ppTable thead th:first-child{z-index:4}
+  #ppTable tr:hover td:first-child{background:#22304a}
+  #ppTable tr.total td:first-child{background:var(--panel2)}
+  #ppTable td.sumcol,#ppTable th.sumcol{border-left:1px solid #3d5070}
+  .item-link{cursor:pointer;color:var(--text)}
+  .item-link:hover{color:var(--accent);text-decoration:underline}
+  tr.detailrow td{background:#141f33;padding:8px 14px}
+  tr.detailrow table{font-size:11.5px}
+  tr.detailrow th{position:static;background:#1b2a44}
   .hidden{display:none !important}
   details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:8px}
   .footer-note{color:var(--muted);font-size:11.5px;text-align:center;padding:14px}
@@ -104,7 +123,8 @@
   <button data-tab="dashboard">2 · Dashboard</button>
   <button data-tab="explorer">3 · Pivot Explorer</button>
   <button data-tab="forecast">4 · Forecast</button>
-  <button data-tab="settings">5 · Settings</button>
+  <button data-tab="project">5 · Project Plan</button>
+  <button data-tab="settings">6 · Settings</button>
 </nav>
 
 <main>
@@ -221,6 +241,54 @@
     <h2>Forecast chart <span class="hint">— pick a row to see actuals vs forecast</span></h2>
     <div class="row" style="margin-bottom:10px"><select id="fcChartPick" style="max-width:560px"></select></div>
     <div class="chartbox" style="height:340px"><canvas id="chForecast"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ PROJECT PLAN TAB ============ -->
+<section id="tab-project" class="hidden">
+  <div class="card">
+    <h2>Single-project weekly plan <span class="hint">— actuals per week vs your forecast, item by item</span></h2>
+    <div class="row">
+      <label>Project: <select id="ppProject" style="max-width:430px"></select></label>
+      <label>Rows:
+        <select id="ppLevel">
+          <option value="topTaskEmployee">Top Task + Employee/Vendor</option>
+          <option value="employee">Employee/Vendor</option>
+          <option value="taskEmployee">Task + Employee/Vendor</option>
+          <option value="topTask">Top Task</option>
+          <option value="task">Task</option>
+        </select>
+      </label>
+      <label>Week ends:
+        <select id="ppWeekEnd">
+          <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
+          <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
+        </select>
+      </label>
+      <label>Past weeks shown:
+        <select id="ppPast"><option value="8">8</option><option value="13">13</option><option value="26">26</option><option value="all">all</option></select>
+      </label>
+      <label>Plan weeks ahead: <input type="number" id="ppAhead" min="1" max="52" value="12" style="width:64px"></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnPpBaseline">Save current plan as original forecast</button>
+      <button id="btnPpCopyActuals">Copy actual hours into past plan cells</button>
+      <button id="btnPpClear">Clear current plan</button>
+      <button id="btnPpCsv">Export grid CSV</button>
+      <span class="hint" id="ppBaselineInfo"></span>
+    </div>
+    <p class="hint">In each week cell the gray number is the <b>actual</b> charged that week and the box is your <b>forecast</b> (hours for people, cost for subs/expense items).
+      A red cell means the actual ran over your forecast that week. Plan cells accept <b>paste from Excel</b> (a whole row or block at once).
+      Hover a plan cell to see the original-forecast value for that week. Click an item name to see every charge behind it.
+      Forecasts and rates are saved in your browser per project and survive next week's upload. Global filters do not apply here — the grid always shows the whole project.</p>
+  </div>
+  <div class="card">
+    <div class="tablewrap" style="max-height:640px"><table id="ppTable"></table></div>
+    <div class="hint" id="ppInfo" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>Hours by week — actual vs forecast vs original</h2>
+    <div class="chartbox"><canvas id="chPlan"></canvas></div>
   </div>
 </section>
 
@@ -349,8 +417,10 @@ let state = {
     expDims:['projectNumber','projectName'], expMetric:'totalCost',
     fcLevel:'projectNumber,projectName', fcMetric:'totalCost', fcMethod:'avgN',
     fcLookback:3, fcHorizon:6, fcGrowth:0, fcExcludeLatest:true,
+    ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12,
   },
   budgets:{},                  // `${level}::${groupKey}` -> number
+  plans:{},                    // projectNum -> level -> {current:{itemKey|weekKey:num}, baseline:{...}, rates:{item:rate}, baselineAt}
 };
 let raw = { workbook:null, sheetName:null, headerRowIdx:0, headers:[], rows:[] }; // parsed file
 let data = [];                 // canonical rows after mapping
@@ -362,11 +432,11 @@ function loadState(){
   try{
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
     if(s){ state.mapping=s.mapping||{}; state.filters=s.filters||{};
-      state.settings=Object.assign(state.settings, s.settings||{}); state.budgets=s.budgets||{}; }
+      state.settings=Object.assign(state.settings, s.settings||{}); state.budgets=s.budgets||{}; state.plans=s.plans||{}; }
   }catch(e){}
 }
 function saveState(){
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify({mapping:state.mapping, filters:state.filters, settings:state.settings, budgets:state.budgets})); }catch(e){}
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify({mapping:state.mapping, filters:state.filters, settings:state.settings, budgets:state.budgets, plans:state.plans})); }catch(e){}
 }
 
 /* ===================== Utils ===================== */
@@ -1066,6 +1136,387 @@ function exportForecastCsv(){
   downloadCSV('forecast.csv',[header,...rows]);
 }
 
+/* ===================== Project Plan (single-project weekly grid) ===================== */
+let ppCtx=null; // context of the currently rendered grid
+function setupProjectPlan(){
+  const s=state.settings;
+  $('#ppLevel').value=s.ppLevel; $('#ppWeekEnd').value=String(s.ppWeekEnd);
+  $('#ppPast').value=s.ppPast; $('#ppAhead').value=s.ppAhead;
+  ['ppLevel','ppWeekEnd','ppPast','ppAhead','ppProject'].forEach(id=>{
+    $('#'+id).addEventListener('change',()=>{
+      s.ppLevel=$('#ppLevel').value; s.ppWeekEnd=+$('#ppWeekEnd').value;
+      s.ppPast=$('#ppPast').value; s.ppAhead=Math.max(1,Math.min(52,+$('#ppAhead').value||12));
+      s.ppProject=$('#ppProject').value; saveState(); renderProjectPlan();
+    });
+  });
+  $('#btnPpBaseline').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    const node=ppCtx.node;
+    if(node.baselineAt && !confirm('An original forecast was saved on '+node.baselineAt.slice(0,10)+'. Overwrite it with the current plan?'))return;
+    node.baseline=Object.assign({},node.current);
+    node.baselineAt=new Date().toISOString();
+    saveState(); renderProjectPlan();
+  });
+  $('#btnPpCopyActuals').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    for(const it of ppCtx.items){
+      const src=it.isLabor? it.hoursW : it.costW;
+      for(const wk of ppCtx.actualWeeks){
+        const v=src.get(wk);
+        if(v) ppCtx.node.current[it.label+'|'+wk]=Math.round(v*100)/100;
+      }
+    }
+    saveState(); renderProjectPlan();
+  });
+  $('#btnPpClear').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    if(confirm('Clear all current plan values for this project/level? (The saved original forecast is kept.)')){
+      ppCtx.node.current={}; saveState(); renderProjectPlan();
+    }
+  });
+  $('#btnPpCsv').addEventListener('click',exportPlanCsv);
+}
+function weekEndOf(d){
+  const e=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  e.setDate(e.getDate()+((state.settings.ppWeekEnd-e.getDay()+7)%7));
+  return e;
+}
+function wkKey(d){ const e=weekEndOf(d); return e.getFullYear()+'-'+String(e.getMonth()+1).padStart(2,'0')+'-'+String(e.getDate()).padStart(2,'0'); }
+function wkAdd(key,n){ const [y,m,dd]=key.split('-').map(Number); const d=new Date(y,m-1,dd+7*n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function wkLabel(key){ const [y,m,d]=key.split('-').map(Number); return m+'/'+d; }
+function planNode(proj,level){
+  if(!state.plans[proj])state.plans[proj]={};
+  if(!state.plans[proj][level])state.plans[proj][level]={current:{},baseline:{},rates:{},baselineAt:''};
+  const n=state.plans[proj][level];
+  n.current=n.current||{}; n.baseline=n.baseline||{}; n.rates=n.rates||{};
+  return n;
+}
+function ppItemLabel(r,level){
+  const tt=((r.topTaskNumber||'')+' '+(r.topTaskName||'')).trim();
+  const tk=((r.taskNumber||'')+' '+(r.taskName||'')).trim();
+  const emp=r.employee||'(blank)';
+  if(level==='employee')return emp;
+  if(level==='topTask')return tt||'(no task)';
+  if(level==='task')return tk||'(no task)';
+  if(level==='taskEmployee')return (tk||'(no task)')+' · '+emp;
+  return (tt||'(no task)')+' · '+emp;
+}
+function renderProjectPlan(){
+  if(!data.length) return;
+  const s=state.settings;
+  // (re)populate project picker
+  const projMap=new Map();
+  for(const r of data){ const k=r.projectNumber||r.projectName; if(k && !projMap.has(k)) projMap.set(k,(r.projectNumber? r.projectNumber+' — ':'')+(r.projectName||'')); }
+  const pick=$('#ppProject'); const prev=s.ppProject;
+  pick.innerHTML='';
+  [...projMap.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([k,lbl])=>pick.append(el('option',{value:k},lbl)));
+  if(projMap.has(prev)) pick.value=prev; else { s.ppProject=pick.value; }
+  const proj=pick.value;
+  if(!proj){ $('#ppInfo').textContent='No projects found in the data.'; return; }
+
+  const projRows=data.filter(r=>(r.projectNumber||r.projectName)===proj);
+  const level=s.ppLevel;
+  const node=planNode(proj,level);
+
+  // build items
+  const items=new Map(); let undated=0;
+  for(const r of projRows){
+    const label=ppItemLabel(r,level);
+    let it=items.get(label);
+    if(!it){ it={label,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[]}; items.set(label,it); }
+    const d=r.transactionDate||r.glDate;
+    if(d){ const wk=wkKey(d);
+      it.hoursW.set(wk,(it.hoursW.get(wk)||0)+(r.hours||0));
+      it.costW.set(wk,(it.costW.get(wk)||0)+(r.totalCost||0));
+    } else undated++;
+    it.hours+=r.hours||0; it.cost+=r.totalCost||0; it.rows.push(r);
+  }
+  const itemList=[...items.values()];
+  for(const it of itemList) it.isLabor=Math.abs(it.hours)>0.01;
+  itemList.sort((a,b)=>(b.isLabor-a.isLabor)||a.label.localeCompare(b.label));
+
+  // week columns
+  const wkSet=new Set();
+  for(const it of itemList){ for(const k of it.costW.keys()) wkSet.add(k); }
+  // include weeks that only exist in the saved plan (so future plans never disappear)
+  for(const k of Object.keys(node.current)){ const wk=k.slice(k.lastIndexOf('|')+1); if(/^\d{4}-\d{2}-\d{2}$/.test(wk)) wkSet.add(wk); }
+  const allWeeks=[...wkSet].sort();
+  if(!allWeeks.length){ $('#ppInfo').textContent='No dated transactions for this project.'; $('#ppTable').innerHTML=''; return; }
+  const todayWk=wkKey(new Date());
+  const lastActualWeek=[...itemList.reduce((s2,it)=>{for(const k of it.costW.keys())s2.add(k);return s2;},new Set())].sort().pop()||allWeeks[allWeeks.length-1];
+  const actualWeeks=allWeeks.filter(w=>w<=lastActualWeek);
+  const futureWeeks=[]; for(let i=1;i<=s.ppAhead;i++)futureWeeks.push(wkAdd(lastActualWeek,i));
+  const shownPast = s.ppPast==='all'? actualWeeks : actualWeeks.slice(-(+s.ppPast));
+  const hiddenWeeks = actualWeeks.slice(0,actualWeeks.length-shownPast.length);
+  const visWeeks=[...shownPast,...futureWeeks];
+
+  ppCtx={proj,level,node,items:itemList,actualWeeks,futureWeeks,shownPast,hiddenWeeks,visWeeks,lastActualWeek,inputs:[]};
+
+  // ===== table =====
+  const t=$('#ppTable'); t.innerHTML='';
+  const sumCols=['Act hrs/cost','Plan to date','Var to date','Plan to go','EAC','Rate','Act cost','EAC cost','Orig EAC','Overrun'];
+  const headCells=[el('th',null,'Item')];
+  if(hiddenWeeks.length) headCells.push(el('th',{class:'num',title:hiddenWeeks.length+' earlier weeks ('+wkLabel(hiddenWeeks[0])+' … '+wkLabel(hiddenWeeks[hiddenWeeks.length-1])+')'},'Earlier'));
+  for(const wk of visWeeks){
+    const fut=wk>lastActualWeek;
+    headCells.push(el('th',{class:'num'+(fut?' fut':''),title:'Week ending '+wk+(wk===todayWk?' (current week — likely partial)':'')},
+      'WE '+wkLabel(wk)+(wk===todayWk?' •':'')));
+  }
+  sumCols.forEach((c,i)=>headCells.push(el('th',{class:'num'+(i===0?' sumcol':'')},c)));
+  t.append(el('thead',null,el('tr',null,...headCells)));
+  const tb=el('tbody');
+  const colCount=headCells.length;
+
+  for(const it of itemList){
+    const tr=el('tr');
+    const unit=it.isLabor?'hrs':'cost';
+    const name=el('span',{class:'item-link',onclick:()=>toggleDetail(it,tr,colCount)},it.label);
+    tr.append(el('td',{title:it.label},name,' ',el('span',{class:'pill',style:'margin-left:4px'},unit)));
+    if(hiddenWeeks.length){
+      let hAct=0; for(const wk of hiddenWeeks) hAct+=(it.isLabor?it.hoursW.get(wk):it.costW.get(wk))||0;
+      tr.append(el('td',{class:'num',style:'color:#8aa0bd'},hAct? (it.isLabor?fmtNum(hAct,1):fmtMoney(hAct)):''));
+    }
+    const rowInputs=[];
+    for(const wk of visWeeks){
+      const fut=wk>lastActualWeek;
+      const act=(it.isLabor?it.hoursW.get(wk):it.costW.get(wk))||0;
+      const k=it.label+'|'+wk;
+      const plan=node.current[k];
+      const baseV=node.baseline[k];
+      const inp=el('input',{class:'plan-in',type:'text',inputmode:'decimal',
+        title:(node.baselineAt? 'Original: '+(baseV!=null?baseV:'—'):'No original forecast saved yet'),
+        value:plan!=null?plan:''});
+      inp.dataset.item=it.label; inp.dataset.week=wk;
+      inp.addEventListener('input',()=>{
+        const v=inp.value.trim();
+        if(v==='') delete node.current[k]; else { const n=parseNumber(v); if(!isNaN(n)) node.current[k]=n; }
+        saveState(); updateItemSummary(it); updatePlanTotals(); refreshCellOver(td,act,node.current[k],wk,lastActualWeek);
+      });
+      inp.addEventListener('change',updatePlanChart);
+      inp.addEventListener('paste',e=>handlePlanPaste(e,inp));
+      rowInputs.push(inp);
+      const td=el('td',{class:'wk'},
+        el('span',{class:'wk-act'},fut?'':(act?(it.isLabor?fmtNum(act,1):fmtNum(act,0)):'')),
+        inp);
+      refreshCellOver(td,act,plan,wk,lastActualWeek);
+      tr.append(td);
+    }
+    ppCtx.inputs.push(rowInputs);
+    // summary cells (filled by updateItemSummary)
+    it._sum={};
+    const mk=(key,cls)=>{const td=el('td',{class:'num'+(cls||'')});it._sum[key]=td;return td;};
+    tr.append(mk('act',' sumcol'),mk('planTD'),mk('varTD'),mk('toGo'),mk('eac'));
+    // rate cell
+    const rateTd=el('td',{class:'num'});
+    if(it.isLabor){
+      const derived=it.hours? it.cost/it.hours : 0;
+      const rin=el('input',{class:'rate-in',type:'text',inputmode:'decimal',title:'Burdened $/hr — derived from actuals; type to override',
+        value: node.rates[it.label]!=null? node.rates[it.label] : (derived?derived.toFixed(2):'')});
+      rin.addEventListener('input',()=>{
+        const v=rin.value.trim();
+        if(v==='') delete node.rates[it.label]; else { const n=parseNumber(v); if(!isNaN(n)) node.rates[it.label]=n; }
+        saveState(); updateItemSummary(it); updatePlanTotals();
+      });
+      rateTd.append(rin);
+    } else rateTd.textContent='—';
+    tr.append(rateTd, mk('actC'), mk('eacC'), mk('origEac'), mk('over'));
+    tb.append(tr);
+    updateItemSummary(it);
+  }
+  // totals row
+  const trTot=el('tr',{class:'total'});
+  trTot.append(el('td',null,'TOTAL'));
+  if(hiddenWeeks.length) trTot.append(el('td',{class:'num'}));
+  ppCtx._totWeekTds=[];
+  for(const wk of visWeeks){ const td=el('td',{class:'wk num'}); ppCtx._totWeekTds.push(td); trTot.append(td); }
+  ppCtx._totSum={};
+  ['act','planTD','varTD','toGo','eac','rate','actC','eacC','origEac','over'].forEach((k,i)=>{
+    const td=el('td',{class:'num'+(i===0?' sumcol':'')}); ppCtx._totSum[k]=td; trTot.append(td);
+  });
+  tb.append(trTot);
+  t.append(tb);
+  updatePlanTotals();
+  updatePlanChart();
+  $('#ppBaselineInfo').textContent = node.baselineAt
+    ? 'Original forecast saved '+node.baselineAt.slice(0,10)+' ('+Object.keys(node.baseline).length+' cells)'
+    : 'No original forecast saved yet — enter your plan, then click "Save current plan as original forecast".';
+  $('#ppInfo').textContent = itemList.length+' items · '+projRows.length.toLocaleString()+' transactions · weeks '
+    +wkLabel(allWeeks[0])+' – '+wkLabel(lastActualWeek)+' actual, +'+s.ppAhead+' planned'
+    +(undated?' · '+undated+' undated rows excluded from weekly columns':'');
+}
+function refreshCellOver(td,act,plan,wk,lastActualWeek){
+  const past=wk<=lastActualWeek;
+  td.classList.toggle('over', past && plan!=null && act>plan+0.26);
+}
+function itemCalc(it){
+  const node=ppCtx.node;
+  let planTD=0,toGo=0,baseTot=0;
+  const pre=it.label+'|';
+  for(const k in node.current){
+    if(!k.startsWith(pre))continue;
+    const wk=k.slice(pre.length);
+    if(wk<=ppCtx.lastActualWeek)planTD+=node.current[k]; else toGo+=node.current[k];
+  }
+  for(const k in node.baseline){ if(k.startsWith(pre)) baseTot+=node.baseline[k]; }
+  const act=it.isLabor? it.hours : it.cost;
+  const rate=it.isLabor? (node.rates[it.label]!=null? node.rates[it.label] : (it.hours? it.cost/it.hours:0)) : 1;
+  const eac=act+toGo;
+  const eacCost=it.cost+toGo*rate;
+  const origEacCost=node.baselineAt? (it.isLabor? baseTot*rate : baseTot) : null;
+  const over=node.baselineAt&&baseTot? eac-baseTot : null;
+  return {planTD,toGo,baseTot,act,rate,eac,eacCost,origEacCost,over,varTD:act-planTD};
+}
+function updateItemSummary(it){
+  const c=itemCalc(it);
+  const f=v=>it.isLabor? fmtNum(v,1) : fmtMoney(v);
+  const S=it._sum;
+  S.act.textContent=f(c.act);
+  S.planTD.textContent=c.planTD?f(c.planTD):'';
+  if(c.planTD){
+    S.varTD.textContent=(c.varTD>0?'+':'')+f(c.varTD);
+    S.varTD.className='num '+(c.varTD>0.26?'neg':'pos');
+  } else { S.varTD.textContent=''; S.varTD.className='num'; }
+  S.toGo.textContent=c.toGo?f(c.toGo):'';
+  S.toGo.className='num fut-h';
+  S.eac.textContent=f(c.eac);
+  S.actC.textContent=fmtMoney(it.cost);
+  S.eacC.textContent=fmtMoney(c.eacCost);
+  S.origEac.textContent=c.baseTot? f(c.baseTot):'';
+  S.over.innerHTML='';
+  if(c.over!=null){
+    const pct=c.baseTot? (100*c.over/Math.abs(c.baseTot)):0;
+    const cls=c.over>0.26?'bad':(c.over<-0.26?'ok':'');
+    S.over.append(el('span',{class:'pill '+cls},(c.over>0?'+':'')+f(c.over)+(c.baseTot?' ('+pct.toFixed(0)+'%)':'')));
+  }
+}
+function updatePlanTotals(){
+  if(!ppCtx)return;
+  const node=ppCtx.node;
+  // weekly totals: hours for labor items + plan hours (labor only) shown as act/plan
+  ppCtx.visWeeks.forEach((wk,i)=>{
+    let act=0,plan=0;
+    for(const it of ppCtx.items){ if(!it.isLabor)continue;
+      act+=it.hoursW.get(wk)||0;
+      const v=node.current[it.label+'|'+wk]; if(v!=null)plan+=v;
+    }
+    const td=ppCtx._totWeekTds[i];
+    td.innerHTML='';
+    td.append(el('span',{class:'wk-act'},wk<=ppCtx.lastActualWeek&&act?fmtNum(act,1):''),
+      el('span',null,plan?fmtNum(plan,1):''));
+    td.title='Labor hours — actual / planned';
+  });
+  // summary totals
+  let actH=0,planTD=0,toGo=0,eacH=0,actC=0,eacC=0,baseH=0,overSum=0,hasBase=false;
+  for(const it of ppCtx.items){
+    const c=itemCalc(it);
+    if(it.isLabor){ actH+=c.act; planTD+=c.planTD; toGo+=c.toGo; eacH+=c.eac; baseH+=c.baseTot; if(c.over!=null){overSum+=c.over;hasBase=true;} }
+    actC+=it.cost; eacC+=c.eacCost;
+  }
+  const T=ppCtx._totSum;
+  T.act.textContent=fmtNum(actH,1)+' h';
+  T.planTD.textContent=planTD?fmtNum(planTD,1):'';
+  T.varTD.textContent=planTD?fmtNum(actH-planTD,1):'';
+  T.varTD.className='num '+(planTD&&actH-planTD>0.5?'neg':'');
+  T.toGo.textContent=toGo?fmtNum(toGo,1):'';
+  T.eac.textContent=fmtNum(eacH,1)+' h';
+  T.rate.textContent='';
+  T.actC.textContent=fmtMoney(actC);
+  T.eacC.textContent=fmtMoney(eacC);
+  T.origEac.textContent=baseH?fmtNum(baseH,1)+' h':'';
+  T.over.textContent=hasBase?(overSum>0?'+':'')+fmtNum(overSum,1)+' h':'';
+  T.over.className='num '+(hasBase&&overSum>0.5?'neg':hasBase?'pos':'');
+}
+function handlePlanPaste(e,inp){
+  const text=(e.clipboardData||window.clipboardData).getData('text');
+  if(!/[\t\n]/.test(text))return; // single value: default paste
+  e.preventDefault();
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l!=='');
+  // locate the focused input in the grid
+  let r0=-1,c0=-1;
+  ppCtx.inputs.forEach((row,r)=>{const c=row.indexOf(inp);if(c>=0){r0=r;c0=c;}});
+  if(r0<0)return;
+  lines.forEach((line,dr)=>{
+    const cells=line.split('\t');
+    const row=ppCtx.inputs[r0+dr]; if(!row)return;
+    cells.forEach((cv,dc)=>{
+      const target=row[c0+dc]; if(!target)return;
+      target.value=cv.trim();
+      target.dispatchEvent(new Event('input'));
+    });
+  });
+  updatePlanChart();
+}
+function updatePlanChart(){
+  if(!ppCtx)return;
+  const node=ppCtx.node;
+  const labels=ppCtx.visWeeks.map(wkLabel);
+  const act=[],plan=[],base=[];
+  for(const wk of ppCtx.visWeeks){
+    let a=0,p=0,b=0;
+    for(const it of ppCtx.items){ if(!it.isLabor)continue;
+      a+=it.hoursW.get(wk)||0;
+      const k=it.label+'|'+wk;
+      if(node.current[k]!=null)p+=node.current[k];
+      if(node.baseline[k]!=null)b+=node.baseline[k];
+    }
+    act.push(wk<=ppCtx.lastActualWeek?a:null); plan.push(p); base.push(node.baselineAt?b:null);
+  }
+  const ds=[
+    {label:'Actual hrs',data:act,backgroundColor:'#38bdf8',type:'bar'},
+    {label:'Forecast hrs',data:plan,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',borderDash:[6,5],tension:.2,pointRadius:2},
+  ];
+  if(node.baselineAt) ds.push({label:'Original forecast',data:base,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',tension:.2,pointRadius:2});
+  drawChart('chPlan',{type:'bar',data:{labels,datasets:ds},options:chartOpts()});
+}
+function toggleDetail(it,tr,colCount){
+  const next=tr.nextSibling;
+  if(next&&next.classList&&next.classList.contains('detailrow')){ next.remove(); return; }
+  const dt=el('table');
+  dt.append(el('thead',null,el('tr',null,...['Date','Employee/Vendor','Task','Type','Expenditure Type','Hours','Total Cost','Billed','Invoice','Comments'].map(h=>el('th',null,h)))));
+  const db=el('tbody');
+  const rows=[...it.rows].sort((a,b)=>{const da=a.transactionDate||a.glDate,db2=b.transactionDate||b.glDate;return (da&&db2)?da-db2:0;});
+  rows.slice(0,300).forEach(r=>{
+    const d=r.transactionDate||r.glDate;
+    db.append(el('tr',null,
+      el('td',null,d?d.toISOString().slice(0,10):''),
+      el('td',null,r.employee),
+      el('td',null,((r.taskNumber||'')+' '+(r.taskName||'')).trim()),
+      el('td',null,r.transactionType),
+      el('td',null,r.expenditureType),
+      el('td',{class:numCls(r.hours)},r.hours?fmtNum(r.hours,1):''),
+      el('td',{class:numCls(r.totalCost)},fmtMoney(r.totalCost)),
+      el('td',null,r.billedStatus),
+      el('td',null,r.invoiceNumber),
+      el('td',null,r.comments)));
+  });
+  dt.append(db);
+  const wrap=el('div',{style:'max-height:260px;overflow:auto'},dt);
+  const note=rows.length>300? el('div',{class:'hint'},'Showing first 300 of '+rows.length+' charges'):null;
+  tr.after(el('tr',{class:'detailrow'},el('td',{colspan:colCount},wrap,note)));
+}
+function exportPlanCsv(){
+  if(!ppCtx){alert('Open a project first.');return;}
+  const node=ppCtx.node;
+  const head=['Item','Unit'];
+  for(const wk of ppCtx.visWeeks){ head.push('WE '+wk+' actual','WE '+wk+' plan','WE '+wk+' original'); }
+  head.push('Actual to date','Plan to date','Variance to date','Plan to go','EAC','Rate','Actual cost','EAC cost','Original EAC','Overrun vs original');
+  const out=[head];
+  for(const it of ppCtx.items){
+    const c=itemCalc(it);
+    const row=[it.label,it.isLabor?'hours':'cost'];
+    for(const wk of ppCtx.visWeeks){
+      const act=(it.isLabor?it.hoursW.get(wk):it.costW.get(wk))||0;
+      const k=it.label+'|'+wk;
+      row.push(wk<=ppCtx.lastActualWeek?Math.round(act*100)/100:'', node.current[k]??'', node.baseline[k]??'');
+    }
+    row.push(Math.round(c.act*100)/100,c.planTD,c.varTD.toFixed(2),c.toGo,c.eac.toFixed(2),
+      it.isLabor?c.rate.toFixed(2):'',it.cost.toFixed(2),c.eacCost.toFixed(2),c.baseTot||'',c.over!=null?c.over.toFixed(2):'');
+    out.push(row);
+  }
+  downloadCSV('project-plan-'+ppCtx.proj+'.csv',out);
+}
+
 /* ===================== Settings ===================== */
 function setupSettings(){
   const s=state.settings;
@@ -1083,7 +1534,7 @@ function setupSettings(){
 
 /* ===================== Config import/export ===================== */
 function exportConfig(){
-  const blob=new Blob([JSON.stringify({mapping:state.mapping,filters:state.filters,settings:state.settings,budgets:state.budgets},null,2)],{type:'application/json'});
+  const blob=new Blob([JSON.stringify({mapping:state.mapping,filters:state.filters,settings:state.settings,budgets:state.budgets,plans:state.plans},null,2)],{type:'application/json'});
   const a=el('a',{href:URL.createObjectURL(blob),download:'forecast-tool-settings.json'}); document.body.append(a); a.click(); a.remove();
 }
 function importConfig(file){
@@ -1092,7 +1543,7 @@ function importConfig(file){
     try{
       const s=JSON.parse(e.target.result);
       if(s.mapping)state.mapping=s.mapping; if(s.filters)state.filters=s.filters;
-      if(s.settings)Object.assign(state.settings,s.settings); if(s.budgets)state.budgets=s.budgets;
+      if(s.settings)Object.assign(state.settings,s.settings); if(s.budgets)state.budgets=s.budgets; if(s.plans)state.plans=s.plans;
       saveState(); alert('Settings imported. Re-upload your extract to apply.'); location.reload();
     }catch(err){ alert('Invalid settings file.'); }
   };
@@ -1102,7 +1553,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','forecast','project','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -1112,6 +1563,7 @@ function refreshActiveTab(){
   if(t==='dashboard') renderDashboard();
   else if(t==='explorer') renderExplorer();
   else if(t==='forecast') renderForecast();
+  else if(t==='project') renderProjectPlan();
 }
 
 /* ===================== Sample data ===================== */
@@ -1192,7 +1644,7 @@ function init(){
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
   $('#btnSample').addEventListener('click',loadSample);
-  setupExplorer(); setupForecast(); setupSettings();
+  setupExplorer(); setupForecast(); setupProjectPlan(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
