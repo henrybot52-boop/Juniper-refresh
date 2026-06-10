@@ -22,7 +22,8 @@ Click **Load sample data** in the header to try the tool without a real extract.
 | **Dashboard** | KPIs (total cost, hours, labor, subs/expenses, unbilled, latest-period spend, 3-month average burn), cost-by-period chart with cumulative line, cost-mix breakdown, top-25 projects table. |
 | **Pivot Explorer** | Group by any combination of the 30+ dimensions (project, task, PM, cost center, expenditure type, employee…), spread any metric across periods, or show all cost columns. Export to CSV. |
 | **Forecast** | Pick a level (Project, Project + Top Task, PM, Cost Center, BU/Division, Expenditure Type), a method, look-back window, horizon and a monthly adjustment %. Enter a **Budget / EAC** per row to get remaining budget, % used, runway in months and a projected depletion period. Actuals-vs-forecast chart per group. Export to CSV. |
-| **Project Plan** | Single-project weekly control sheet. Rows are items (Top Task + Employee/Vendor by default — adjustable), columns are weeks. Each cell shows the **actual** charged that week next to an editable **forecast** cell (hours for people, cost for subs/expenses). Red cells flag weekly overruns. Summary columns give actuals to date, plan to date, variance, plan to go, EAC in hours and dollars (using a burdened rate derived from actuals, overridable per person), and overrun vs your saved **original forecast**. Click an item to see every charge behind it. Paste hour blocks straight from Excel. |
+| **Project Forecast** | Single page for the **baseline job plan**: add rows per task/person (before any charges exist), enter hours per person per week over a plan window you set (start date + number of weeks), with the rate table (burdened cost rate + bill rate / price to owner per employee) and baseline totals: labor hours, cost, total revenue and margin. This page stays fixed as the original forecast. |
+| **Actuals vs Forecast** | The weekly working page: actuals from each upload shown next to an editable **updated forecast** per cell, red weekly overruns, per-item EAC/variance columns, and a **comparison table — original vs updated vs actual** (hours, cost, revenue, margin) with a variance column. Buttons to seed the updated forecast from the original, copy actuals into past cells, or re-baseline. |
 | **Settings** | Period source (Period Name vs GL/Transaction Date month), currency, decimals, what counts as "billed". |
 
 ## Forecast methods (all adjustable)
@@ -35,41 +36,22 @@ Click **Load sample data** in the header to try the tool without a real extract.
 - Option to exclude the latest period from burn-rate calcs since a weekly extract usually contains a partial month.
 - Every dimension can be filtered (multi-select with search) before forecasting.
 
-## Project Plan workflow (hours per employee per week)
+## Two-page project workflow
 
-1. Open the **Project Plan** tab and pick a project. Set the week-ending day
-   (default Friday) and how many weeks ahead you want to plan.
-2. Enter forecast hours per person per week — type, tab through, or paste a
-   block straight from an Excel staffing plan. Use *Copy actual hours into past
-   plan cells* to seed history.
-3. Click **Save current plan as original forecast**. That snapshot becomes the
-   baseline: from then on the tool shows overrun vs original per item (hours
-   and dollars) while you keep revising the current forecast each week.
-4. Each week, upload the new extract — actuals fill in, red cells show where
-   someone burned more than forecast, and the chart compares actual vs current
-   forecast vs original.
-5. Rates: EAC cost uses each person's burdened rate derived from their actuals
-   (total cost ÷ hours, so fringe and oncost are included); override any rate
-   in the Rate column. Sub/expense items are planned in dollars instead of hours.
+1. **Project Forecast tab** — set the plan window, add rows for each task/person,
+   enter baseline hours per week (paste from Excel works), set cost and bill
+   rates in the rate table. The baseline totals card shows planned hours, cost,
+   total revenue and margin. This is the original forecast and stays fixed.
+2. **Actuals vs Forecast tab** — click *Copy original forecast → updated
+   forecast* once to seed it. Each week, upload the new extract: actuals appear
+   next to your forecast, red cells flag weekly overruns, and you revise the
+   updated forecast freely. The comparison table at the top shows original vs
+   updated vs actual side by side so the drift is always visible.
+3. If scope changes are approved, *Set new baseline from updated forecast*
+   re-baselines the job.
 
-Plans and baselines are saved per project *and* per row-level, so a Top
-Task + Employee plan and an Employee-only plan can coexist.
-
-### Rate table, revenue and project totals
-
-- The **rate table** (below the grid) lists every employee on the project with
-  their derived burdened cost rate, an overridable **cost rate**, and a
-  **bill rate (price to owner)**, plus margin per hour. Add people who haven't
-  charged yet, and use *Set bill = cost × N* to fill empty bill rates from a
-  multiplier. Rates are stored per project and shared across row levels.
-- **Add plan row** above the grid creates rows for tasks/people with no
-  charges yet (marked with a yellow *plan* pill, removable with ✕) — so a full
-  baseline job plan can be built before the first timesheet hits.
-- The **Project totals** card shows Labor hours, Cost, **Revenue** and
-  **Margin** ($ and %) side by side for the *original baseline*, the *current
-  forecast (EAC)* and *actuals to date*, with an EAC-vs-baseline variance
-  column. Revenue = hours × bill rate; subs/expenses are billed at cost plus
-  the adjustable non-labor markup %.
+Plans, baselines and rates are saved per project (and per row-level) in the
+browser and survive weekly uploads.
 
 ## Persistence
 

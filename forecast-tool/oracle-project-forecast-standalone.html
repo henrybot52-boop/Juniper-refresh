@@ -163,8 +163,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   <button data-tab="dashboard">2 · Dashboard</button>
   <button data-tab="explorer">3 · Pivot Explorer</button>
   <button data-tab="forecast">4 · Forecast</button>
-  <button data-tab="project">5 · Project Plan</button>
-  <button data-tab="settings">6 · Settings</button>
+  <button data-tab="pforecast">5 · Project Forecast</button>
+  <button data-tab="pactuals">6 · Actuals vs Forecast</button>
+  <button data-tab="settings">7 · Settings</button>
 </nav>
 
 <main>
@@ -284,14 +285,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   </div>
 </section>
 
-<!-- ============ PROJECT PLAN TAB ============ -->
-<section id="tab-project" class="hidden">
+<!-- ============ PROJECT FORECAST TAB ============ -->
+<section id="tab-pforecast" class="hidden">
   <div class="card">
-    <h2>Single-project weekly plan <span class="hint">— actuals per week vs your forecast, item by item</span></h2>
+    <h2>Project forecast — baseline plan <span class="hint">— build the original job plan: hours per person per week, rates, price to owner</span></h2>
     <div class="row">
-      <label>Project: <select id="ppProject" style="max-width:430px"></select></label>
+      <label>Project: <select id="fpProject" style="max-width:430px"></select></label>
       <label>Rows:
-        <select id="ppLevel">
+        <select id="fpLevel">
           <option value="topTaskEmployee">Top Task + Employee/Vendor</option>
           <option value="employee">Employee/Vendor</option>
           <option value="taskEmployee">Task + Employee/Vendor</option>
@@ -300,48 +301,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         </select>
       </label>
       <label>Week ends:
-        <select id="ppWeekEnd">
+        <select id="fpWeekEnd">
           <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
           <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
         </select>
       </label>
-      <label>Past weeks shown:
-        <select id="ppPast"><option value="8">8</option><option value="13">13</option><option value="26">26</option><option value="all">all</option></select>
-      </label>
-      <label>Plan weeks ahead: <input type="number" id="ppAhead" min="1" max="52" value="12" style="width:64px"></label>
+      <label>Plan starts: <input type="date" id="fpStart"></label>
+      <label># weeks: <input type="number" id="fpWeeks" min="1" max="156" style="width:66px"></label>
     </div>
     <div class="row" style="margin-top:10px">
-      <button id="btnPpBaseline">Save current plan as original forecast</button>
-      <button id="btnPpCopyActuals">Copy actual hours into past plan cells</button>
-      <button id="btnPpClear">Clear current plan</button>
-      <button id="btnPpCsv">Export grid CSV</button>
-      <span class="hint" id="ppBaselineInfo"></span>
-    </div>
-    <p class="hint">In each week cell the gray number is the <b>actual</b> charged that week and the box is your <b>forecast</b> (hours for people, cost for subs/expense items).
-      A red cell means the actual ran over your forecast that week. Plan cells accept <b>paste from Excel</b> (a whole row or block at once).
-      Hover a plan cell to see the original-forecast value for that week. Click an item name to see every charge behind it.
-      Forecasts and rates are saved in your browser per project and survive next week's upload. Global filters do not apply here — the grid always shows the whole project.</p>
-  </div>
-  <div class="card">
-    <h2>Project totals — cost &amp; revenue <span class="hint">— original baseline vs current forecast vs actuals</span></h2>
-    <div class="row" style="margin-bottom:8px">
-      <label>Non-labor markup %: <input type="number" id="ppNlMarkup" step="0.5" value="0" style="width:74px" title="Applied to subs/expense cost to compute price to owner"></label>
-      <span class="hint">Revenue = hours × bill rate from the rate table below; subs/expenses are billed at cost plus this markup.</span>
-    </div>
-    <div class="tablewrap" style="max-height:280px"><table id="ppTotals"></table></div>
-  </div>
-  <div class="card">
-    <div class="row" style="margin-bottom:10px">
       <span class="hint" style="font-weight:600">Add plan row:</span>
-      <input id="ppNewTask" list="ppTaskList" placeholder="Task" style="width:230px">
-      <input id="ppNewEmp" list="ppEmpList" placeholder="Employee/Vendor" style="width:200px">
-      <select id="ppNewUnit"><option value="hours">hours</option><option value="cost">cost ($)</option></select>
-      <button id="btnPpAddRow" class="small">Add row</button>
+      <input id="fpNewTask" list="ppTaskList" placeholder="Task" style="width:220px">
+      <input id="fpNewEmp" list="ppEmpList" placeholder="Employee/Vendor" style="width:190px">
+      <select id="fpNewUnit"><option value="hours">hours</option><option value="cost">cost ($)</option></select>
+      <button id="btnFpAddRow" class="small">Add row</button>
       <datalist id="ppTaskList"></datalist><datalist id="ppEmpList"></datalist>
-      <span class="hint">— for tasks/people in the plan that have no charges yet</span>
+      <span class="spacer"></span>
+      <button id="btnFpCsv" class="small">Export CSV</button>
+      <button id="btnFpClear" class="small" style="border-color:var(--bad);color:var(--bad)">Clear baseline</button>
     </div>
-    <div class="tablewrap" style="max-height:640px"><table id="ppTable"></table></div>
-    <div class="hint" id="ppInfo" style="margin-top:8px"></div>
+    <p class="hint">This page holds the <b>original forecast</b> — it stays fixed as the reference the job is measured against.
+      Enter hours per person per week (dollars for subs/expense rows); paste whole blocks from Excel. Weekly actuals and forecast
+      revisions live on the <b>Actuals vs Forecast</b> tab. Everything is saved in your browser per project.</p>
+  </div>
+  <div class="card">
+    <div class="tablewrap" style="max-height:560px"><table id="fpTable"></table></div>
+    <div class="hint" id="fpInfo" style="margin-top:8px"></div>
   </div>
   <div class="card">
     <h2>Rate table — cost &amp; price to owner per employee</h2>
@@ -356,12 +341,67 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     <div class="tablewrap" style="max-height:320px"><table id="rateTable"></table></div>
   </div>
   <div class="card">
-    <h2>Hours by week — actual vs forecast vs original</h2>
+    <h2>Baseline totals</h2>
+    <div class="row" style="margin-bottom:10px">
+      <label>Non-labor markup %: <input type="number" id="ppNlMarkup" step="0.5" value="0" style="width:74px" title="Applied to subs/expense cost to compute price to owner"></label>
+      <span class="hint">Revenue = hours × bill rate; subs/expenses are billed at cost plus this markup.</span>
+    </div>
+    <div class="kpis" id="fpTotals"></div>
+  </div>
+</section>
+
+<!-- ============ ACTUALS VS FORECAST TAB ============ -->
+<section id="tab-pactuals" class="hidden">
+  <div class="card">
+    <h2>Actuals &amp; updated forecast <span class="hint">— weekly actuals against the plan; revise the forecast and compare to the original</span></h2>
+    <div class="row">
+      <label>Project: <select id="apProject" style="max-width:430px"></select></label>
+      <label>Rows:
+        <select id="apLevel">
+          <option value="topTaskEmployee">Top Task + Employee/Vendor</option>
+          <option value="employee">Employee/Vendor</option>
+          <option value="taskEmployee">Task + Employee/Vendor</option>
+          <option value="topTask">Top Task</option>
+          <option value="task">Task</option>
+        </select>
+      </label>
+      <label>Week ends:
+        <select id="apWeekEnd">
+          <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
+          <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
+        </select>
+      </label>
+      <label>Past weeks shown:
+        <select id="apPast"><option value="8">8</option><option value="13">13</option><option value="26">26</option><option value="all">all</option></select>
+      </label>
+      <label>Forecast weeks ahead: <input type="number" id="apAhead" min="1" max="52" value="12" style="width:66px"></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnApSeed">Copy original forecast → updated forecast</button>
+      <button id="btnApCopyActuals">Copy actual hours into past cells</button>
+      <button id="btnApRebase">Set new baseline from updated forecast</button>
+      <button id="btnApClear">Clear updated forecast</button>
+      <button id="btnApCsv">Export CSV</button>
+    </div>
+    <p class="hint">Gray = actual charged that week; box = your <b>updated forecast</b> (hover shows the original forecast for that week).
+      A red cell means the actual ran over the updated forecast. Paste from Excel supported. Rates are managed on the Project Forecast tab.</p>
+  </div>
+  <div class="card">
+    <h2>Comparison — original vs updated vs actual</h2>
+    <div class="tablewrap" style="max-height:280px"><table id="ppTotals"></table></div>
+  </div>
+  <div class="card">
+    <div class="tablewrap" style="max-height:640px"><table id="ppTable"></table></div>
+    <div class="hint" id="ppInfo" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>Hours by week — actual vs updated vs original</h2>
     <div class="chartbox"><canvas id="chPlan"></canvas></div>
   </div>
 </section>
 
 <!-- ============ SETTINGS TAB ============ -->
+
 <section id="tab-settings" class="hidden">
   <div class="card">
     <h2>General settings</h2>
@@ -1205,91 +1245,26 @@ function exportForecastCsv(){
   downloadCSV('forecast.csv',[header,...rows]);
 }
 
-/* ===================== Project Plan (single-project weekly grid) ===================== */
-let ppCtx=null; // context of the currently rendered grid
-function setupProjectPlan(){
-  const s=state.settings;
-  $('#ppLevel').value=s.ppLevel; $('#ppWeekEnd').value=String(s.ppWeekEnd);
-  $('#ppPast').value=s.ppPast; $('#ppAhead').value=s.ppAhead;
-  ['ppLevel','ppWeekEnd','ppPast','ppAhead','ppProject'].forEach(id=>{
-    $('#'+id).addEventListener('change',()=>{
-      s.ppLevel=$('#ppLevel').value; s.ppWeekEnd=+$('#ppWeekEnd').value;
-      s.ppPast=$('#ppPast').value; s.ppAhead=Math.max(1,Math.min(52,+$('#ppAhead').value||12));
-      s.ppProject=$('#ppProject').value; saveState(); renderProjectPlan();
-    });
-  });
-  $('#btnPpBaseline').addEventListener('click',()=>{
-    if(!ppCtx)return;
-    const node=ppCtx.node;
-    if(node.baselineAt && !confirm('An original forecast was saved on '+node.baselineAt.slice(0,10)+'. Overwrite it with the current plan?'))return;
-    node.baseline=Object.assign({},node.current);
-    node.baselineAt=new Date().toISOString();
-    saveState(); renderProjectPlan();
-  });
-  $('#btnPpCopyActuals').addEventListener('click',()=>{
-    if(!ppCtx)return;
-    for(const it of ppCtx.items){
-      const src=it.isLabor? it.hoursW : it.costW;
-      for(const wk of ppCtx.actualWeeks){
-        const v=src.get(wk);
-        if(v) ppCtx.node.current[it.label+'|'+wk]=Math.round(v*100)/100;
-      }
-    }
-    saveState(); renderProjectPlan();
-  });
-  $('#btnPpClear').addEventListener('click',()=>{
-    if(!ppCtx)return;
-    if(confirm('Clear all current plan values for this project/level? (The saved original forecast is kept.)')){
-      ppCtx.node.current={}; saveState(); renderProjectPlan();
-    }
-  });
-  $('#btnPpCsv').addEventListener('click',exportPlanCsv);
-  $('#ppNlMarkup').addEventListener('change',()=>{
-    if(!ppCtx)return;
-    ppCtx.meta._nlMarkup=+$('#ppNlMarkup').value||0;
-    saveState(); updateAllSummaries();
-  });
-  $('#btnPpAddRow').addEventListener('click',()=>{
-    if(!ppCtx)return;
-    const task=$('#ppNewTask').value.trim(), emp=$('#ppNewEmp').value.trim(), unit=$('#ppNewUnit').value;
-    const lvl=ppCtx.level;
-    const needsTask=lvl!=='employee', needsEmp=lvl==='employee'||lvl==='topTaskEmployee'||lvl==='taskEmployee';
-    if(needsTask&&!task){alert('Enter a task (e.g. "1.0 Project Management").');return;}
-    if(needsEmp&&!emp){alert('Enter an employee/vendor name.');return;}
-    let label;
-    if(lvl==='employee')label=emp;
-    else if(lvl==='topTask'||lvl==='task')label=task;
-    else label=task+' · '+emp;
-    if(ppCtx.items.some(it=>it.label===label)){alert('That row already exists in the grid.');return;}
-    ppCtx.node.manual=ppCtx.node.manual||[];
-    ppCtx.node.manual.push({label,emp:needsEmp?emp:null,isLabor:unit==='hours'});
-    if(needsEmp&&emp){ const rt=ppCtx.meta._rateTable; if(!rt[emp])rt[emp]={}; }
-    $('#ppNewTask').value='';$('#ppNewEmp').value='';
-    saveState(); renderProjectPlan();
-  });
-  $('#btnRtAdd').addEventListener('click',()=>{
-    if(!ppCtx)return;
-    const name=$('#rtNewEmp').value.trim();
-    if(!name)return;
-    const rt=ppCtx.meta._rateTable;
-    if(!rt[name])rt[name]={};
-    $('#rtNewEmp').value='';
-    saveState(); renderRateTable(); updateAllSummaries();
-  });
-  $('#btnRtFill').addEventListener('click',()=>{
-    if(!ppCtx)return;
-    const mult=+$('#rtMult').value||0;
-    if(mult<=0){alert('Enter a multiplier > 0.');return;}
-    const rt=ppCtx.meta._rateTable;
-    for(const emp of rateTableEmps()){
-      if(!rt[emp])rt[emp]={};
-      if(rt[emp].bill==null){
-        const cost=rt[emp].cost!=null?rt[emp].cost:(ppCtx.empStats[emp]?ppCtx.empStats[emp].rate:0);
-        if(cost>0)rt[emp].bill=Math.round(cost*mult*100)/100;
-      }
-    }
-    saveState(); renderRateTable(); updateAllSummaries();
-  });
+/* ===================== Project pages: Forecast (baseline) & Actuals vs updated forecast ===================== */
+let ppCtx=null; // context of the currently rendered project page
+function ppRender(){ if(!ppCtx)return; ppCtx.mode==='f'?renderForecastPage():renderActualsPage(); }
+function weekEndOf(d){
+  const e=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  e.setDate(e.getDate()+((state.settings.ppWeekEnd-e.getDay()+7)%7));
+  return e;
+}
+function wkKey(d){ const e=weekEndOf(d); return e.getFullYear()+'-'+String(e.getMonth()+1).padStart(2,'0')+'-'+String(e.getDate()).padStart(2,'0'); }
+function wkAdd(key,n){ const [y,m,dd]=key.split('-').map(Number); const d=new Date(y,m-1,dd+7*n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function wkDiff(a,b){ const pa=a.split('-').map(Number),pb=b.split('-').map(Number);
+  return Math.round((new Date(pb[0],pb[1]-1,pb[2])-new Date(pa[0],pa[1]-1,pa[2]))/(7*864e5)); }
+function wkLabel(key){ const [y,m,d]=key.split('-').map(Number); return m+'/'+d; }
+function planNode(proj,level){
+  if(!state.plans[proj])state.plans[proj]={};
+  if(!state.plans[proj][level])state.plans[proj][level]={current:{},baseline:{},rates:{},baselineAt:''};
+  const n=state.plans[proj][level];
+  n.current=n.current||{}; n.baseline=n.baseline||{}; n.rates=n.rates||{};
+  return n;
 }
 function projMeta(proj){
   if(!state.plans[proj])state.plans[proj]={};
@@ -1297,6 +1272,16 @@ function projMeta(proj){
   p._rateTable=p._rateTable||{};
   if(p._nlMarkup==null)p._nlMarkup=0;
   return p;
+}
+function ppItemLabel(r,level){
+  const tt=((r.topTaskNumber||'')+' '+(r.topTaskName||'')).trim();
+  const tk=((r.taskNumber||'')+' '+(r.taskName||'')).trim();
+  const emp=r.employee||'(blank)';
+  if(level==='employee')return emp;
+  if(level==='topTask')return tt||'(no task)';
+  if(level==='task')return tk||'(no task)';
+  if(level==='taskEmployee')return (tk||'(no task)')+' · '+emp;
+  return (tt||'(no task)')+' · '+emp;
 }
 function rateTableEmps(){
   const set=new Set(Object.keys(ppCtx.empStats));
@@ -1322,54 +1307,136 @@ function billRateOf(it){
 }
 function updateAllSummaries(){
   if(!ppCtx)return;
-  for(const it of ppCtx.items)updateItemSummary(it);
-  updatePlanTotals();
+  if(ppCtx.mode==='f'){ for(const it of ppCtx.items)updateFpSummary(it); updateFpTotalsRow(); renderFpTotals(); }
+  else { for(const it of ppCtx.items)updateItemSummary(it); updatePlanTotals(); }
 }
-function weekEndOf(d){
-  const e=new Date(d.getFullYear(),d.getMonth(),d.getDate());
-  e.setDate(e.getDate()+((state.settings.ppWeekEnd-e.getDay()+7)%7));
-  return e;
-}
-function wkKey(d){ const e=weekEndOf(d); return e.getFullYear()+'-'+String(e.getMonth()+1).padStart(2,'0')+'-'+String(e.getDate()).padStart(2,'0'); }
-function wkAdd(key,n){ const [y,m,dd]=key.split('-').map(Number); const d=new Date(y,m-1,dd+7*n);
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function wkLabel(key){ const [y,m,d]=key.split('-').map(Number); return m+'/'+d; }
-function planNode(proj,level){
-  if(!state.plans[proj])state.plans[proj]={};
-  if(!state.plans[proj][level])state.plans[proj][level]={current:{},baseline:{},rates:{},baselineAt:''};
-  const n=state.plans[proj][level];
-  n.current=n.current||{}; n.baseline=n.baseline||{}; n.rates=n.rates||{};
-  return n;
-}
-function ppItemLabel(r,level){
-  const tt=((r.topTaskNumber||'')+' '+(r.topTaskName||'')).trim();
-  const tk=((r.taskNumber||'')+' '+(r.taskName||'')).trim();
-  const emp=r.employee||'(blank)';
-  if(level==='employee')return emp;
-  if(level==='topTask')return tt||'(no task)';
-  if(level==='task')return tk||'(no task)';
-  if(level==='taskEmployee')return (tk||'(no task)')+' · '+emp;
-  return (tt||'(no task)')+' · '+emp;
-}
-function renderProjectPlan(){
-  if(!data.length) return;
+function setupProjectPages(){
   const s=state.settings;
-  // (re)populate project picker
+  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); };
+  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['fpLevel','ppLevel'],['apLevel','ppLevel'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
+    $('#'+id).addEventListener('change',e=>{ s[key]=isNum?+e.target.value:e.target.value; saveState(); reRender(); });
+  }
+  $('#fpLevel').value=s.ppLevel; $('#apLevel').value=s.ppLevel;
+  $('#fpWeekEnd').value=String(s.ppWeekEnd); $('#apWeekEnd').value=String(s.ppWeekEnd);
+  $('#apPast').value=s.ppPast; $('#apAhead').value=s.ppAhead;
+  $('#apPast').addEventListener('change',e=>{ s.ppPast=e.target.value; saveState(); renderActualsPage(); });
+  $('#apAhead').addEventListener('change',e=>{ s.ppAhead=Math.max(1,Math.min(52,+e.target.value||12)); saveState(); renderActualsPage(); });
+  $('#fpStart').addEventListener('change',e=>{
+    if(!ppCtx)return; const v=e.target.value; if(!v)return;
+    const [y,m,d]=v.split('-').map(Number);
+    ppCtx.node.baseStart=wkKey(new Date(y,m-1,d));
+    saveState(); renderForecastPage();
+  });
+  $('#fpWeeks').addEventListener('change',e=>{
+    if(!ppCtx)return;
+    ppCtx.node.baseWeeks=Math.max(1,Math.min(156,+e.target.value||12));
+    saveState(); renderForecastPage();
+  });
+  $('#btnFpAddRow').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    const task=$('#fpNewTask').value.trim(), emp=$('#fpNewEmp').value.trim(), unit=$('#fpNewUnit').value;
+    const lvl=ppCtx.level;
+    const needsTask=lvl!=='employee', needsEmp=lvl==='employee'||lvl==='topTaskEmployee'||lvl==='taskEmployee';
+    if(needsTask&&!task){alert('Enter a task (e.g. "1.0 Project Management").');return;}
+    if(needsEmp&&!emp){alert('Enter an employee/vendor name.');return;}
+    let label;
+    if(lvl==='employee')label=emp;
+    else if(lvl==='topTask'||lvl==='task')label=task;
+    else label=task+' · '+emp;
+    if(ppCtx.items.some(it=>it.label===label)){alert('That row already exists in the grid.');return;}
+    ppCtx.node.manual=ppCtx.node.manual||[];
+    ppCtx.node.manual.push({label,emp:needsEmp?emp:null,isLabor:unit==='hours'});
+    if(needsEmp&&emp){ const rt=ppCtx.meta._rateTable; if(!rt[emp])rt[emp]={}; }
+    $('#fpNewTask').value='';$('#fpNewEmp').value='';
+    saveState(); renderForecastPage();
+  });
+  $('#btnFpClear').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    if(confirm('Clear the entire original forecast (baseline) for this project/level?')){
+      ppCtx.node.baseline={}; ppCtx.node.baselineAt='';
+      saveState(); renderForecastPage();
+    }
+  });
+  $('#btnFpCsv').addEventListener('click',exportFpCsv);
+  $('#btnApSeed').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    if(Object.keys(ppCtx.node.current).length && !confirm('Overwrite the updated forecast with the original forecast?'))return;
+    ppCtx.node.current=Object.assign({},ppCtx.node.baseline);
+    saveState(); renderActualsPage();
+  });
+  $('#btnApCopyActuals').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    for(const it of ppCtx.items){
+      const src=it.isLabor? it.hoursW : it.costW;
+      for(const wk of ppCtx.actualWeeks){
+        const v=src.get(wk);
+        if(v) ppCtx.node.current[it.label+'|'+wk]=Math.round(v*100)/100;
+      }
+    }
+    saveState(); renderActualsPage();
+  });
+  $('#btnApRebase').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    if(!confirm('Replace the original forecast with the current updated forecast? The old baseline is lost.'))return;
+    ppCtx.node.baseline=Object.assign({},ppCtx.node.current);
+    ppCtx.node.baselineAt=new Date().toISOString();
+    saveState(); renderActualsPage();
+  });
+  $('#btnApClear').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    if(confirm('Clear all updated-forecast values for this project/level? (The original forecast is kept.)')){
+      ppCtx.node.current={}; saveState(); renderActualsPage();
+    }
+  });
+  $('#btnApCsv').addEventListener('click',exportPlanCsv);
+  $('#ppNlMarkup').addEventListener('change',()=>{
+    if(!ppCtx)return;
+    ppCtx.meta._nlMarkup=+$('#ppNlMarkup').value||0;
+    saveState(); updateAllSummaries();
+  });
+  $('#btnRtAdd').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    const name=$('#rtNewEmp').value.trim();
+    if(!name)return;
+    const rt=ppCtx.meta._rateTable;
+    if(!rt[name])rt[name]={};
+    $('#rtNewEmp').value='';
+    saveState(); renderRateTable(); updateAllSummaries();
+  });
+  $('#btnRtFill').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    const mult=+$('#rtMult').value||0;
+    if(mult<=0){alert('Enter a multiplier > 0.');return;}
+    const rt=ppCtx.meta._rateTable;
+    for(const emp of rateTableEmps()){
+      if(!rt[emp])rt[emp]={};
+      if(rt[emp].bill==null){
+        const cost=rt[emp].cost!=null?rt[emp].cost:(ppCtx.empStats[emp]?ppCtx.empStats[emp].rate:0);
+        if(cost>0)rt[emp].bill=Math.round(cost*mult*100)/100;
+      }
+    }
+    saveState(); renderRateTable(); updateAllSummaries();
+  });
+}
+/* ---------- shared context builder ---------- */
+function ppBuild(mode){
+  if(!data.length)return null;
+  const s=state.settings;
+  const pick=$(mode==='f'?'#fpProject':'#apProject');
   const projMap=new Map();
   for(const r of data){ const k=r.projectNumber||r.projectName; if(k && !projMap.has(k)) projMap.set(k,(r.projectNumber? r.projectNumber+' — ':'')+(r.projectName||'')); }
-  const pick=$('#ppProject'); const prev=s.ppProject;
-  pick.innerHTML='';
+  const prev=s.ppProject; pick.innerHTML='';
   [...projMap.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([k,lbl])=>pick.append(el('option',{value:k},lbl)));
-  if(projMap.has(prev)) pick.value=prev; else { s.ppProject=pick.value; }
+  if(projMap.has(prev)) pick.value=prev; else s.ppProject=pick.value;
+  $(mode==='f'?'#fpLevel':'#apLevel').value=s.ppLevel;
+  $(mode==='f'?'#fpWeekEnd':'#apWeekEnd').value=String(s.ppWeekEnd);
   const proj=pick.value;
-  if(!proj){ $('#ppInfo').textContent='No projects found in the data.'; return; }
-
-  const projRows=data.filter(r=>(r.projectNumber||r.projectName)===proj);
+  if(!proj)return null;
   const level=s.ppLevel;
   const node=planNode(proj,level);
   const meta=projMeta(proj);
   const hasEmp=level==='employee'||level==='topTaskEmployee'||level==='taskEmployee';
-
+  const projRows=data.filter(r=>(r.projectNumber||r.projectName)===proj);
   // per-employee actuals (for derived burdened rates)
   const empStats={};
   for(const r of projRows){
@@ -1379,7 +1446,6 @@ function renderProjectPlan(){
     empStats[e2].hours+=r.hours||0; empStats[e2].cost+=r.totalCost||0;
   }
   for(const e2 in empStats)empStats[e2].rate=empStats[e2].hours?empStats[e2].cost/empStats[e2].hours:0;
-
   // build items from actuals
   const items=new Map(); let undated=0;
   for(const r of projRows){
@@ -1401,7 +1467,7 @@ function renderProjectPlan(){
     if(items.has(m.label)){ items.get(m.label)._manual=true; continue; }
     items.set(m.label,{label:m.label,emp:m.emp||null,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[],isLabor:m.isLabor!==false,_manual:true});
   }
-  // rows that exist only in saved plan/baseline keys (e.g. level was rebuilt)
+  // rows that exist only in saved plan/baseline keys
   for(const store of [node.current,node.baseline]){
     for(const k of Object.keys(store)){
       const label=k.slice(0,k.lastIndexOf('|'));
@@ -1419,31 +1485,17 @@ function renderProjectPlan(){
     }
   }
   itemList.sort((a,b)=>(b.isLabor-a.isLabor)||a.label.localeCompare(b.label));
-
-  // week columns
-  const wkSet=new Set();
-  for(const it of itemList){ for(const k of it.costW.keys()) wkSet.add(k); }
-  // include weeks that only exist in the saved plan (so future plans never disappear)
-  for(const k of Object.keys(node.current)){ const wk=k.slice(k.lastIndexOf('|')+1); if(/^\d{4}-\d{2}-\d{2}$/.test(wk)) wkSet.add(wk); }
-  const allWeeks=[...wkSet].sort();
-  if(!allWeeks.length){ $('#ppInfo').textContent='No dated transactions for this project.'; $('#ppTable').innerHTML=''; return; }
-  const todayWk=wkKey(new Date());
-  const lastActualWeek=[...itemList.reduce((s2,it)=>{for(const k of it.costW.keys())s2.add(k);return s2;},new Set())].sort().pop()||allWeeks[allWeeks.length-1];
-  const actualWeeks=allWeeks.filter(w=>w<=lastActualWeek);
-  const futureWeeks=[]; for(let i=1;i<=s.ppAhead;i++)futureWeeks.push(wkAdd(lastActualWeek,i));
-  const shownPast = s.ppPast==='all'? actualWeeks : actualWeeks.slice(-(+s.ppPast));
-  const hiddenWeeks = actualWeeks.slice(0,actualWeeks.length-shownPast.length);
-  const visWeeks=[...shownPast,...futureWeeks];
-
-  ppCtx={proj,level,node,meta,empStats,items:itemList,actualWeeks,futureWeeks,shownPast,hiddenWeeks,visWeeks,lastActualWeek,inputs:[]};
-  // blended rates used when a row has no employee (task-level plans)
+  const awSet=new Set();
+  for(const it of itemList){ for(const k of it.costW.keys()) awSet.add(k); }
+  const actualWeeks=[...awSet].sort();
+  ppCtx={mode,proj,level,node,meta,empStats,items:itemList,projRows,actualWeeks,
+    lastActualWeek:actualWeeks[actualWeeks.length-1]||null,undated,inputs:[]};
   {
     let h=0,c2=0; for(const e2 in empStats){h+=empStats[e2].hours;c2+=empStats[e2].cost;}
     ppCtx.avgCostRate=h?c2/h:0;
     const bills=Object.values(meta._rateTable).map(r=>r.bill).filter(v=>v!=null&&v>0);
     ppCtx.avgBillRate=bills.length?bills.reduce((a,b)=>a+b,0)/bills.length:0;
   }
-  $('#ppNlMarkup').value=meta._nlMarkup;
   // datalists for the add-row form
   const taskSet=new Set(), empSet=new Set(Object.keys(empStats));
   for(const r of projRows){
@@ -1455,8 +1507,183 @@ function renderProjectPlan(){
   for(const k of Object.keys(meta._rateTable))empSet.add(k);
   $('#ppTaskList').innerHTML='';[...taskSet].sort().forEach(v=>$('#ppTaskList').append(el('option',{value:v})));
   $('#ppEmpList').innerHTML='';[...empSet].sort().forEach(v=>$('#ppEmpList').append(el('option',{value:v})));
-
-  // ===== table =====
+  $('#ppNlMarkup').value=meta._nlMarkup;
+  return ppCtx;
+}
+function makeItemCell(it,tr,colCount){
+  const unit=it.isLabor?'hrs':'cost';
+  const name=el('span',{class:'item-link',onclick:()=>toggleDetail(it,tr,colCount)},it.label);
+  const cell=el('td',{title:it.label},name,' ',el('span',{class:'pill',style:'margin-left:4px'},unit));
+  if(it._manual&&!it.rows.length){
+    cell.append(' ',el('span',{class:'pill',style:'color:var(--warn)'},'plan'),
+      ' ',el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove this plan row and its forecast values',
+        onclick:()=>{
+          if(!confirm('Remove plan row "'+it.label+'" and delete its forecast values?'))return;
+          ppCtx.node.manual=(ppCtx.node.manual||[]).filter(m=>m.label!==it.label);
+          const pre=it.label+'|';
+          for(const st of [ppCtx.node.current,ppCtx.node.baseline])
+            for(const k of Object.keys(st)) if(k.startsWith(pre)) delete st[k];
+          saveState(); ppRender();
+        }},'✕'));
+  }
+  return cell;
+}
+/* ---------- page 1: project forecast (baseline) ---------- */
+function renderForecastPage(){
+  if(!ppBuild('f'))return;
+  const node=ppCtx.node;
+  const baseKeys=[...new Set(Object.keys(node.baseline).map(k=>k.slice(k.lastIndexOf('|')+1)))].filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  if(!node.baseStart) node.baseStart = baseKeys[0]||ppCtx.actualWeeks[0]||wkKey(new Date());
+  // re-snap to the current week-end day in case the setting changed
+  { const [y,m,d]=node.baseStart.split('-').map(Number); node.baseStart=wkKey(new Date(y,m-1,d)); }
+  if(!node.baseWeeks) node.baseWeeks = Math.max(12, baseKeys.length? wkDiff(node.baseStart,baseKeys[baseKeys.length-1])+1 : 12);
+  $('#fpStart').value=node.baseStart;
+  $('#fpWeeks').value=node.baseWeeks;
+  const weeks=[]; for(let i=0;i<node.baseWeeks;i++)weeks.push(wkAdd(node.baseStart,i));
+  ppCtx.visWeeks=weeks;
+  const t=$('#fpTable'); t.innerHTML='';
+  const sumCols=['Total','Cost rate','Bill rate','Cost','Revenue','Margin'];
+  const headCells=[el('th',null,'Item'),
+    ...weeks.map(wk=>el('th',{class:'num',title:'Week ending '+wk},'WE '+wkLabel(wk))),
+    ...sumCols.map((c,i)=>el('th',{class:'num'+(i===0?' sumcol':'')},c))];
+  t.append(el('thead',null,el('tr',null,...headCells)));
+  const tb=el('tbody');
+  const colCount=headCells.length;
+  for(const it of ppCtx.items){
+    const tr=el('tr');
+    tr.append(makeItemCell(it,tr,colCount));
+    const rowInputs=[];
+    for(const wk of weeks){
+      const k=it.label+'|'+wk;
+      const inp=el('input',{class:'plan-in',type:'text',inputmode:'decimal',
+        title:it.isLabor?'Planned hours, week ending '+wk:'Planned cost, week ending '+wk,
+        value:node.baseline[k]!=null?node.baseline[k]:''});
+      inp.addEventListener('input',()=>{
+        const v=inp.value.trim();
+        if(v==='')delete node.baseline[k]; else{const n=parseNumber(v);if(!isNaN(n))node.baseline[k]=n;}
+        if(!node.baselineAt)node.baselineAt=new Date().toISOString();
+        saveState(); updateFpSummary(it); updateFpTotalsRow(); renderFpTotals();
+      });
+      inp.addEventListener('paste',e=>handlePlanPaste(e,inp));
+      rowInputs.push(inp);
+      tr.append(el('td',{class:'wk'},inp));
+    }
+    ppCtx.inputs.push(rowInputs);
+    it._sum={};
+    const mk=(key,cls)=>{const td=el('td',{class:'num'+(cls||'')});it._sum[key]=td;return td;};
+    tr.append(mk('tot',' sumcol'),mk('rate'),mk('bill'),mk('cost'),mk('rev'),mk('margin'));
+    tb.append(tr);
+    updateFpSummary(it);
+  }
+  const trTot=el('tr',{class:'total'});
+  trTot.append(el('td',null,'TOTAL'));
+  ppCtx._fpWeekTds=weeks.map(()=>{const td=el('td',{class:'num wk'});trTot.append(td);return td;});
+  ppCtx._fpSum={};
+  ['tot','rate','bill','cost','rev','margin'].forEach((k,i)=>{
+    const td=el('td',{class:'num'+(i===0?' sumcol':'')}); ppCtx._fpSum[k]=td; trTot.append(td);
+  });
+  tb.append(trTot);
+  t.append(tb);
+  updateFpTotalsRow();
+  renderRateTable();
+  renderFpTotals();
+  const outOfRange=baseKeys.filter(k=>k<weeks[0]||k>weeks[weeks.length-1]).length;
+  $('#fpInfo').textContent=ppCtx.items.length+' items · plan window '+weeks[0]+' → '+weeks[weeks.length-1]
+    +(node.baselineAt?' · baseline first entered '+node.baselineAt.slice(0,10):'')
+    +(outOfRange?' · '+outOfRange+' baseline week(s) outside this window (still counted in totals)':'');
+}
+function fpCalc(it){
+  const node=ppCtx.node;
+  let tot=0; const pre=it.label+'|';
+  for(const k in node.baseline) if(k.startsWith(pre)) tot+=node.baseline[k];
+  const mkup=1+(ppCtx.meta._nlMarkup||0)/100;
+  const rate=it.isLabor?costRateOf(it):1;
+  const bill=it.isLabor?billRateOf(it):null;
+  const cost=it.isLabor?tot*rate:tot;
+  const rev=it.isLabor?tot*bill:tot*mkup;
+  return {tot,rate,bill,cost,rev,margin:rev-cost};
+}
+function updateFpSummary(it){
+  const c=fpCalc(it); const S=it._sum;
+  if(!S||!S.tot)return;
+  const f=v=>it.isLabor?fmtNum(v,1):fmtMoney(v);
+  S.tot.textContent=c.tot?f(c.tot):'';
+  S.rate.textContent=it.isLabor?fmtNum(c.rate,2):'—';
+  S.bill.textContent=it.isLabor?(c.bill?fmtNum(c.bill,2):''):'—';
+  S.bill.title=it.isLabor&&!c.bill?'No bill rate in the rate table':'';
+  S.cost.textContent=c.tot?fmtMoney(c.cost):'';
+  S.rev.textContent=c.tot?fmtMoney(c.rev):'';
+  S.margin.textContent=c.tot?fmtMoney(c.margin):'';
+  S.margin.className='num '+(c.tot?(c.margin<0?'neg':'pos'):'');
+}
+function updateFpTotalsRow(){
+  if(!ppCtx||ppCtx.mode!=='f')return;
+  const node=ppCtx.node;
+  ppCtx.visWeeks.forEach((wk,i)=>{
+    let h=0;
+    for(const it of ppCtx.items){ if(!it.isLabor)continue; const v=node.baseline[it.label+'|'+wk]; if(v!=null)h+=v; }
+    ppCtx._fpWeekTds[i].textContent=h?fmtNum(h,1):'';
+  });
+  let hrs=0,cost=0,rev=0;
+  for(const it of ppCtx.items){ const c=fpCalc(it); if(it.isLabor)hrs+=c.tot; cost+=c.cost; rev+=c.rev; }
+  const T=ppCtx._fpSum;
+  T.tot.textContent=fmtNum(hrs,1)+' h'; T.rate.textContent=''; T.bill.textContent='';
+  T.cost.textContent=fmtMoney(cost); T.rev.textContent=fmtMoney(rev);
+  T.margin.textContent=fmtMoney(rev-cost);
+}
+function renderFpTotals(){
+  if(!ppCtx)return;
+  let hrs=0,cost=0,rev=0,missingBill=0;
+  for(const it of ppCtx.items){
+    const c=fpCalc(it);
+    if(it.isLabor){ hrs+=c.tot; if(!c.bill&&c.tot)missingBill++; }
+    cost+=c.cost; rev+=c.rev;
+  }
+  const k=$('#fpTotals'); k.innerHTML='';
+  const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
+  kpi('Baseline labor hours',fmtNum(hrs,1));
+  kpi('Baseline cost',fmtMoney(cost));
+  kpi('Total revenue (price to owner)',fmtMoney(rev));
+  kpi('Margin',fmtMoney(rev-cost), rev?(100*(rev-cost)/rev).toFixed(1)+'% of revenue':'');
+  if(missingBill) kpi('⚠ Missing bill rates',String(missingBill),'labor row(s) counted at $0 revenue');
+}
+function exportFpCsv(){
+  if(!ppCtx||ppCtx.mode!=='f'){alert('Open the Project Forecast tab first.');return;}
+  const node=ppCtx.node;
+  const head=['Item','Unit',...ppCtx.visWeeks.map(wk=>'WE '+wk),'Total','Cost rate','Bill rate','Cost','Revenue','Margin'];
+  const out=[head];
+  for(const it of ppCtx.items){
+    const c=fpCalc(it);
+    out.push([it.label,it.isLabor?'hours':'cost',
+      ...ppCtx.visWeeks.map(wk=>node.baseline[it.label+'|'+wk]??''),
+      c.tot,it.isLabor?c.rate.toFixed(2):'',it.isLabor&&c.bill?c.bill.toFixed(2):'',
+      c.cost.toFixed(2),c.rev.toFixed(2),c.margin.toFixed(2)]);
+  }
+  downloadCSV('project-baseline-'+ppCtx.proj+'.csv',out);
+}
+/* ---------- page 2: actuals & updated forecast ---------- */
+function renderActualsPage(){
+  if(!ppBuild('a'))return;
+  const s=state.settings;
+  $('#apPast').value=s.ppPast; $('#apAhead').value=s.ppAhead;
+  const node=ppCtx.node, meta=ppCtx.meta;
+  const todayWk=wkKey(new Date());
+  if(!ppCtx.lastActualWeek)ppCtx.lastActualWeek=todayWk;
+  if(!ppCtx.actualWeeks.length && !Object.keys(node.baseline).length && !Object.keys(node.current).length){
+    $('#ppInfo').textContent='No transactions or plan for this project yet — start on the Project Forecast tab.';
+    $('#ppTable').innerHTML=''; renderApTotals(); updatePlanChart(); return;
+  }
+  const lastActualWeek=ppCtx.lastActualWeek;
+  const wkSet=new Set(ppCtx.actualWeeks);
+  for(const store of [node.current,node.baseline])
+    for(const k of Object.keys(store)){ const wk=k.slice(k.lastIndexOf('|')+1); if(/^\d{4}-\d{2}-\d{2}$/.test(wk)) wkSet.add(wk); }
+  const allWeeks=[...wkSet].sort();
+  const actualWeeks=allWeeks.filter(w=>w<=lastActualWeek);
+  const futureWeeks=[]; for(let i=1;i<=s.ppAhead;i++)futureWeeks.push(wkAdd(lastActualWeek,i));
+  const shownPast = s.ppPast==='all'? actualWeeks : actualWeeks.slice(-(+s.ppPast));
+  const hiddenWeeks = actualWeeks.slice(0,actualWeeks.length-shownPast.length);
+  const visWeeks=[...shownPast,...futureWeeks];
+  Object.assign(ppCtx,{actualWeeks,futureWeeks,shownPast,hiddenWeeks,visWeeks});
   const t=$('#ppTable'); t.innerHTML='';
   const sumCols=['Act hrs/cost','Plan to date','Var to date','Plan to go','EAC','Cost rate','Act cost','EAC cost','EAC rev','Orig EAC','Overrun'];
   const headCells=[el('th',null,'Item')];
@@ -1470,25 +1697,9 @@ function renderProjectPlan(){
   t.append(el('thead',null,el('tr',null,...headCells)));
   const tb=el('tbody');
   const colCount=headCells.length;
-
-  for(const it of itemList){
+  for(const it of ppCtx.items){
     const tr=el('tr');
-    const unit=it.isLabor?'hrs':'cost';
-    const name=el('span',{class:'item-link',onclick:()=>toggleDetail(it,tr,colCount)},it.label);
-    const cell=el('td',{title:it.label},name,' ',el('span',{class:'pill',style:'margin-left:4px'},unit));
-    if(it._manual&&!it.rows.length){
-      cell.append(' ',el('span',{class:'pill',style:'color:var(--warn)'},'plan'),
-        ' ',el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove this plan row and its forecast values',
-          onclick:()=>{
-            if(!confirm('Remove plan row "'+it.label+'" and delete its forecast values?'))return;
-            ppCtx.node.manual=(ppCtx.node.manual||[]).filter(m=>m.label!==it.label);
-            const pre=it.label+'|';
-            for(const st of [ppCtx.node.current,ppCtx.node.baseline])
-              for(const k of Object.keys(st)) if(k.startsWith(pre)) delete st[k];
-            saveState(); renderProjectPlan();
-          }},'✕'));
-    }
-    tr.append(cell);
+    tr.append(makeItemCell(it,tr,colCount));
     if(hiddenWeeks.length){
       let hAct=0; for(const wk of hiddenWeeks) hAct+=(it.isLabor?it.hoursW.get(wk):it.costW.get(wk))||0;
       tr.append(el('td',{class:'num',style:'color:#8aa0bd'},hAct? (it.isLabor?fmtNum(hAct,1):fmtMoney(hAct)):''));
@@ -1501,9 +1712,8 @@ function renderProjectPlan(){
       const plan=node.current[k];
       const baseV=node.baseline[k];
       const inp=el('input',{class:'plan-in',type:'text',inputmode:'decimal',
-        title:(node.baselineAt? 'Original: '+(baseV!=null?baseV:'—'):'No original forecast saved yet'),
+        title:(node.baselineAt? 'Original: '+(baseV!=null?baseV:'—'):'No original forecast entered yet'),
         value:plan!=null?plan:''});
-      inp.dataset.item=it.label; inp.dataset.week=wk;
       inp.addEventListener('input',()=>{
         const v=inp.value.trim();
         if(v==='') delete node.current[k]; else { const n=parseNumber(v); if(!isNaN(n)) node.current[k]=n; }
@@ -1519,18 +1729,16 @@ function renderProjectPlan(){
       tr.append(td);
     }
     ppCtx.inputs.push(rowInputs);
-    // summary cells (filled by updateItemSummary)
     it._sum={};
     const mk=(key,cls)=>{const td=el('td',{class:'num'+(cls||'')});it._sum[key]=td;return td;};
     tr.append(mk('act',' sumcol'),mk('planTD'),mk('varTD'),mk('toGo'),mk('eac'));
-    // cost-rate cell (writes to the project rate table when the row maps to an employee)
     const rateTd=el('td',{class:'num'});
     if(it.isLabor){
       const rt=meta._rateTable;
       const override=it.emp&&rt[it.emp]?rt[it.emp].cost:node.rates[it.label];
       const eff=costRateOf(it);
       const rin=el('input',{class:'rate-in',type:'text',inputmode:'decimal',
-        title:(it.emp?'Burdened cost $/hr for '+it.emp+' (shared with their other rows; also editable in the rate table)':'Burdened cost $/hr for this row'),
+        title:(it.emp?'Burdened cost $/hr for '+it.emp+' (shared with their other rows; also editable in the rate table on the Project Forecast tab)':'Burdened cost $/hr for this row'),
         value: override!=null? override : (eff?eff.toFixed(2):'')});
       rin.addEventListener('input',()=>{
         const v=rin.value.trim();
@@ -1542,14 +1750,12 @@ function renderProjectPlan(){
         }
         saveState(); updateAllSummaries();
       });
-      rin.addEventListener('change',renderRateTable);
       rateTd.append(rin);
     } else rateTd.textContent='—';
     tr.append(rateTd, mk('actC'), mk('eacC'), mk('eacRev'), mk('origEac'), mk('over'));
     tb.append(tr);
     updateItemSummary(it);
   }
-  // totals row
   const trTot=el('tr',{class:'total'});
   trTot.append(el('td',null,'TOTAL'));
   if(hiddenWeeks.length) trTot.append(el('td',{class:'num'}));
@@ -1561,15 +1767,13 @@ function renderProjectPlan(){
   });
   tb.append(trTot);
   t.append(tb);
-  renderRateTable();
   updatePlanTotals();
   updatePlanChart();
-  $('#ppBaselineInfo').textContent = node.baselineAt
-    ? 'Original forecast saved '+node.baselineAt.slice(0,10)+' ('+Object.keys(node.baseline).length+' cells)'
-    : 'No original forecast saved yet — enter your plan, then click "Save current plan as original forecast".';
-  $('#ppInfo').textContent = itemList.length+' items · '+projRows.length.toLocaleString()+' transactions · weeks '
-    +wkLabel(allWeeks[0])+' – '+wkLabel(lastActualWeek)+' actual, +'+s.ppAhead+' planned'
-    +(undated?' · '+undated+' undated rows excluded from weekly columns':'');
+  $('#ppInfo').textContent = ppCtx.items.length+' items · '+ppCtx.projRows.length.toLocaleString()+' transactions'
+    +(ppCtx.actualWeeks.length?' · actual weeks '+wkLabel(ppCtx.actualWeeks[0])+' – '+wkLabel(lastActualWeek):'')
+    +' · +'+s.ppAhead+' forecast weeks'
+    +(node.baselineAt?' · original forecast entered '+node.baselineAt.slice(0,10):' · no original forecast yet')
+    +(ppCtx.undated?' · '+ppCtx.undated+' undated rows excluded from weekly columns':'');
 }
 function refreshCellOver(td,act,plan,wk,lastActualWeek){
   const past=wk<=lastActualWeek;
@@ -1591,7 +1795,6 @@ function itemCalc(it){
   const eacCost=it.cost+toGo*rate;
   const baseCost=node.baselineAt? (it.isLabor? baseTot*rate : baseTot) : null;
   const over=node.baselineAt&&baseTot? eac-baseTot : null;
-  // revenue (price to owner): labor = hours x bill rate; non-labor = cost + markup
   const mkup=1+(ppCtx.meta._nlMarkup||0)/100;
   const bill=it.isLabor? billRateOf(it) : null;
   const nl=(it.nlCost||0)*mkup; // expense/subs charges within a labor row, billed at cost + markup
@@ -1601,9 +1804,11 @@ function itemCalc(it){
   return {planTD,toGo,baseTot,act,rate,bill,eac,eacCost,baseCost,actRev,eacRev,baseRev,over,varTD:act-planTD};
 }
 function updateItemSummary(it){
+  if(ppCtx.mode!=='a')return;
   const c=itemCalc(it);
   const f=v=>it.isLabor? fmtNum(v,1) : fmtMoney(v);
   const S=it._sum;
+  if(!S||!S.act)return;
   S.act.textContent=f(c.act);
   S.planTD.textContent=c.planTD?f(c.planTD):'';
   if(c.planTD){
@@ -1626,9 +1831,8 @@ function updateItemSummary(it){
   }
 }
 function updatePlanTotals(){
-  if(!ppCtx)return;
+  if(!ppCtx||ppCtx.mode!=='a')return;
   const node=ppCtx.node;
-  // weekly totals: hours for labor items + plan hours (labor only) shown as act/plan
   ppCtx.visWeeks.forEach((wk,i)=>{
     let act=0,plan=0;
     for(const it of ppCtx.items){ if(!it.isLabor)continue;
@@ -1639,9 +1843,8 @@ function updatePlanTotals(){
     td.innerHTML='';
     td.append(el('span',{class:'wk-act'},wk<=ppCtx.lastActualWeek&&act?fmtNum(act,1):''),
       el('span',null,plan?fmtNum(plan,1):''));
-    td.title='Labor hours — actual / planned';
+    td.title='Labor hours — actual / updated forecast';
   });
-  // summary totals
   let actH=0,planTD=0,toGo=0,eacH=0,actC=0,eacC=0,eacR=0,baseH=0,overSum=0,hasBase=false;
   for(const it of ppCtx.items){
     const c=itemCalc(it);
@@ -1662,7 +1865,53 @@ function updatePlanTotals(){
   T.origEac.textContent=baseH?fmtNum(baseH,1)+' h':'';
   T.over.textContent=hasBase?(overSum>0?'+':'')+fmtNum(overSum,1)+' h':'';
   T.over.className='num '+(hasBase&&overSum>0.5?'neg':hasBase?'pos':'');
-  renderPpTotals();
+  renderApTotals();
+}
+function renderApTotals(){
+  if(!ppCtx)return;
+  const node=ppCtx.node;
+  const hasBase=!!node.baselineAt;
+  let A={h:0,c:0,r:0},E={h:0,c:0,r:0},B={h:0,c:0,r:0};
+  let missingBill=0;
+  for(const it of ppCtx.items){
+    const c=itemCalc(it);
+    if(it.isLabor){
+      A.h+=it.hours; E.h+=c.eac; B.h+=c.baseTot;
+      if(!c.bill&&(c.eac||c.baseTot))missingBill++;
+    }
+    A.c+=it.cost; A.r+=c.actRev||0;
+    E.c+=c.eacCost; E.r+=c.eacRev||0;
+    if(hasBase){ B.c+=c.baseCost||0; B.r+=c.baseRev||0; }
+  }
+  const t=$('#ppTotals'); t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,el('th'),
+    el('th',{class:'num'},'Original forecast'),el('th',{class:'num'},'Updated forecast (EAC)'),
+    el('th',{class:'num'},'Actuals to date'),el('th',{class:'num'},'Updated vs original'))));
+  const tb=el('tbody');
+  const row=(lbl,b,e,a,fmt2,invertGood)=>{
+    const d=hasBase? e-b : null;
+    const cls=d==null?'num':(invertGood? (d<-0.5?'num neg':'num pos') : (d>0.5?'num neg':'num pos'));
+    tb.append(el('tr',null,el('td',null,lbl),
+      el('td',{class:'num'},hasBase?fmt2(b):'—'),
+      el('td',{class:'num'},fmt2(e)),
+      el('td',{class:'num'},fmt2(a)),
+      el('td',{class:cls},d==null?'—':(d>0?'+':'')+fmt2(d))));
+  };
+  row('Labor hours',B.h,E.h,A.h,v=>fmtNum(v,1));
+  row('Cost',B.c,E.c,A.c,fmtMoney);
+  row('Revenue (price to owner)',B.r,E.r,A.r,fmtMoney,true);
+  row('Margin',B.r-B.c,E.r-E.c,A.r-A.c,fmtMoney,true);
+  const pct=(r,c2)=>r? (100*(r-c2)/r).toFixed(1)+'%':'—';
+  tb.append(el('tr',null,el('td',null,'Margin %'),
+    el('td',{class:'num'},hasBase?pct(B.r,B.c):'—'),
+    el('td',{class:'num'},pct(E.r,E.c)),
+    el('td',{class:'num'},pct(A.r,A.c)),
+    el('td',{class:'num'},'')));
+  t.append(tb);
+  if(missingBill){
+    t.append(el('tfoot',null,el('tr',null,el('td',{colspan:5,class:'hint',style:'color:var(--warn)'},
+      missingBill+' labor row(s) have no bill rate in the rate table (Project Forecast tab) — their revenue counts as 0.'))));
+  }
 }
 function renderRateTable(){
   if(!ppCtx)return;
@@ -1691,7 +1940,7 @@ function renderRateTable(){
       inp.addEventListener('change',renderRateTable);
     };
     wire(costIn,'cost'); wire(billIn,'bill');
-    const del=(!es&&Object.keys(e).length>=0)? el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove from rate table',
+    const del=!es? el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove from rate table',
       onclick:()=>{ delete rt[emp]; saveState(); renderRateTable(); updateAllSummaries(); }},'✕') : null;
     tb.append(el('tr',null,
       el('td',null,emp),
@@ -1701,62 +1950,15 @@ function renderRateTable(){
       el('td',{class:'num'},billIn),
       el('td',{class:margin!=null?numCls(margin):'num'},margin!=null?fmtNum(margin,2):''),
       el('td',{class:margin!=null&&e.bill?numCls(margin):'num'},margin!=null&&e.bill?(100*margin/e.bill).toFixed(1)+'%':''),
-      el('td',null,es?null:del)));
+      el('td',null,del)));
   }
   t.append(tb);
-}
-function renderPpTotals(){
-  if(!ppCtx)return;
-  const node=ppCtx.node;
-  const hasBase=!!node.baselineAt;
-  let A={h:0,c:0,r:0},E={h:0,c:0,r:0},B={h:0,c:0,r:0};
-  let missingBill=0;
-  for(const it of ppCtx.items){
-    const c=itemCalc(it);
-    if(it.isLabor){
-      A.h+=it.hours; E.h+=c.eac; B.h+=c.baseTot;
-      if(!c.bill&&(c.eac||c.baseTot))missingBill++;
-    }
-    A.c+=it.cost; A.r+=c.actRev||0;
-    E.c+=c.eacCost; E.r+=c.eacRev||0;
-    if(hasBase){ B.c+=c.baseCost||0; B.r+=c.baseRev||0; }
-  }
-  const t=$('#ppTotals'); t.innerHTML='';
-  t.append(el('thead',null,el('tr',null,el('th'),
-    el('th',{class:'num'},'Original baseline'),el('th',{class:'num'},'Current forecast (EAC)'),
-    el('th',{class:'num'},'Actuals to date'),el('th',{class:'num'},'EAC vs baseline'))));
-  const tb=el('tbody');
-  const row=(lbl,b,e,a,fmt2,invertGood)=>{
-    const d=hasBase? e-b : null;
-    const cls=d==null?'num':(invertGood? (d<-0.5?'num neg':'num pos') : (d>0.5?'num neg':'num pos'));
-    tb.append(el('tr',null,el('td',null,lbl),
-      el('td',{class:'num'},hasBase?fmt2(b):'—'),
-      el('td',{class:'num'},fmt2(e)),
-      el('td',{class:'num'},fmt2(a)),
-      el('td',{class:cls},d==null?'—':(d>0?'+':'')+fmt2(d))));
-  };
-  row('Labor hours',B.h,E.h,A.h,v=>fmtNum(v,1));
-  row('Cost',B.c,E.c,A.c,fmtMoney);
-  row('Revenue (price to owner)',B.r,E.r,A.r,fmtMoney,true);
-  row('Margin',B.r-B.c,E.r-E.c,A.r-A.c,fmtMoney,true);
-  const pct=(r,c2)=>r? (100*(r-c2)/r).toFixed(1)+'%':'—';
-  tb.append(el('tr',null,el('td',null,'Margin %'),
-    el('td',{class:'num'},hasBase?pct(B.r,B.c):'—'),
-    el('td',{class:'num'},pct(E.r,E.c)),
-    el('td',{class:'num'},pct(A.r,A.c)),
-    el('td',{class:'num'},'')));
-  t.append(tb);
-  if(missingBill){
-    t.append(el('tfoot',null,el('tr',null,el('td',{colspan:5,class:'hint',style:'color:var(--warn)'},
-      missingBill+' labor row(s) have no bill rate in the rate table — their revenue counts as 0.'))));
-  }
 }
 function handlePlanPaste(e,inp){
   const text=(e.clipboardData||window.clipboardData).getData('text');
   if(!/[\t\n]/.test(text))return; // single value: default paste
   e.preventDefault();
   const lines=text.replace(/\r/g,'').split('\n').filter(l=>l!=='');
-  // locate the focused input in the grid
   let r0=-1,c0=-1;
   ppCtx.inputs.forEach((row,r)=>{const c=row.indexOf(inp);if(c>=0){r0=r;c0=c;}});
   if(r0<0)return;
@@ -1769,14 +1971,15 @@ function handlePlanPaste(e,inp){
       target.dispatchEvent(new Event('input'));
     });
   });
-  updatePlanChart();
+  if(ppCtx.mode==='a')updatePlanChart();
 }
 function updatePlanChart(){
-  if(!ppCtx)return;
+  if(!ppCtx||ppCtx.mode!=='a')return;
   const node=ppCtx.node;
-  const labels=ppCtx.visWeeks.map(wkLabel);
+  const visWeeks=ppCtx.visWeeks||[];
+  const labels=visWeeks.map(wkLabel);
   const act=[],plan=[],base=[];
-  for(const wk of ppCtx.visWeeks){
+  for(const wk of visWeeks){
     let a=0,p=0,b=0;
     for(const it of ppCtx.items){ if(!it.isLabor)continue;
       a+=it.hoursW.get(wk)||0;
@@ -1788,7 +1991,7 @@ function updatePlanChart(){
   }
   const ds=[
     {label:'Actual hrs',data:act,backgroundColor:'#38bdf8',type:'bar'},
-    {label:'Forecast hrs',data:plan,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',borderDash:[6,5],tension:.2,pointRadius:2},
+    {label:'Updated forecast',data:plan,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',borderDash:[6,5],tension:.2,pointRadius:2},
   ];
   if(node.baselineAt) ds.push({label:'Original forecast',data:base,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',tension:.2,pointRadius:2});
   drawChart('chPlan',{type:'bar',data:{labels,datasets:ds},options:chartOpts()});
@@ -1796,6 +1999,7 @@ function updatePlanChart(){
 function toggleDetail(it,tr,colCount){
   const next=tr.nextSibling;
   if(next&&next.classList&&next.classList.contains('detailrow')){ next.remove(); return; }
+  if(!it.rows.length){ tr.after(el('tr',{class:'detailrow'},el('td',{colspan:colCount},el('span',{class:'hint'},'No charges yet — this row exists only in the plan.')))); return; }
   const dt=el('table');
   dt.append(el('thead',null,el('tr',null,...['Date','Employee/Vendor','Task','Type','Expenditure Type','Hours','Total Cost','Billed','Invoice','Comments'].map(h=>el('th',null,h)))));
   const db=el('tbody');
@@ -1820,10 +2024,10 @@ function toggleDetail(it,tr,colCount){
   tr.after(el('tr',{class:'detailrow'},el('td',{colspan:colCount},wrap,note)));
 }
 function exportPlanCsv(){
-  if(!ppCtx){alert('Open a project first.');return;}
+  if(!ppCtx||ppCtx.mode!=='a'){alert('Open the Actuals vs Forecast tab first.');return;}
   const node=ppCtx.node;
   const head=['Item','Unit'];
-  for(const wk of ppCtx.visWeeks){ head.push('WE '+wk+' actual','WE '+wk+' plan','WE '+wk+' original'); }
+  for(const wk of ppCtx.visWeeks){ head.push('WE '+wk+' actual','WE '+wk+' updated','WE '+wk+' original'); }
   head.push('Actual to date','Plan to date','Variance to date','Plan to go','EAC','Cost rate','Bill rate','Actual cost','EAC cost','EAC revenue','Original EAC','Original cost','Original revenue','Overrun vs original');
   const out=[head];
   for(const it of ppCtx.items){
@@ -1841,7 +2045,7 @@ function exportPlanCsv(){
       c.over!=null?c.over.toFixed(2):'');
     out.push(row);
   }
-  downloadCSV('project-plan-'+ppCtx.proj+'.csv',out);
+  downloadCSV('project-actuals-vs-forecast-'+ppCtx.proj+'.csv',out);
 }
 
 /* ===================== Settings ===================== */
@@ -1880,7 +2084,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','project','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','forecast','pforecast','pactuals','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -1890,7 +2094,8 @@ function refreshActiveTab(){
   if(t==='dashboard') renderDashboard();
   else if(t==='explorer') renderExplorer();
   else if(t==='forecast') renderForecast();
-  else if(t==='project') renderProjectPlan();
+  else if(t==='pforecast') renderForecastPage();
+  else if(t==='pactuals') renderActualsPage();
 }
 
 /* ===================== Sample data ===================== */
@@ -1971,7 +2176,7 @@ function init(){
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
   $('#btnSample').addEventListener('click',loadSample);
-  setupExplorer(); setupForecast(); setupProjectPlan(); setupSettings();
+  setupExplorer(); setupForecast(); setupProjectPages(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
