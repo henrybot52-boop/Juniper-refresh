@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oracle Project Forecasting Tool</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#27364a; --border:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --accent2:#34d399;
+    --warn:#fbbf24; --bad:#f87171; --good:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+  header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;position:sticky;top:0;z-index:50}
+  header h1{font-size:17px;margin:0;font-weight:600;color:#fff}
+  header h1 span{color:var(--accent)}
+  .spacer{flex:1}
+  button,.btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 14px;cursor:pointer;font-size:13px;transition:background .15s}
+  button:hover,.btn:hover{background:#33445c}
+  button.primary{background:var(--accent);color:#06283d;border-color:var(--accent);font-weight:600}
+  button.primary:hover{background:#5fcbfa}
+  button.small{padding:3px 9px;font-size:12px}
+  input,select{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:13px}
+  input[type=number]{width:90px}
+  input:focus,select:focus{outline:1px solid var(--accent)}
+  nav.tabs{display:flex;gap:2px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--border)}
+  nav.tabs button{background:none;border:none;border-bottom:3px solid transparent;border-radius:0;padding:11px 18px;color:var(--muted);font-size:14px}
+  nav.tabs button.active{color:#fff;border-bottom-color:var(--accent)}
+  nav.tabs button:hover{color:#fff;background:none}
+  main{padding:20px;max-width:1700px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:18px}
+  .card h2{margin:0 0 12px;font-size:15px;font-weight:600;color:#fff}
+  .card h3{margin:14px 0 8px;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .hint{color:var(--muted);font-size:12.5px;line-height:1.5}
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .row label{color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:6px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .kpi .lbl{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  .kpi .val{font-size:22px;font-weight:700;color:#fff;margin-top:4px}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .dropzone{border:2px dashed var(--border);border-radius:10px;padding:46px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .15s,background .15s}
+  .dropzone.drag{border-color:var(--accent);background:#1a2c42}
+  .dropzone b{color:var(--text)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+  th{background:var(--panel2);color:var(--muted);font-weight:600;position:sticky;top:0;cursor:default}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr:hover td{background:#22304a}
+  tr.total td{font-weight:700;background:var(--panel2);color:#fff}
+  .tablewrap{overflow:auto;max-height:600px;border:1px solid var(--border);border-radius:8px}
+  .neg{color:var(--bad)} .pos{color:var(--good)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11.5px;background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
+  .pill.ok{color:var(--good);border-color:var(--good)}
+  .pill.warn{color:var(--warn);border-color:var(--warn)}
+  .pill.bad{color:var(--bad);border-color:var(--bad)}
+  /* filter dropdowns */
+  .filterbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+  .fdrop{position:relative;display:inline-block}
+  .fdrop>button{font-size:12.5px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fdrop>button.active-filter{border-color:var(--accent);color:var(--accent)}
+  .fpanel{position:absolute;top:calc(100% + 4px);left:0;z-index:100;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;min-width:260px;max-width:360px;box-shadow:0 8px 28px rgba(0,0,0,.5);display:none}
+  .fpanel.open{display:block}
+  .fpanel input[type=text]{width:100%;margin-bottom:8px}
+  .fpanel .opts{max-height:260px;overflow:auto}
+  .fpanel .opts label{display:flex;gap:7px;align-items:center;padding:3px 2px;font-size:12.5px;color:var(--text);cursor:pointer}
+  .fpanel .links{display:flex;gap:12px;margin-bottom:6px;font-size:12px}
+  .fpanel .links a{color:var(--accent);cursor:pointer;text-decoration:none}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:1100px){.grid2{grid-template-columns:1fr}}
+  .chartbox{position:relative;height:300px}
+  .checkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px}
+  .checkgrid label{display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--text);padding:2px 0;cursor:pointer}
+  .maptable td select{width:100%;min-width:180px}
+  .ok-dot{color:var(--good)} .miss-dot{color:var(--bad)}
+  input.budget-in{width:120px;text-align:right;background:#16243a;border-color:#3b5375}
+  .banner{padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px}
+  .banner.info{background:#173049;border:1px solid #1d4f74}
+  .banner.warn{background:#3a2e12;border:1px solid #6b5418;color:#fde68a}
+  .hidden{display:none !important}
+  details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:8px}
+  .footer-note{color:var(--muted);font-size:11.5px;text-align:center;padding:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Oracle <span>Project Forecasting</span> Tool</h1>
+  <span id="dataStatus" class="pill">No data loaded</span>
+  <div class="spacer"></div>
+  <button id="btnSample" class="small">Load sample data</button>
+  <button id="btnExportCfg" class="small">Export settings</button>
+  <button id="btnImportCfg" class="small">Import settings</button>
+  <input type="file" id="cfgFile" accept=".json" class="hidden">
+  <button id="btnUploadTop" class="primary">Upload extract</button>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.tsv,.txt" class="hidden">
+</header>
+
+<nav class="tabs">
+  <button data-tab="upload" class="active">1 · Upload &amp; Mapping</button>
+  <button data-tab="dashboard">2 · Dashboard</button>
+  <button data-tab="explorer">3 · Pivot Explorer</button>
+  <button data-tab="forecast">4 · Forecast</button>
+  <button data-tab="settings">5 · Settings</button>
+</nav>
+
+<main>
+
+<!-- ============ UPLOAD TAB ============ -->
+<section id="tab-upload">
+  <div class="card">
+    <h2>Upload your weekly Oracle extract</h2>
+    <div class="dropzone" id="dropzone">
+      <b>Drop your file here</b> or click to browse<br>
+      <span style="font-size:12px">Excel (.xlsx / .xls) or CSV/TSV · Everything stays in your browser — nothing is uploaded to a server</span>
+    </div>
+    <div id="sheetPickRow" class="row hidden" style="margin-top:12px">
+      <label>Worksheet: <select id="sheetPick"></select></label>
+      <label>Header row: <input type="number" id="headerRow" min="1" value="1" style="width:70px"></label>
+      <button id="btnReparse" class="small">Re-read</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="mapCard">
+    <h2>Column mapping <span class="hint">— auto-detected; adjust if your extract uses different headings. Saved for next week’s upload.</span></h2>
+    <div class="tablewrap" style="max-height:420px">
+      <table class="maptable"><thead><tr><th>Field the tool needs</th><th>Column in your file</th><th></th></tr></thead>
+      <tbody id="mapBody"></tbody></table>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="btnApplyMap" class="primary">Apply mapping &amp; load data</button>
+      <span class="hint" id="mapSummary"></span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="previewCard">
+    <h2>Data preview <span class="hint" id="previewInfo"></span></h2>
+    <div class="tablewrap" style="max-height:340px"><table id="previewTable"></table></div>
+  </div>
+</section>
+
+<!-- ============ DASHBOARD TAB ============ -->
+<section id="tab-dashboard" class="hidden">
+  <div class="filterbar" id="filterbar-dash"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="grid2">
+    <div class="card"><h2>Cost by period</h2><div class="chartbox"><canvas id="chTrend"></canvas></div></div>
+    <div class="card"><h2>Cost mix</h2><div class="chartbox"><canvas id="chMix"></canvas></div></div>
+  </div>
+  <div class="card">
+    <h2>Top projects by total cost</h2>
+    <div class="tablewrap" style="max-height:420px"><table id="topProjects"></table></div>
+  </div>
+</section>
+
+<!-- ============ EXPLORER TAB ============ -->
+<section id="tab-explorer" class="hidden">
+  <div class="filterbar" id="filterbar-exp"></div>
+  <div class="card">
+    <h2>Pivot builder</h2>
+    <h3>Group rows by (in order)</h3>
+    <div class="checkgrid" id="expDims"></div>
+    <div class="row" style="margin-top:12px">
+      <label>Value: <select id="expMetric"></select></label>
+      <label><input type="checkbox" id="expByPeriod" checked> Spread across periods (columns)</label>
+      <label><input type="checkbox" id="expAllMetrics"> Show all cost columns instead</label>
+      <button id="btnExpRun" class="primary">Build pivot</button>
+      <button id="btnExpCsv">Export CSV</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="tablewrap" style="max-height:640px"><table id="expTable"></table></div>
+    <div class="hint" id="expInfo" style="margin-top:8px"></div>
+  </div>
+</section>
+
+<!-- ============ FORECAST TAB ============ -->
+<section id="tab-forecast" class="hidden">
+  <div class="filterbar" id="filterbar-fc"></div>
+  <div class="card">
+    <h2>Forecast configuration</h2>
+    <div class="row">
+      <label>Forecast level:
+        <select id="fcLevel">
+          <option value="projectNumber,projectName">Project</option>
+          <option value="projectNumber,projectName,topTaskNumber,topTaskName">Project + Top Task</option>
+          <option value="projectManager">Project Manager</option>
+          <option value="costCenter">Cost Center</option>
+          <option value="businessUnit,division">Business Unit + Division</option>
+          <option value="expenditureType">Expenditure/Event Type</option>
+        </select>
+      </label>
+      <label>Metric:
+        <select id="fcMetric"></select>
+      </label>
+      <label>Method:
+        <select id="fcMethod">
+          <option value="avgN">Average of last N periods</option>
+          <option value="weighted">Weighted average (recent heavier)</option>
+          <option value="linear">Linear trend (last N periods)</option>
+          <option value="last">Repeat last period</option>
+        </select>
+      </label>
+      <label>Look-back N: <input type="number" id="fcLookback" min="1" max="36" value="3"></label>
+      <label>Horizon (months): <input type="number" id="fcHorizon" min="1" max="36" value="6"></label>
+      <label>Monthly adjust %: <input type="number" id="fcGrowth" step="0.5" value="0" title="Applied compounding each forecast month, e.g. -5 ramps spend down 5%/month"></label>
+      <label><input type="checkbox" id="fcExcludeLatest" checked> Latest period is partial — exclude from burn-rate</label>
+      <button id="btnFcRun" class="primary">Run forecast</button>
+      <button id="btnFcCsv">Export CSV</button>
+    </div>
+    <p class="hint">Enter a <b>Budget / EAC</b> per row to get remaining budget, runway (months until the budget runs out at the forecast burn rate) and a projected depletion date. Budgets are saved in your browser and survive next week’s upload.</p>
+  </div>
+  <div class="card">
+    <div class="tablewrap" style="max-height:560px"><table id="fcTable"></table></div>
+    <div class="hint" id="fcInfo" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>Forecast chart <span class="hint">— pick a row to see actuals vs forecast</span></h2>
+    <div class="row" style="margin-bottom:10px"><select id="fcChartPick" style="max-width:560px"></select></div>
+    <div class="chartbox" style="height:340px"><canvas id="chForecast"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS TAB ============ -->
+<section id="tab-settings" class="hidden">
+  <div class="card">
+    <h2>General settings</h2>
+    <div class="row" style="margin-bottom:10px">
+      <label>Period taken from:
+        <select id="setPeriodSource">
+          <option value="periodName">Period Name column</option>
+          <option value="glDate">GL Date (calendar month)</option>
+          <option value="transactionDate">Transaction Date (calendar month)</option>
+        </select>
+      </label>
+      <label>Currency symbol:
+        <select id="setCurrency"><option value="$">$</option><option value="£">£</option><option value="€">€</option><option value="">none</option></select>
+      </label>
+      <label>Decimals: <select id="setDecimals"><option value="0">0</option><option value="2">2</option></select></label>
+    </div>
+    <div class="row">
+      <label>Treat as "unbilled" when Billed Status is not one of:
+        <input type="text" id="setBilledValues" style="width:240px" placeholder="billed,invoiced" title="Comma-separated values counted as billed (case-insensitive)">
+      </label>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Saved data</h2>
+    <p class="hint">Column mapping, filters, forecast settings and budgets are stored in this browser (localStorage). Use Export settings in the header to back them up or move to another machine. Your transaction data itself is never stored — re-upload each week.</p>
+    <div class="row">
+      <button id="btnClearBudgets">Clear saved budgets</button>
+      <button id="btnClearAll" style="border-color:var(--bad);color:var(--bad)">Reset everything</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>About</h2>
+    <p class="hint">
+      Single-file tool, runs entirely in your browser. Expected columns: Business Unit, Division, Sub Division, Cost Center, Project Manager, Project Number/Name, Employee/Vendor, Task hierarchy, Transaction Type, Expenditure Org/Type, Period Name, GL/Transaction Date, Hours, Salaries, Fringe, Subs Cost, Expenses Cost, Oncost, Total Cost, Bill Flag, Billed Status, Invoice Number, Comments. Any missing column simply disables the related feature — only a period source and at least one cost column are required.
+    </p>
+  </div>
+</section>
+
+</main>
+<div class="footer-note">All processing happens locally in your browser. No data leaves your machine.</div>
+
+<script>
+"use strict";
+/* ===================== Field definitions ===================== */
+const FIELDS = [
+  {key:'businessUnit',     label:'Business Unit',          type:'dim'},
+  {key:'division',         label:'Division',               type:'dim'},
+  {key:'subDivision',      label:'Sub Division',           type:'dim'},
+  {key:'costCenter',       label:'Cost Center',            type:'dim'},
+  {key:'projectManager',   label:'Project Manager',        type:'dim'},
+  {key:'projectNumber',    label:'Project Number',         type:'dim'},
+  {key:'projectName',      label:'Project Name',           type:'dim'},
+  {key:'employee',         label:'Employee/Vendor',        type:'dim'},
+  {key:'employeeNum',      label:'Employee #',             type:'dim'},
+  {key:'employeeCC',       label:'Employee Cost Center',   type:'dim'},
+  {key:'journalName',      label:'Journal Name',           type:'dim'},
+  {key:'taskManager',      label:'Task Manager',           type:'dim'},
+  {key:'topTaskNumber',    label:'Top Task Number',        type:'dim'},
+  {key:'topTaskName',      label:'Top Task Name',          type:'dim'},
+  {key:'taskNumber',       label:'Task Number',            type:'dim'},
+  {key:'taskName',         label:'Task Name',              type:'dim'},
+  {key:'fieldHome',        label:'Field/Home',             type:'dim'},
+  {key:'transactionType',  label:'Transaction Type',       type:'dim'},
+  {key:'expenditureOrg',   label:'Expenditure Org',        type:'dim'},
+  {key:'expenditureType',  label:'Expenditure/Event Type', type:'dim'},
+  {key:'periodName',       label:'Period Name',            type:'dim'},
+  {key:'glDate',           label:'GL Date',                type:'date'},
+  {key:'transactionDate',  label:'Transaction Date',       type:'date'},
+  {key:'transactionId',    label:'Transaction ID',         type:'dim'},
+  {key:'hours',            label:'Hours',                  type:'num'},
+  {key:'salaries',         label:'Salaries',               type:'num'},
+  {key:'fringe',           label:'Fringe',                 type:'num'},
+  {key:'subsCost',         label:'Subs Cost',              type:'num'},
+  {key:'expensesCost',     label:'Expenses Cost',          type:'num'},
+  {key:'oncost',           label:'Oncost',                 type:'num'},
+  {key:'totalCost',        label:'Total Cost',             type:'num'},
+  {key:'billFlag',         label:'Bill Flag',              type:'dim'},
+  {key:'billedStatus',     label:'Billed Status',          type:'dim'},
+  {key:'invoiceNumber',    label:'Invoice Number',         type:'dim'},
+  {key:'comments',         label:'Comments',               type:'dim'},
+];
+const SYNONYMS = {
+  employee:['employeevendor','employeevendorname','vendor','employeename'],
+  employeeNum:['employeenumber','empno','employeeno'],
+  employeeCC:['employeecostcenter','empcostcenter'],
+  expenditureType:['expenditureeventtype','expendituretype','eventtype'],
+  fieldHome:['fieldhome'],
+  subsCost:['subscost','subcost','subcontractorcost','subs'],
+  expensesCost:['expensescost','expensecost','expenses'],
+  totalCost:['totalcost','totalburdenedcost','total'],
+  glDate:['gldate','glperioddate'],
+  transactionDate:['transactiondate','trxdate','expenditureitemdate'],
+  transactionId:['transactionid','trxid'],
+  projectManager:['projectmanager','pm'],
+  costCenter:['costcenter','costcentre'],
+  employeeCC2:[],
+};
+const METRICS = [
+  {key:'hours',        label:'Hours',        money:false},
+  {key:'salaries',     label:'Salaries',     money:true},
+  {key:'fringe',       label:'Fringe',       money:true},
+  {key:'subsCost',     label:'Subs Cost',    money:true},
+  {key:'expensesCost', label:'Expenses',     money:true},
+  {key:'oncost',       label:'Oncost',       money:true},
+  {key:'totalCost',    label:'Total Cost',   money:true},
+];
+const FILTER_DIMS = ['businessUnit','division','subDivision','costCenter','projectManager',
+  'projectNumber','projectName','taskManager','topTaskName','fieldHome','transactionType',
+  'expenditureOrg','expenditureType','periodName','billedStatus','employee'];
+const PIVOT_DIMS = FIELDS.filter(f=>f.type==='dim').map(f=>f.key);
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_IDX = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+const STORE_KEY = 'oracleForecastTool.v1';
+
+/* ===================== State ===================== */
+let state = {
+  mapping:{},                  // fieldKey -> source header
+  filters:{},                  // fieldKey -> array of selected values (absent = all)
+  settings:{
+    periodSource:'periodName', currency:'$', decimals:0,
+    billedValues:'billed,invoiced,fully billed,y,yes',
+    expDims:['projectNumber','projectName'], expMetric:'totalCost',
+    fcLevel:'projectNumber,projectName', fcMetric:'totalCost', fcMethod:'avgN',
+    fcLookback:3, fcHorizon:6, fcGrowth:0, fcExcludeLatest:true,
+  },
+  budgets:{},                  // `${level}::${groupKey}` -> number
+};
+let raw = { workbook:null, sheetName:null, headerRowIdx:0, headers:[], rows:[] }; // parsed file
+let data = [];                 // canonical rows after mapping
+let lastForecast = null;       // results of last forecast run
+let lastPivot = null;
+let charts = {};
+
+function loadState(){
+  try{
+    const s = JSON.parse(localStorage.getItem(STORE_KEY));
+    if(s){ state.mapping=s.mapping||{}; state.filters=s.filters||{};
+      state.settings=Object.assign(state.settings, s.settings||{}); state.budgets=s.budgets||{}; }
+  }catch(e){}
+}
+function saveState(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify({mapping:state.mapping, filters:state.filters, settings:state.settings, budgets:state.budgets})); }catch(e){}
+}
+
+/* ===================== Utils ===================== */
+const $ = s=>document.querySelector(s);
+const $$ = s=>[...document.querySelectorAll(s)];
+function el(tag, attrs, ...kids){
+  const e=document.createElement(tag);
+  if(attrs) for(const [k,v] of Object.entries(attrs)){
+    if(k==='class') e.className=v; else if(k.startsWith('on')) e.addEventListener(k.slice(2),v);
+    else if(k==='html') e.innerHTML=v; else e.setAttribute(k,v);
+  }
+  for(const k of kids){ if(k!=null) e.append(k); }
+  return e;
+}
+function norm(s){ return String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]/g,''); }
+function parseNumber(v){
+  if(v==null||v==='') return 0;
+  if(typeof v==='number') return isFinite(v)?v:0;
+  let s=String(v).trim(); if(!s) return 0;
+  let neg=false;
+  if(/^\(.*\)$/.test(s)){ neg=true; s=s.slice(1,-1); }
+  s=s.replace(/[$£€,\s]/g,'');
+  const n=parseFloat(s);
+  if(isNaN(n)) return 0;
+  return neg? -n : n;
+}
+function parseDateVal(v){
+  if(v==null||v==='') return null;
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='number'){ // Excel serial
+    if(v>20000 && v<80000) return new Date(Math.round((v-25569)*86400000));
+    return null;
+  }
+  const d=new Date(v);
+  return isNaN(d)?null:d;
+}
+function parsePeriodName(p){
+  if(p==null||p==='') return null;
+  const s=String(p).trim().toLowerCase();
+  let m=s.match(/^([a-z]{3,9})[\s\-\/_.]*'?(\d{2,4})$/);
+  if(m && MONTH_IDX[m[1].slice(0,3)]){ let y=+m[2]; if(y<100)y+=2000; return {y, m:MONTH_IDX[m[1].slice(0,3)]}; }
+  m=s.match(/^(\d{4})[\s\-\/_.]+(\d{1,2})$/);
+  if(m && +m[2]>=1 && +m[2]<=12) return {y:+m[1], m:+m[2]};
+  m=s.match(/^(\d{1,2})[\s\-\/_.]+(\d{4})$/);
+  if(m && +m[1]>=1 && +m[1]<=12) return {y:+m[2], m:+m[1]};
+  m=s.match(/^(\d{4})(\d{2})$/);
+  if(m && +m[2]>=1 && +m[2]<=12) return {y:+m[1], m:+m[2]};
+  return null;
+}
+function pk(y,m){ return y*12+(m-1); }
+function pkLabel(k){ return MONTH_NAMES[k%12]+'-'+String(Math.floor(k/12)).slice(2); }
+function fmtNum(v,dec){ return new Intl.NumberFormat('en-US',{minimumFractionDigits:dec??state.settings.decimals, maximumFractionDigits:dec??state.settings.decimals}).format(v||0); }
+function fmtMoney(v){ const s=state.settings.currency; const a=Math.abs(v||0); const str=s+fmtNum(a); return (v<0?'-':'')+str; }
+function fmtMetric(v, metricKey){ const m=METRICS.find(x=>x.key===metricKey); return m&&!m.money? fmtNum(v,1) : fmtMoney(v); }
+function numCls(v){ return v<0?'num neg':'num'; }
+function downloadCSV(filename, rows){
+  const csv = rows.map(r=>r.map(c=>{
+    c = c==null?'':String(c);
+    return /[",\n]/.test(c) ? '"'+c.replace(/"/g,'""')+'"' : c;
+  }).join(',')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:filename}); document.body.append(a); a.click(); a.remove();
+}
+function isBilled(v){
+  const ok = state.settings.billedValues.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+  return ok.includes(String(v||'').trim().toLowerCase());
+}
+
+/* ===================== File loading ===================== */
+function handleFile(file){
+  const name=file.name.toLowerCase();
+  const reader=new FileReader();
+  reader.onload = e=>{
+    try{
+      if(name.endsWith('.csv')||name.endsWith('.tsv')||name.endsWith('.txt')){
+        const text=e.target.result;
+        const delim = name.endsWith('.tsv') ? '\t' : detectDelim(text);
+        raw.workbook=null;
+        const grid=parseDSV(text, delim);
+        loadGrid(grid);
+      } else {
+        if(typeof XLSX==='undefined'){ alert('Excel library failed to load (offline?). Save your extract as CSV and upload that instead.'); return; }
+        raw.workbook = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:false});
+        const pick=$('#sheetPick'); pick.innerHTML='';
+        raw.workbook.SheetNames.forEach(n=>pick.append(el('option',{value:n},n)));
+        // choose the sheet with most rows
+        let best=raw.workbook.SheetNames[0], bestN=0;
+        for(const n of raw.workbook.SheetNames){
+          const ref=raw.workbook.Sheets[n]['!ref'];
+          const rows = ref? XLSX.utils.decode_range(ref).e.r : 0;
+          if(rows>bestN){bestN=rows;best=n;}
+        }
+        pick.value=best;
+        loadSheet(best);
+      }
+      $('#sheetPickRow').classList.toggle('hidden', !raw.workbook);
+    }catch(err){ alert('Could not read file: '+err.message); }
+  };
+  if(name.endsWith('.csv')||name.endsWith('.tsv')||name.endsWith('.txt')) reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+}
+function detectDelim(text){
+  const line=text.split(/\r?\n/).find(l=>l.trim())||'';
+  const counts=[[',',(line.match(/,/g)||[]).length],['\t',(line.match(/\t/g)||[]).length],[';',(line.match(/;/g)||[]).length]];
+  counts.sort((a,b)=>b[1]-a[1]); return counts[0][1]>0?counts[0][0]:',';
+}
+function parseDSV(text, delim){
+  const rows=[]; let row=[], cur='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(inQ){
+      if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else inQ=false; }
+      else cur+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===delim){ row.push(cur); cur=''; }
+      else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&text[i+1]==='\n')i++; row.push(cur); cur=''; if(row.some(c=>c!=='')) rows.push(row); row=[]; }
+      else cur+=ch;
+    }
+  }
+  row.push(cur); if(row.some(c=>c!=='')) rows.push(row);
+  return rows;
+}
+function loadSheet(name){
+  raw.sheetName=name;
+  const grid = XLSX.utils.sheet_to_json(raw.workbook.Sheets[name], {header:1, defval:'', raw:true});
+  loadGrid(grid);
+}
+function loadGrid(grid){
+  if(!grid.length){ alert('File appears to be empty.'); return; }
+  // auto-detect header row: the row matching the most known field labels
+  const labels = new Set(FIELDS.map(f=>norm(f.label)));
+  let bestIdx=0, bestScore=-1;
+  for(let i=0;i<Math.min(grid.length,15);i++){
+    const score=grid[i].reduce((a,c)=>a+(labels.has(norm(c))?1:0),0);
+    if(score>bestScore){bestScore=score;bestIdx=i;}
+  }
+  if(bestScore<3) bestIdx=0;
+  raw.headerRowIdx=bestIdx;
+  $('#headerRow').value=bestIdx+1;
+  applyHeaderRow(grid);
+}
+function applyHeaderRow(grid){
+  raw.grid=grid;
+  const h=raw.headerRowIdx;
+  raw.headers = grid[h].map((c,i)=>String(c).trim()||('Column '+(i+1)));
+  raw.rows = grid.slice(h+1).filter(r=>r.some(c=>c!==''&&c!=null));
+  autoMap();
+  renderMapping();
+  $('#mapCard').classList.remove('hidden');
+  $('#dataStatus').textContent = raw.rows.length.toLocaleString()+' rows read — confirm mapping';
+}
+function autoMap(){
+  const byNorm={};
+  raw.headers.forEach(hd=>{ byNorm[norm(hd)]=hd; });
+  const mapping={};
+  for(const f of FIELDS){
+    // 1. previously saved mapping still valid?
+    if(state.mapping[f.key] && raw.headers.includes(state.mapping[f.key])){ mapping[f.key]=state.mapping[f.key]; continue; }
+    // 2. exact label match
+    let hit = byNorm[norm(f.label)];
+    // 3. synonyms
+    if(!hit && SYNONYMS[f.key]) for(const s of SYNONYMS[f.key]){ if(byNorm[s]){hit=byNorm[s];break;} }
+    if(hit) mapping[f.key]=hit;
+  }
+  state.mapping=mapping;
+}
+function renderMapping(){
+  const tb=$('#mapBody'); tb.innerHTML='';
+  for(const f of FIELDS){
+    const sel=el('select',{onchange:e=>{ if(e.target.value)state.mapping[f.key]=e.target.value; else delete state.mapping[f.key]; saveState(); updateMapSummary(); }});
+    sel.append(el('option',{value:''},'— not in file —'));
+    raw.headers.forEach(hd=>sel.append(el('option',{value:hd},hd)));
+    sel.value=state.mapping[f.key]||'';
+    const dot=el('span',{class:state.mapping[f.key]?'ok-dot':'miss-dot'}, state.mapping[f.key]?'●':'○');
+    tb.append(el('tr',null, el('td',null,f.label), el('td',null,sel), el('td',null,dot)));
+  }
+  updateMapSummary();
+}
+function updateMapSummary(){
+  const n=Object.keys(state.mapping).length;
+  $('#mapSummary').textContent = n+' of '+FIELDS.length+' fields mapped. Period + at least one cost column is enough to start.';
+}
+function applyMapping(){
+  const m=state.mapping;
+  if(!m.periodName && !m.glDate && !m.transactionDate){ alert('Map at least one of: Period Name, GL Date, Transaction Date.'); return; }
+  if(!METRICS.some(x=>m[x.key])){ alert('Map at least one cost/hours column.'); return; }
+  const hIdx={}; raw.headers.forEach((hd,i)=>{ if(!(hd in hIdx)) hIdx[hd]=i; });
+  data = raw.rows.map(r=>{
+    const o={};
+    for(const f of FIELDS){
+      const src=m[f.key]; if(src==null){ o[f.key] = f.type==='num'?0:''; continue; }
+      const v=r[hIdx[src]];
+      if(f.type==='num') o[f.key]=parseNumber(v);
+      else if(f.type==='date') o[f.key]=parseDateVal(v);
+      else o[f.key]= v==null?'':String(v).trim();
+    }
+    return o;
+  });
+  recomputePeriods();
+  saveState();
+  $('#dataStatus').textContent = data.length.toLocaleString()+' rows loaded';
+  $('#dataStatus').classList.add('ok');
+  renderPreview();
+  buildAllFilterbars();
+  switchTab('dashboard');
+}
+function recomputePeriods(){
+  const src=state.settings.periodSource;
+  let unparsed=0;
+  for(const r of data){
+    let key=null, label='';
+    if(src==='periodName' && r.periodName){
+      const pm=parsePeriodName(r.periodName);
+      if(pm){ key=pk(pm.y,pm.m); label=pkLabel(key); } else { label=r.periodName; }
+    }
+    if(key==null && (src!=='periodName' || !r.periodName)){
+      const d = src==='transactionDate'? (r.transactionDate||r.glDate) : (r.glDate||r.transactionDate);
+      if(d){ key=pk(d.getFullYear(), d.getMonth()+1); label=pkLabel(key); }
+    }
+    if(key==null && r.periodName){ // fallback: any date available
+      const d=r.glDate||r.transactionDate;
+      if(d){ key=pk(d.getFullYear(), d.getMonth()+1); label=pkLabel(key); }
+    }
+    if(key==null) unparsed++;
+    r._pk=key; r._plabel = label || '(unknown)';
+  }
+  data._unparsed=unparsed;
+}
+function renderPreview(){
+  $('#previewCard').classList.remove('hidden');
+  const t=$('#previewTable'); t.innerHTML='';
+  const cols=FIELDS.filter(f=>state.mapping[f.key]);
+  t.append(el('thead',null,el('tr',null,...cols.map(c=>el('th',{class:c.type==='num'?'num':''},c.label)))));
+  const tb=el('tbody');
+  data.slice(0,50).forEach(r=>{
+    tb.append(el('tr',null,...cols.map(c=>{
+      let v=r[c.key];
+      if(c.type==='num') return el('td',{class:numCls(v)},fmtNum(v,2));
+      if(c.type==='date') return el('td',null, v? v.toISOString().slice(0,10):'');
+      return el('td',null,String(v));
+    })));
+  });
+  t.append(tb);
+  const un = data._unparsed? ` · ${data._unparsed} rows had no readable period` : '';
+  $('#previewInfo').textContent = `— first 50 of ${data.length.toLocaleString()} rows${un}`;
+}
+
+/* ===================== Filters ===================== */
+function filteredRows(){
+  const f=state.filters;
+  const active=Object.entries(f).filter(([k,v])=>v && v.length && state.mapping[k]);
+  if(!active.length) return data;
+  return data.filter(r=>active.every(([k,vals])=>vals.includes(r[k]||'(blank)')));
+}
+function buildAllFilterbars(){
+  ['dash','exp','fc'].forEach(suffix=>buildFilterbar('#filterbar-'+suffix));
+}
+function buildFilterbar(sel){
+  const bar=$(sel); bar.innerHTML='';
+  bar.append(el('span',{class:'hint',style:'margin-right:4px'},'Filters:'));
+  for(const key of FILTER_DIMS){
+    if(!state.mapping[key]) continue;
+    bar.append(makeFilterDropdown(key));
+  }
+  const clr=el('button',{class:'small',onclick:()=>{ state.filters={}; saveState(); buildAllFilterbars(); refreshActiveTab(); }},'Clear all');
+  bar.append(clr);
+}
+function makeFilterDropdown(key){
+  const f=FIELDS.find(x=>x.key===key);
+  const values=[...new Set(data.map(r=>r[key]||'(blank)'))].sort((a,b)=>String(a).localeCompare(String(b)));
+  const sel = state.filters[key]||[];
+  const wrap=el('div',{class:'fdrop'});
+  const btn=el('button',{class:sel.length?'active-filter':''},
+    f.label + (sel.length? ` (${sel.length})` : ''));
+  const panel=el('div',{class:'fpanel'});
+  const search=el('input',{type:'text',placeholder:'Search…'});
+  const links=el('div',{class:'links'},
+    el('a',{onclick:()=>{ delete state.filters[key]; commit(); }},'All'),
+    el('a',{onclick:()=>{ state.filters[key]=[]; renderOpts(); }},'None'));
+  const opts=el('div',{class:'opts'});
+  function renderOpts(){
+    const q=search.value.toLowerCase();
+    opts.innerHTML='';
+    const cur=new Set(state.filters[key]||[]);
+    let shown=0;
+    for(const v of values){
+      if(q && !String(v).toLowerCase().includes(q)) continue;
+      if(++shown>400){ opts.append(el('div',{class:'hint'},'… type to narrow the list')); break; }
+      const cb=el('input',{type:'checkbox'});
+      cb.checked = cur.size? cur.has(v) : false;
+      cb.addEventListener('change',()=>{
+        const s=new Set(state.filters[key]||[]);
+        cb.checked? s.add(v) : s.delete(v);
+        state.filters[key]=[...s];
+        if(!state.filters[key].length) delete state.filters[key];
+        saveState();
+      });
+      opts.append(el('label',null,cb,String(v)));
+    }
+  }
+  function commit(){ saveState(); panel.classList.remove('open'); buildAllFilterbars(); refreshActiveTab(); }
+  search.addEventListener('input',renderOpts);
+  btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const open=panel.classList.contains('open');
+    $$('.fpanel.open').forEach(p=>p.classList.remove('open'));
+    if(!open){ renderOpts(); panel.classList.add('open'); }
+    else commit();
+  });
+  const apply=el('button',{class:'small primary',style:'margin-top:8px;width:100%',onclick:()=>commit()},'Apply');
+  panel.append(search,links,opts,apply);
+  panel.addEventListener('click',e=>e.stopPropagation());
+  wrap.append(btn,panel);
+  return wrap;
+}
+document.addEventListener('click',()=>{ $$('.fpanel.open').forEach(p=>{ p.classList.remove('open'); buildAllFilterbars(); refreshActiveTab(); }); });
+
+/* ===================== Aggregation ===================== */
+function initMetrics(){ const o={}; METRICS.forEach(m=>o[m.key]=0); return o; }
+function aggregate(rows, dims){
+  const map=new Map();
+  for(const r of rows){
+    const parts=dims.map(d=>r[d]||'(blank)');
+    const key=parts.join(' | ');
+    let g=map.get(key);
+    if(!g){ g={key, parts, periods:new Map(), totals:initMetrics(), unbilled:0}; map.set(key,g); }
+    let p=g.periods.get(r._pk);
+    if(!p){ p=initMetrics(); g.periods.set(r._pk,p); }
+    for(const m of METRICS){ const v=r[m.key]||0; p[m.key]+=v; g.totals[m.key]+=v; }
+    if(state.mapping.billedStatus && !isBilled(r.billedStatus)) g.unbilled += r.totalCost||0;
+  }
+  return [...map.values()];
+}
+function periodCols(rows){
+  const keys=[...new Set(rows.map(r=>r._pk).filter(k=>k!=null))].sort((a,b)=>a-b);
+  return keys;
+}
+
+/* ===================== Dashboard ===================== */
+function renderDashboard(){
+  if(!data.length) return;
+  const rows=filteredRows();
+  const cols=periodCols(rows);
+  const tot=initMetrics(); let unbilled=0;
+  const projects=new Set();
+  for(const r of rows){
+    for(const m of METRICS) tot[m.key]+=r[m.key]||0;
+    if(state.mapping.billedStatus && !isBilled(r.billedStatus)) unbilled+=r.totalCost||0;
+    projects.add(r.projectNumber||r.projectName||'');
+  }
+  const lastK=cols.length?cols[cols.length-1]:null;
+  const lastTot = lastK==null?0: rows.filter(r=>r._pk===lastK).reduce((a,r)=>a+(r.totalCost||0),0);
+  const burn3 = avgOverLast(rows, cols, 3);
+  const k=$('#kpis'); k.innerHTML='';
+  const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
+  kpi('Total cost (filtered)', fmtMoney(tot.totalCost), rows.length.toLocaleString()+' transactions');
+  kpi('Hours', fmtNum(tot.hours,1), 'Labor: '+fmtMoney(tot.salaries+tot.fringe));
+  kpi('Subs / Expenses', fmtMoney(tot.subsCost+tot.expensesCost), 'Oncost: '+fmtMoney(tot.oncost));
+  if(state.mapping.billedStatus) kpi('Unbilled cost', fmtMoney(unbilled), tot.totalCost? (100*unbilled/tot.totalCost).toFixed(1)+'% of total':'');
+  kpi('Latest period', lastK!=null? pkLabel(lastK):'—', lastK!=null? fmtMoney(lastTot):'');
+  kpi('Avg burn (last 3 mo)', fmtMoney(burn3), cols.length+' periods · '+projects.size+' projects');
+
+  // trend chart
+  const byP=new Map(cols.map(c=>[c,initMetrics()]));
+  for(const r of rows){ if(r._pk==null)continue; const p=byP.get(r._pk); for(const m of METRICS)p[m.key]+=r[m.key]||0; }
+  const labels=cols.map(pkLabel);
+  let cum=0; const cumData=cols.map(c=>{cum+=byP.get(c).totalCost;return cum;});
+  drawChart('chTrend',{
+    type:'bar',
+    data:{labels, datasets:[
+      {label:'Total cost', data:cols.map(c=>byP.get(c).totalCost), backgroundColor:'#38bdf8', yAxisID:'y'},
+      {label:'Cumulative', data:cumData, type:'line', borderColor:'#34d399', backgroundColor:'#34d399', tension:.25, yAxisID:'y1', pointRadius:2},
+    ]},
+    options:chartOpts({y:{position:'left'},y1:{position:'right',grid:{drawOnChartArea:false}}})
+  });
+  // mix chart
+  drawChart('chMix',{
+    type:'doughnut',
+    data:{labels:['Salaries','Fringe','Subs','Expenses','Oncost'],
+      datasets:[{data:[tot.salaries,tot.fringe,tot.subsCost,tot.expensesCost,tot.oncost],
+        backgroundColor:['#38bdf8','#818cf8','#f472b6','#fbbf24','#34d399'], borderColor:'#1e293b'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#e2e8f0'}}}}
+  });
+  // top projects
+  const groups=aggregate(rows, state.mapping.projectNumber?['projectNumber','projectName']:['projectName']);
+  groups.sort((a,b)=>b.totals.totalCost-a.totals.totalCost);
+  const t=$('#topProjects'); t.innerHTML='';
+  const head=['Project','Name','Hours','Salaries','Fringe','Subs','Expenses','Oncost','Total','Unbilled','Last period','3-mo avg'];
+  t.append(el('thead',null,el('tr',null,...head.map((h,i)=>el('th',{class:i>1?'num':''},h)))));
+  const tb=el('tbody');
+  for(const g of groups.slice(0,25)){
+    const lastV = lastK!=null && g.periods.get(lastK)? g.periods.get(lastK).totalCost:0;
+    const a3 = avgOfGroup(g, cols, 3);
+    tb.append(el('tr',null,
+      el('td',null,g.parts[0]), el('td',null,g.parts[1]||''),
+      el('td',{class:'num'},fmtNum(g.totals.hours,1)),
+      ...['salaries','fringe','subsCost','expensesCost','oncost','totalCost'].map(mk=>el('td',{class:numCls(g.totals[mk])},fmtMoney(g.totals[mk]))),
+      el('td',{class:numCls(g.unbilled)},state.mapping.billedStatus?fmtMoney(g.unbilled):'—'),
+      el('td',{class:numCls(lastV)},fmtMoney(lastV)),
+      el('td',{class:numCls(a3)},fmtMoney(a3)),
+    ));
+  }
+  t.append(tb);
+}
+function avgOverLast(rows, cols, n){
+  const use=cols.slice(-n); if(!use.length)return 0;
+  const sums=new Map(use.map(c=>[c,0]));
+  for(const r of rows){ if(sums.has(r._pk)) sums.set(r._pk, sums.get(r._pk)+(r.totalCost||0)); }
+  return [...sums.values()].reduce((a,b)=>a+b,0)/use.length;
+}
+function avgOfGroup(g, cols, n){
+  const use=cols.slice(-n); if(!use.length)return 0;
+  let s=0; for(const c of use){ const p=g.periods.get(c); if(p)s+=p.totalCost; }
+  return s/use.length;
+}
+function chartOpts(scales){
+  const base={x:{ticks:{color:'#94a3b8'},grid:{color:'#27364a'}}};
+  for(const [k,v] of Object.entries(scales||{y:{}})) base[k]=Object.assign({ticks:{color:'#94a3b8'},grid:{color:'#27364a'}},v);
+  return {responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e2e8f0'}}},scales:base};
+}
+function drawChart(id,cfg){
+  if(typeof Chart==='undefined'){ const c=$('#'+id); if(c)c.parentElement.innerHTML='<p class="hint">Charts unavailable offline — tables still work.</p>'; return; }
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart($('#'+id).getContext('2d'),cfg);
+}
+
+/* ===================== Explorer ===================== */
+function setupExplorer(){
+  const dimBox=$('#expDims'); dimBox.innerHTML='';
+  for(const key of PIVOT_DIMS){
+    const f=FIELDS.find(x=>x.key===key);
+    const cb=el('input',{type:'checkbox'});
+    cb.checked = state.settings.expDims.includes(key);
+    cb.addEventListener('change',()=>{
+      const cur=state.settings.expDims.filter(k=>k!==key);
+      if(cb.checked)cur.push(key);
+      state.settings.expDims=cur; saveState();
+    });
+    dimBox.append(el('label',null,cb,f.label));
+  }
+  const ms=$('#expMetric'); ms.innerHTML='';
+  METRICS.forEach(m=>ms.append(el('option',{value:m.key},m.label)));
+  ms.value=state.settings.expMetric;
+  ms.addEventListener('change',()=>{ state.settings.expMetric=ms.value; saveState(); });
+  $('#btnExpRun').addEventListener('click',renderExplorer);
+  $('#btnExpCsv').addEventListener('click',()=>{ if(lastPivot)downloadCSV('pivot.csv',lastPivot); });
+  $('#expAllMetrics').addEventListener('change',e=>{ if(e.target.checked)$('#expByPeriod').checked=false; });
+  $('#expByPeriod').addEventListener('change',e=>{ if(e.target.checked)$('#expAllMetrics').checked=false; });
+}
+function renderExplorer(){
+  if(!data.length) return;
+  const dims = state.settings.expDims.filter(k=>state.mapping[k]);
+  if(!dims.length){ $('#expInfo').textContent='Pick at least one row dimension above.'; return; }
+  const rows=filteredRows();
+  const metric=state.settings.expMetric;
+  const byPeriod=$('#expByPeriod').checked;
+  const allMetrics=$('#expAllMetrics').checked;
+  const cols=periodCols(rows);
+  const groups=aggregate(rows,dims);
+  groups.sort((a,b)=>b.totals[metric]-a.totals[metric]);
+  const dimLabels=dims.map(d=>FIELDS.find(f=>f.key===d).label);
+  const t=$('#expTable'); t.innerHTML='';
+  let header, makeRow, csvHeader, makeCsv;
+  const mObj=METRICS.find(m=>m.key===metric);
+  if(allMetrics){
+    header=[...dimLabels,...METRICS.map(m=>m.label)];
+    makeRow=g=>[...g.parts.map(p=>el('td',null,p)), ...METRICS.map(m=>el('td',{class:numCls(g.totals[m.key])}, fmtMetric(g.totals[m.key],m.key)))];
+    makeCsv=g=>[...g.parts, ...METRICS.map(m=>g.totals[m.key])];
+  } else if(byPeriod){
+    header=[...dimLabels,...cols.map(pkLabel),'Total'];
+    makeRow=g=>[...g.parts.map(p=>el('td',null,p)),
+      ...cols.map(c=>{const p=g.periods.get(c);const v=p?p[metric]:0;return el('td',{class:numCls(v)},v?fmtMetric(v,metric):'');}),
+      el('td',{class:numCls(g.totals[metric])+' '},fmtMetric(g.totals[metric],metric))];
+    makeCsv=g=>[...g.parts, ...cols.map(c=>{const p=g.periods.get(c);return p?p[metric]:0;}), g.totals[metric]];
+  } else {
+    header=[...dimLabels,mObj.label];
+    makeRow=g=>[...g.parts.map(p=>el('td',null,p)), el('td',{class:numCls(g.totals[metric])},fmtMetric(g.totals[metric],metric))];
+    makeCsv=g=>[...g.parts, g.totals[metric]];
+  }
+  t.append(el('thead',null,el('tr',null,...header.map((h,i)=>el('th',{class:i>=dims.length?'num':''},h)))));
+  const tb=el('tbody');
+  const LIMIT=1000;
+  groups.slice(0,LIMIT).forEach(g=>tb.append(el('tr',null,...makeRow(g))));
+  // grand total row
+  const gt=initMetrics();
+  for(const g of groups) for(const m of METRICS) gt[m.key]+=g.totals[m.key];
+  if(allMetrics){
+    tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), ...METRICS.map(m=>el('td',{class:'num'},fmtMetric(gt[m.key],m.key)))));
+  } else if(byPeriod){
+    const perC=cols.map(c=>groups.reduce((a,g)=>{const p=g.periods.get(c);return a+(p?p[metric]:0);},0));
+    tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), ...perC.map(v=>el('td',{class:'num'},fmtMetric(v,metric))), el('td',{class:'num'},fmtMetric(gt[metric],metric))));
+  } else {
+    tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), el('td',{class:'num'},fmtMetric(gt[metric],metric))));
+  }
+  t.append(tb);
+  $('#expInfo').textContent = groups.length.toLocaleString()+' groups'+(groups.length>LIMIT?` (showing top ${LIMIT} — export CSV for all)`:'');
+  lastPivot=[header, ...groups.map(makeCsv)];
+}
+
+/* ===================== Forecast ===================== */
+function setupForecast(){
+  const s=state.settings;
+  const ms=$('#fcMetric'); ms.innerHTML='';
+  METRICS.forEach(m=>ms.append(el('option',{value:m.key},m.label)));
+  $('#fcLevel').value=s.fcLevel; $('#fcMetric').value=s.fcMetric; $('#fcMethod').value=s.fcMethod;
+  $('#fcLookback').value=s.fcLookback; $('#fcHorizon').value=s.fcHorizon;
+  $('#fcGrowth').value=s.fcGrowth; $('#fcExcludeLatest').checked=s.fcExcludeLatest;
+  $('#btnFcRun').addEventListener('click',()=>{ readFcSettings(); renderForecast(); });
+  $('#btnFcCsv').addEventListener('click',exportForecastCsv);
+  $('#fcChartPick').addEventListener('change',drawForecastChart);
+}
+function readFcSettings(){
+  const s=state.settings;
+  s.fcLevel=$('#fcLevel').value; s.fcMetric=$('#fcMetric').value; s.fcMethod=$('#fcMethod').value;
+  s.fcLookback=Math.max(1,+$('#fcLookback').value||3);
+  s.fcHorizon=Math.max(1,+$('#fcHorizon').value||6);
+  s.fcGrowth=+$('#fcGrowth').value||0;
+  s.fcExcludeLatest=$('#fcExcludeLatest').checked;
+  saveState();
+}
+function forecastSeries(values, opts){
+  // values: array of numbers (chronological, complete-month basis). Returns array of length horizon.
+  const {method, lookback, horizon, growth} = opts;
+  const use=values.slice(-lookback);
+  const g=1+growth/100;
+  const out=[];
+  if(!use.length) return Array(horizon).fill(0);
+  if(method==='linear' && use.length>=2){
+    const n=use.length;
+    let sx=0,sy=0,sxy=0,sxx=0;
+    use.forEach((y,x)=>{sx+=x;sy+=y;sxy+=x*y;sxx+=x*x;});
+    const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx||1);
+    const icpt=(sy-slope*sx)/n;
+    for(let t=0;t<horizon;t++) out.push((icpt+slope*(n+t))*Math.pow(g,t+1));
+    return out;
+  }
+  let base;
+  if(method==='last') base=use[use.length-1];
+  else if(method==='weighted'){
+    let ws=0,vs=0; use.forEach((v,i)=>{const w=i+1;ws+=w;vs+=v*w;}); base=vs/ws;
+  } else { base=use.reduce((a,b)=>a+b,0)/use.length; }
+  for(let t=0;t<horizon;t++) out.push(base*Math.pow(g,t+1));
+  return out;
+}
+function renderForecast(){
+  if(!data.length) return;
+  const s=state.settings;
+  const dims=s.fcLevel.split(',').filter(k=>state.mapping[k]);
+  if(!dims.length){ $('#fcInfo').textContent='None of the columns for this level are mapped.'; return; }
+  const rows=filteredRows();
+  const metric=s.fcMetric;
+  const allCols=periodCols(rows);
+  if(!allCols.length){ $('#fcInfo').textContent='No periods could be parsed from the data.'; return; }
+  const lastActual=allCols[allCols.length-1];
+  // history columns used for the burn-rate calc
+  const histCols = s.fcExcludeLatest && allCols.length>1 ? allCols.slice(0,-1) : allCols;
+  // fill the full continuous month range so gaps count as zero-spend months
+  const firstHist=histCols[0], lastHist=histCols[histCols.length-1];
+  const histRange=[]; for(let k=firstHist;k<=lastHist;k++) histRange.push(k);
+  const futCols=[]; for(let t=1;t<=s.fcHorizon;t++) futCols.push(lastActual+t);
+  const groups=aggregate(rows,dims);
+  groups.sort((a,b)=>b.totals[metric]-a.totals[metric]);
+  const mObj=METRICS.find(m=>m.key===metric);
+  const fmt=v=>fmtMetric(v,metric);
+
+  const results=groups.map(g=>{
+    const series=histRange.map(k=>{const p=g.periods.get(k);return p?p[metric]:0;});
+    const fc=forecastSeries(series,{method:s.fcMethod,lookback:s.fcLookback,horizon:s.fcHorizon,growth:s.fcGrowth});
+    const actual=g.totals[metric];
+    const burn=series.slice(-s.fcLookback).reduce((a,b)=>a+b,0)/Math.min(s.fcLookback,series.length||1);
+    const fcSum=fc.reduce((a,b)=>a+b,0);
+    const bKey=s.fcLevel+'::'+g.key;
+    const budget=state.budgets[bKey];
+    let remaining=null,runway=null,depletion=null,pct=null;
+    if(budget!=null && budget!==''){
+      remaining=budget-actual;
+      pct=budget? actual/budget*100:null;
+      if(burn>0){
+        runway=remaining/burn;
+        if(runway>=0 && runway<600){
+          const dk=lastActual+Math.ceil(runway);
+          depletion=pkLabel(dk);
+        }
+      }
+    }
+    return {g,series,fc,actual,burn,fcSum,bKey,budget,remaining,runway,depletion,pct,
+      projected: actual+fcSum};
+  });
+  lastForecast={results,dims,metric,histRange,futCols,lastActual};
+
+  const t=$('#fcTable'); t.innerHTML='';
+  const dimLabels=dims.map(d=>FIELDS.find(f=>f.key===d).label);
+  const recentCols=histRange.slice(-Math.min(s.fcLookback,6));
+  const header=[...dimLabels,'Actual to date',
+    ...recentCols.map(k=>pkLabel(k)+' (act)'),
+    'Burn/'+ (mObj.money?'mo':'mo'),
+    ...futCols.map(k=>pkLabel(k)+' (fc)'),
+    'Fcst '+s.fcHorizon+'mo total','Projected total','Budget / EAC','Remaining','% used','Runway (mo)','Depleted'];
+  t.append(el('thead',null,el('tr',null,...header.map((h,i)=>el('th',{class:i>=dims.length?'num':''},h)))));
+  const tb=el('tbody');
+  const LIMIT=500;
+  results.slice(0,LIMIT).forEach(res=>{
+    const {g}=res;
+    const budgetIn=el('input',{class:'budget-in',type:'text',placeholder:'enter…',value:res.budget!=null?res.budget:''});
+    budgetIn.addEventListener('change',()=>{
+      const v=parseNumber(budgetIn.value);
+      if(budgetIn.value.trim()==='') delete state.budgets[res.bKey];
+      else state.budgets[res.bKey]=v;
+      saveState(); renderForecast();
+    });
+    let pctPill='';
+    if(res.pct!=null){
+      const cls=res.pct>100?'bad':res.pct>85?'warn':'ok';
+      pctPill=el('span',{class:'pill '+cls},res.pct.toFixed(0)+'%');
+    }
+    tb.append(el('tr',null,
+      ...g.parts.map(p=>el('td',null,p)),
+      el('td',{class:numCls(res.actual)},fmt(res.actual)),
+      ...recentCols.map(k=>{const p=g.periods.get(k);const v=p?p[metric]:0;return el('td',{class:numCls(v)},v?fmt(v):'');}),
+      el('td',{class:numCls(res.burn)},fmt(res.burn)),
+      ...res.fc.map(v=>el('td',{class:numCls(v),style:'color:#7dd3fc'},fmt(v))),
+      el('td',{class:numCls(res.fcSum),style:'color:#7dd3fc'},fmt(res.fcSum)),
+      el('td',{class:numCls(res.projected)},fmt(res.projected)),
+      el('td',{class:'num'},budgetIn),
+      el('td',{class:res.remaining!=null?numCls(res.remaining):'num'},res.remaining!=null?fmt(res.remaining):''),
+      el('td',{class:'num'},pctPill),
+      el('td',{class:'num'},res.runway!=null?res.runway.toFixed(1):''),
+      el('td',null,res.depletion||''),
+    ));
+  });
+  // totals
+  const totActual=results.reduce((a,r)=>a+r.actual,0);
+  const totFc=results.reduce((a,r)=>a+r.fcSum,0);
+  const totBurn=results.reduce((a,r)=>a+r.burn,0);
+  const totBud=results.reduce((a,r)=>a+(r.budget||0),0);
+  const perFut=futCols.map((k,i)=>results.reduce((a,r)=>a+r.fc[i],0));
+  const perRecent=recentCols.map(k=>results.reduce((a,r)=>{const p=r.g.periods.get(k);return a+(p?p[metric]:0);},0));
+  tb.append(el('tr',{class:'total'},
+    el('td',{colspan:dims.length},'TOTAL'),
+    el('td',{class:'num'},fmt(totActual)),
+    ...perRecent.map(v=>el('td',{class:'num'},fmt(v))),
+    el('td',{class:'num'},fmt(totBurn)),
+    ...perFut.map(v=>el('td',{class:'num'},fmt(v))),
+    el('td',{class:'num'},fmt(totFc)),
+    el('td',{class:'num'},fmt(totActual+totFc)),
+    el('td',{class:'num'},totBud?fmt(totBud):''),
+    el('td',{class:'num'},totBud?fmt(totBud-totActual):''),
+    el('td',{class:'num'},''),el('td',{class:'num'},''),el('td')));
+  t.append(tb);
+  $('#fcInfo').textContent=results.length.toLocaleString()+' groups'+(results.length>LIMIT?` (showing top ${LIMIT} — export CSV for all)`:'')+
+    ` · burn-rate = avg of last ${s.fcLookback} complete period(s)` + (s.fcExcludeLatest?` · ${pkLabel(lastActual)} excluded as partial`:'');
+
+  // chart picker
+  const pick=$('#fcChartPick'); pick.innerHTML='';
+  pick.append(el('option',{value:'__ALL__'},'— All groups combined —'));
+  results.slice(0,60).forEach((r,i)=>pick.append(el('option',{value:i},r.g.key)));
+  drawForecastChart();
+}
+function drawForecastChart(){
+  if(!lastForecast) return;
+  const {results,histRange,futCols,metric}=lastForecast;
+  const v=$('#fcChartPick').value;
+  let series,fc,title;
+  if(v==='__ALL__'){
+    series=histRange.map((k,i)=>results.reduce((a,r)=>a+r.series[i],0));
+    fc=futCols.map((k,i)=>results.reduce((a,r)=>a+r.fc[i],0));
+    title='All groups';
+  } else {
+    const r=results[+v]; if(!r)return;
+    series=r.series; fc=r.fc; title=r.g.key;
+  }
+  const labels=[...histRange.map(pkLabel),...futCols.map(pkLabel)];
+  const actualData=[...series, ...futCols.map(()=>null)];
+  const fcData=[...histRange.map((k,i)=>i===histRange.length-1?series[i]:null), ...fc];
+  drawChart('chForecast',{
+    type:'line',
+    data:{labels,datasets:[
+      {label:'Actuals — '+title,data:actualData,borderColor:'#38bdf8',backgroundColor:'#38bdf8',tension:.2,pointRadius:3},
+      {label:'Forecast',data:fcData,borderColor:'#fbbf24',backgroundColor:'#fbbf24',borderDash:[6,5],tension:.2,pointRadius:3},
+    ]},
+    options:chartOpts()
+  });
+}
+function exportForecastCsv(){
+  if(!lastForecast){ alert('Run a forecast first.'); return; }
+  const {results,dims,futCols,histRange}=lastForecast;
+  const s=state.settings;
+  const recentCols=histRange.slice(-Math.min(s.fcLookback,6));
+  const dimLabels=dims.map(d=>FIELDS.find(f=>f.key===d).label);
+  const header=[...dimLabels,'Actual to date',...recentCols.map(k=>pkLabel(k)+' actual'),'Burn per month',
+    ...futCols.map(k=>pkLabel(k)+' forecast'),'Forecast total','Projected total','Budget','Remaining','Pct used','Runway months','Depletion'];
+  const rows=results.map(r=>[...r.g.parts, r.actual,
+    ...recentCols.map(k=>{const p=r.g.periods.get(k);return p?p[metricOf()]:0;}),
+    r.burn, ...r.fc, r.fcSum, r.projected, r.budget??'', r.remaining??'', r.pct!=null?r.pct.toFixed(1):'', r.runway!=null?r.runway.toFixed(1):'', r.depletion||'']);
+  function metricOf(){ return lastForecast.metric; }
+  downloadCSV('forecast.csv',[header,...rows]);
+}
+
+/* ===================== Settings ===================== */
+function setupSettings(){
+  const s=state.settings;
+  $('#setPeriodSource').value=s.periodSource;
+  $('#setCurrency').value=s.currency;
+  $('#setDecimals').value=String(s.decimals);
+  $('#setBilledValues').value=s.billedValues;
+  $('#setPeriodSource').addEventListener('change',e=>{ s.periodSource=e.target.value; saveState(); if(data.length){recomputePeriods(); refreshActiveTab();} });
+  $('#setCurrency').addEventListener('change',e=>{ s.currency=e.target.value; saveState(); refreshActiveTab(); });
+  $('#setDecimals').addEventListener('change',e=>{ s.decimals=+e.target.value; saveState(); refreshActiveTab(); });
+  $('#setBilledValues').addEventListener('change',e=>{ s.billedValues=e.target.value; saveState(); refreshActiveTab(); });
+  $('#btnClearBudgets').addEventListener('click',()=>{ if(confirm('Delete all saved budgets?')){ state.budgets={}; saveState(); refreshActiveTab(); } });
+  $('#btnClearAll').addEventListener('click',()=>{ if(confirm('Reset mapping, filters, settings and budgets?')){ localStorage.removeItem(STORE_KEY); location.reload(); } });
+}
+
+/* ===================== Config import/export ===================== */
+function exportConfig(){
+  const blob=new Blob([JSON.stringify({mapping:state.mapping,filters:state.filters,settings:state.settings,budgets:state.budgets},null,2)],{type:'application/json'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'forecast-tool-settings.json'}); document.body.append(a); a.click(); a.remove();
+}
+function importConfig(file){
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const s=JSON.parse(e.target.result);
+      if(s.mapping)state.mapping=s.mapping; if(s.filters)state.filters=s.filters;
+      if(s.settings)Object.assign(state.settings,s.settings); if(s.budgets)state.budgets=s.budgets;
+      saveState(); alert('Settings imported. Re-upload your extract to apply.'); location.reload();
+    }catch(err){ alert('Invalid settings file.'); }
+  };
+  r.readAsText(file);
+}
+
+/* ===================== Tabs ===================== */
+function switchTab(name){
+  $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+  ['upload','dashboard','explorer','forecast','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  refreshActiveTab();
+}
+function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
+function refreshActiveTab(){
+  const t=activeTab();
+  if(!data.length) return;
+  if(t==='dashboard') renderDashboard();
+  else if(t==='explorer') renderExplorer();
+  else if(t==='forecast') renderForecast();
+}
+
+/* ===================== Sample data ===================== */
+function loadSample(){
+  const PMs=['J. Arafat','K. Singh','M. Lopez'];
+  const projs=[['10231','Riverside WTP Expansion'],['10454','Hwy 7 Interchange Design'],['10488','Metro Tunnel Inspection'],['10712','Coastal Resiliency Study'],['10733','Airport Terminal MEP'],['10901','Data Center Civil Package']];
+  const tasks=[['1.0','Project Management'],['2.0','Design'],['3.0','Field Services'],['4.0','QA/QC']];
+  const types=['Labor','Subcontract','Expense'];
+  const emps=['Smith, A','Jones, B','Chen, C','Patel, D','ACME Drilling LLC','GeoSub Inc'];
+  const rows=[];
+  const now=new Date(); const endK=pk(now.getFullYear(),now.getMonth()+1);
+  let id=900001;
+  for(const [pn,pname] of projs){
+    const pm=PMs[Math.floor(Math.random()*PMs.length)];
+    const scale=20000+Math.random()*90000;
+    for(let k=endK-11;k<=endK;k++){
+      const drift=1+(k-(endK-11))*(Math.random()*0.04-0.012);
+      const nTx=3+Math.floor(Math.random()*5);
+      for(let i=0;i<nTx;i++){
+        const task=tasks[Math.floor(Math.random()*tasks.length)];
+        const type=types[Math.floor(Math.random()*types.length)];
+        const emp=type==='Subcontract'? emps[4+Math.floor(Math.random()*2)] : emps[Math.floor(Math.random()*4)];
+        const hours=type==='Labor'? Math.round(20+Math.random()*60):0;
+        const sal=type==='Labor'? hours*(55+Math.random()*40)*drift*scale/60000:0;
+        const fr=sal*0.42;
+        const subs=type==='Subcontract'? (3000+Math.random()*12000)*drift*scale/60000:0;
+        const exp=type==='Expense'? (200+Math.random()*2500)*drift*scale/60000:0;
+        const on=(sal+fr+subs+exp)*0.05;
+        const y=Math.floor(k/12), mo=k%12;
+        rows.push({
+          businessUnit:'USA Infrastructure', division:mo%2?'Water':'Transportation', subDivision:'Engineering',
+          costCenter:'CC-'+(400+(+pn%3)), projectManager:pm, projectNumber:pn, projectName:pname,
+          employee:emp, employeeNum:'E'+(1000+i), employeeCC:'CC-'+(400+i%3), journalName:'PA Cost '+pkLabel(k),
+          taskManager:pm, topTaskNumber:task[0], topTaskName:task[1], taskNumber:task[0]+'.1', taskName:task[1]+' - Detail',
+          fieldHome: Math.random()>0.5?'Home':'Field', transactionType:type, expenditureOrg:'US-East',
+          expenditureType:type==='Labor'?'Professional Labor':type==='Subcontract'?'Subconsultant':'Travel & Expenses',
+          periodName:MONTH_NAMES[mo].toUpperCase()+'-'+String(y).slice(2),
+          glDate:new Date(y,mo,Math.min(28,1+Math.floor(Math.random()*27))),
+          transactionDate:new Date(y,mo,Math.min(28,1+Math.floor(Math.random()*27))),
+          transactionId:String(id++),
+          hours, salaries:Math.round(sal*100)/100, fringe:Math.round(fr*100)/100, subsCost:Math.round(subs*100)/100,
+          expensesCost:Math.round(exp*100)/100, oncost:Math.round(on*100)/100,
+          totalCost:Math.round((sal+fr+subs+exp+on)*100)/100,
+          billFlag:'Y', billedStatus:Math.random()>0.25?'Billed':'Unbilled',
+          invoiceNumber:Math.random()>0.25?'INV-'+(5000+Math.floor(Math.random()*999)):'', comments:'',
+        });
+      }
+    }
+  }
+  data=rows;
+  // mark every canonical field as "mapped" so all features light up
+  state.mapping={}; FIELDS.forEach(f=>state.mapping[f.key]=f.label);
+  recomputePeriods();
+  $('#dataStatus').textContent=data.length.toLocaleString()+' sample rows loaded';
+  buildAllFilterbars();
+  switchTab('dashboard');
+}
+
+/* ===================== Init ===================== */
+function init(){
+  loadState();
+  // tabs
+  $$('nav.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+  // upload
+  const fi=$('#fileInput');
+  $('#btnUploadTop').addEventListener('click',()=>fi.click());
+  $('#dropzone').addEventListener('click',()=>fi.click());
+  fi.addEventListener('change',e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); fi.value=''; });
+  const dz=$('#dropzone');
+  ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+  dz.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f)handleFile(f); });
+  $('#sheetPick').addEventListener('change',e=>loadSheet(e.target.value));
+  $('#btnReparse').addEventListener('click',()=>{ raw.headerRowIdx=Math.max(0,(+$('#headerRow').value||1)-1); applyHeaderRow(raw.grid); });
+  $('#btnApplyMap').addEventListener('click',applyMapping);
+  // config
+  $('#btnExportCfg').addEventListener('click',exportConfig);
+  $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
+  $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
+  $('#btnSample').addEventListener('click',loadSample);
+  setupExplorer(); setupForecast(); setupSettings();
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
