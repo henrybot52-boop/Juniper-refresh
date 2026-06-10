@@ -25,6 +25,7 @@ Click **Load sample data** in the header to try the tool without a real extract.
 | **Project Forecast** | Single page for the **baseline job plan**: add rows per task/person (before any charges exist), enter hours per person per week over a plan window you set (start date + number of weeks), with the rate table (burdened cost rate + bill rate / price to owner per employee) and baseline totals: labor hours, cost, total revenue and margin. This page stays fixed as the original forecast. |
 | **Actuals vs Forecast** | The weekly working page: actuals from each upload shown next to an editable **updated forecast** per cell, red weekly overruns, per-item EAC/variance columns, and a **comparison table — original vs updated vs actual** (hours, cost, revenue, margin) with a variance column. Buttons to seed the updated forecast from the original, copy actuals into past cells, or re-baseline. |
 | **Cost Actuals** | Read-only view of every cost straight from the import — labor, subs, expenses, oncost. Group by employee/vendor, task, transaction type or expenditure type; weekly columns by default (or monthly), locked to the same plan window as the two project tabs when a project is selected; billed/unbilled per row, invoice counts, last charge date, click-through to each transaction. Nothing on this page is editable, so it always matches the extract exactly. |
+| **Rate Table** | Own tab: per-project cost rate (burdened, derived from actuals, overridable) and bill rate (price to owner) per employee, margin per hour, add-people and fill-from-multiplier helpers, summary KPIs. Drives cost/revenue/margin on both project tabs. |
 | **Settings** | Period source (Period Name vs GL/Transaction Date month), currency, decimals, what counts as "billed". |
 
 ## Forecast methods (all adjustable)
@@ -40,8 +41,8 @@ Click **Load sample data** in the header to try the tool without a real extract.
 ## Two-page project workflow
 
 1. **Project Forecast tab** — set the plan window, add rows for each task/person,
-   enter baseline hours per week (paste from Excel works), set cost and bill
-   rates in the rate table. The baseline totals card shows planned hours, cost,
+   enter baseline hours per week (paste from Excel works), and set cost and bill
+   rates on the Rate Table tab. The baseline totals card shows planned hours, cost,
    total revenue and margin. This is the original forecast and stays fixed.
 2. **Actuals vs Forecast tab** — click *Copy original forecast → updated
    forecast* once to seed it. Each week, upload the new extract: actuals appear

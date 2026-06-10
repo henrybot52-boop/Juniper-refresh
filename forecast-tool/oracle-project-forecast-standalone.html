@@ -166,7 +166,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   <button data-tab="pforecast">5 · Project Forecast</button>
   <button data-tab="pactuals">6 · Actuals vs Forecast</button>
   <button data-tab="subs">7 · Cost Actuals</button>
-  <button data-tab="settings">8 · Settings</button>
+  <button data-tab="rates">8 · Rate Table</button>
+  <button data-tab="settings">9 · Settings</button>
 </nav>
 
 <main>
@@ -330,18 +331,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     <div class="hint" id="fpInfo" style="margin-top:8px"></div>
   </div>
   <div class="card">
-    <h2>Rate table — cost &amp; price to owner per employee</h2>
-    <p class="hint">Cost rate defaults to the burdened rate derived from this project's actuals (total cost ÷ hours, so fringe and oncost are included) — type to override.
-      Enter each person's <b>bill rate (price to owner)</b> to get revenue and margin. Names must match the Employee/Vendor column exactly. Rates are saved per project.</p>
-    <div class="row" style="margin-bottom:8px">
-      <input id="rtNewEmp" placeholder="Add employee not yet in actuals…" style="width:250px">
-      <button id="btnRtAdd" class="small">Add</button>
-      <label style="margin-left:14px">Set bill = cost × <input type="number" id="rtMult" step="0.05" value="2.5" style="width:74px"></label>
-      <button id="btnRtFill" class="small">Fill empty bill rates</button>
-    </div>
-    <div class="tablewrap" style="max-height:320px"><table id="rateTable"></table></div>
-  </div>
-  <div class="card">
     <h2>Baseline totals</h2>
     <div class="row" style="margin-bottom:10px">
       <label>Non-labor markup %: <input type="number" id="ppNlMarkup" step="0.5" value="0" style="width:74px" title="Applied to subs/expense cost to compute price to owner"></label>
@@ -382,7 +371,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       <button id="btnApCsv">Export CSV</button>
     </div>
     <p class="hint">Gray = actual charged that week; box = your <b>updated forecast</b> (hover shows the original forecast for that week).
-      A red cell means the actual ran over the updated forecast. Paste from Excel supported. Rates are managed on the Project Forecast tab.</p>
+      A red cell means the actual ran over the updated forecast. Paste from Excel supported. Rates are managed on the Rate Table tab.</p>
   </div>
   <div class="card">
     <h2>Comparison — original vs updated vs actual</h2>
@@ -436,6 +425,27 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     <div class="tablewrap" style="max-height:620px"><table id="scTable"></table></div>
     <div class="hint" id="scInfo" style="margin-top:8px"></div>
   </div>
+</section>
+
+<!-- ============ RATE TABLE TAB ============ -->
+<section id="tab-rates" class="hidden">
+  <div class="card">
+    <h2>Rate table — cost &amp; price to owner per employee</h2>
+    <div class="row" style="margin-bottom:10px">
+      <label>Project: <select id="rtProject" style="max-width:430px"></select></label>
+    </div>
+    <p class="hint">Cost rate defaults to the burdened rate derived from this project's actuals (total cost ÷ hours, so fringe and oncost are included) — type to override.
+      Enter each person's <b>bill rate (price to owner)</b> to get revenue and margin. Names must match the Employee/Vendor column exactly.
+      Rates are saved per project and drive the cost, revenue and margin numbers on the Project Forecast and Actuals vs Forecast tabs.</p>
+    <div class="row" style="margin-bottom:8px">
+      <input id="rtNewEmp" placeholder="Add employee not yet in actuals…" style="width:250px">
+      <button id="btnRtAdd" class="small">Add</button>
+      <label style="margin-left:14px">Set bill = cost × <input type="number" id="rtMult" step="0.05" value="2.5" style="width:74px"></label>
+      <button id="btnRtFill" class="small">Fill empty bill rates</button>
+    </div>
+    <div class="tablewrap" style="max-height:520px"><table id="rateTable"></table></div>
+  </div>
+  <div class="kpis" id="rtKpis"></div>
 </section>
 
 <!-- ============ SETTINGS TAB ============ -->
@@ -1377,12 +1387,12 @@ function projWeekWindow(node,actualWeeks){
 function updateAllSummaries(){
   if(!ppCtx)return;
   if(ppCtx.mode==='f'){ for(const it of ppCtx.items)updateFpSummary(it); updateFpTotalsRow(); renderFpTotals(); }
-  else { for(const it of ppCtx.items)updateItemSummary(it); updatePlanTotals(); }
+  else if(ppCtx.mode==='a'){ for(const it of ppCtx.items)updateItemSummary(it); updatePlanTotals(); }
 }
 function setupProjectPages(){
   const s=state.settings;
-  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); };
-  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['fpLevel','ppLevel'],['apLevel','ppLevel'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
+  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); };
+  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['fpLevel','ppLevel'],['apLevel','ppLevel'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
     $('#'+id).addEventListener('change',e=>{ s[key]=isNum?+e.target.value:e.target.value; saveState(); reRender(); });
   }
   $('#fpLevel').value=s.ppLevel; $('#apLevel').value=s.ppLevel;
@@ -1488,14 +1498,16 @@ function setupProjectPages(){
 function ppBuild(mode){
   if(!data.length)return null;
   const s=state.settings;
-  const pick=$(mode==='f'?'#fpProject':'#apProject');
+  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':'#apProject');
   const projMap=new Map();
   for(const r of data){ const k=r.projectNumber||r.projectName; if(k && !projMap.has(k)) projMap.set(k,(r.projectNumber? r.projectNumber+' — ':'')+(r.projectName||'')); }
   const prev=s.ppProject; pick.innerHTML='';
   [...projMap.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([k,lbl])=>pick.append(el('option',{value:k},lbl)));
   if(projMap.has(prev)) pick.value=prev; else s.ppProject=pick.value;
-  $(mode==='f'?'#fpLevel':'#apLevel').value=s.ppLevel;
-  $(mode==='f'?'#fpWeekEnd':'#apWeekEnd').value=String(s.ppWeekEnd);
+  if(mode!=='r'){
+    $(mode==='f'?'#fpLevel':'#apLevel').value=s.ppLevel;
+    $(mode==='f'?'#fpWeekEnd':'#apWeekEnd').value=String(s.ppWeekEnd);
+  }
   const proj=pick.value;
   if(!proj)return null;
   const level=s.ppLevel;
@@ -1793,7 +1805,7 @@ function renderActualsPage(){
       const override=it.emp&&rt[it.emp]?rt[it.emp].cost:node.rates[it.label];
       const eff=costRateOf(it);
       const rin=el('input',{class:'rate-in',type:'text',inputmode:'decimal',
-        title:(it.emp?'Burdened cost $/hr for '+it.emp+' (shared with their other rows; also editable in the rate table on the Project Forecast tab)':'Burdened cost $/hr for this row'),
+        title:(it.emp?'Burdened cost $/hr for '+it.emp+' (shared with their other rows; also editable on the Rate Table tab)':'Burdened cost $/hr for this row'),
         value: override!=null? override : (eff?eff.toFixed(2):'')});
       rin.addEventListener('input',()=>{
         const v=rin.value.trim();
@@ -1964,7 +1976,31 @@ function renderApTotals(){
   t.append(tb);
   if(missingBill){
     t.append(el('tfoot',null,el('tr',null,el('td',{colspan:5,class:'hint',style:'color:var(--warn)'},
-      missingBill+' labor row(s) have no bill rate in the rate table (Project Forecast tab) — their revenue counts as 0.'))));
+      missingBill+' labor row(s) have no bill rate (Rate Table tab) — their revenue counts as 0.'))));
+  }
+}
+function renderRatesTab(){
+  if(!data.length)return;
+  if(!ppBuild('r'))return;
+  renderRateTable();
+}
+function renderRtKpis(){
+  const k=$('#rtKpis'); if(!k||!ppCtx)return;
+  const rt=ppCtx.meta._rateTable;
+  let n=0,withBill=0,cSum=0,bSum=0;
+  for(const emp of rateTableEmps()){
+    const es=ppCtx.empStats[emp]; const e=rt[emp]||{};
+    const cost=e.cost!=null?e.cost:(es?es.rate:0);
+    n++;
+    if(e.bill!=null&&e.bill>0&&cost>0){ withBill++; bSum+=e.bill; cSum+=cost; }
+  }
+  k.innerHTML='';
+  const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
+  kpi('People in rate table',String(n));
+  kpi('With bill rates',String(withBill),n>withBill?(n-withBill)+' missing — their revenue counts as 0':'');
+  if(withBill){
+    kpi('Avg cost / bill rate',fmtNum(cSum/withBill,2)+' / '+fmtNum(bSum/withBill,2));
+    kpi('Avg margin per hour',fmtNum((bSum-cSum)/withBill,2),(100*(bSum-cSum)/bSum).toFixed(1)+'% of bill');
   }
 }
 function renderRateTable(){
@@ -2007,6 +2043,7 @@ function renderRateTable(){
       el('td',null,del)));
   }
   t.append(tb);
+  renderRtKpis();
 }
 function handlePlanPaste(e,inp){
   const text=(e.clipboardData||window.clipboardData).getData('text');
@@ -2283,7 +2320,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -2296,6 +2333,7 @@ function refreshActiveTab(){
   else if(t==='pforecast') renderForecastPage();
   else if(t==='pactuals') renderActualsPage();
   else if(t==='subs') renderCostActuals();
+  else if(t==='rates') renderRatesTab();
 }
 
 /* ===================== Sample data ===================== */
