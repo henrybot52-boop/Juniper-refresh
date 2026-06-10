@@ -49,7 +49,13 @@ Click **Load sample data** in the header to try the tool without a real extract.
    next to your forecast, red cells flag weekly overruns, and you revise the
    updated forecast freely. The comparison table at the top shows original vs
    updated vs actual side by side so the drift is always visible.
-3. If scope changes are approved, *Set new baseline from updated forecast*
+3. **Risk & contingency** — enter dollar amounts (or set from a % of baseline
+   cost) on the Project Forecast tab. Baseline totals then show cost including
+   reserves and margin after reserves, and the Actuals vs Forecast comparison
+   tracks the **drawdown**: how much of the reserve the EAC cost overrun has
+   consumed, what remains (red when blown), and EAC vs the total authorized
+   budget including reserves.
+4. If scope changes are approved, *Set new baseline from updated forecast*
    re-baselines the job.
 
 Plans, baselines and rates are saved per project (and per row-level) in the

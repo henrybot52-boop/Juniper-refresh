@@ -338,6 +338,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       <label>Non-labor markup %: <input type="number" id="ppNlMarkup" step="0.5" value="0" style="width:74px" title="Applied to subs/expense cost to compute price to owner"></label>
       <span class="hint">Revenue = hours × bill rate; subs/expenses are billed at cost plus this markup.</span>
     </div>
+    <div class="row" style="margin-bottom:10px">
+      <label>Contingency $: <input id="fpCont" class="rate-in" style="width:110px" inputmode="decimal" placeholder="0"></label>
+      <label class="hint">or <input type="number" id="fpContPct" step="0.5" value="10" style="width:62px"> % of baseline cost <button id="btnFpContPct" class="small">Set</button></label>
+      <label style="margin-left:18px">Risk allowance $: <input id="fpRisk" class="rate-in" style="width:110px" inputmode="decimal" placeholder="0"></label>
+      <label class="hint">or <input type="number" id="fpRiskPct" step="0.5" value="5" style="width:62px"> % <button id="btnFpRiskPct" class="small">Set</button></label>
+      <span class="hint">— held against the budget; drawdown is tracked on the Actuals vs Forecast tab</span>
+    </div>
     <div class="kpis" id="fpTotals"></div>
   </div>
 </section>
@@ -1331,6 +1338,8 @@ function projMeta(proj){
   const p=state.plans[proj];
   p._rateTable=p._rateTable||{};
   if(p._nlMarkup==null)p._nlMarkup=0;
+  if(p._contBudget==null)p._contBudget=0;
+  if(p._riskBudget==null)p._riskBudget=0;
   return p;
 }
 function ppItemLabel(r,level){
@@ -1487,6 +1496,16 @@ function setupProjectPages(){
     ppCtx.meta._nlMarkup=+$('#ppNlMarkup').value||0;
     saveState(); updateAllSummaries();
   });
+  $('#fpCont').addEventListener('change',e=>{ if(!ppCtx)return; ppCtx.meta._contBudget=parseNumber(e.target.value)||0; saveState(); renderFpTotals(); });
+  $('#fpRisk').addEventListener('change',e=>{ if(!ppCtx)return; ppCtx.meta._riskBudget=parseNumber(e.target.value)||0; saveState(); renderFpTotals(); });
+  $('#btnFpContPct').addEventListener('click',()=>{ if(!ppCtx)return;
+    const pct=+$('#fpContPct').value||0;
+    ppCtx.meta._contBudget=Math.round(fpBaselineCost()*pct/100);
+    $('#fpCont').value=ppCtx.meta._contBudget; saveState(); renderFpTotals(); });
+  $('#btnFpRiskPct').addEventListener('click',()=>{ if(!ppCtx)return;
+    const pct=+$('#fpRiskPct').value||0;
+    ppCtx.meta._riskBudget=Math.round(fpBaselineCost()*pct/100);
+    $('#fpRisk').value=ppCtx.meta._riskBudget; saveState(); renderFpTotals(); });
   $('#rtOhMult').addEventListener('change',e=>{
     const v=parseFloat(e.target.value);
     s.ohMult=v>0?v:2.3474; saveState(); reRender();
@@ -1606,6 +1625,8 @@ function ppBuild(mode){
   $('#ppTaskList').innerHTML='';[...taskSet].sort().forEach(v=>$('#ppTaskList').append(el('option',{value:v})));
   $('#ppEmpList').innerHTML='';[...empSet].sort().forEach(v=>$('#ppEmpList').append(el('option',{value:v})));
   $('#ppNlMarkup').value=meta._nlMarkup;
+  $('#fpCont').value=meta._contBudget||'';
+  $('#fpRisk').value=meta._riskBudget||'';
   return ppCtx;
 }
 function makeItemCell(it,tr,colCount){
@@ -1746,6 +1767,11 @@ function renderForecastPage(){
     +(weeks.length>node.baseWeeks?' (extended through latest actuals)':'')
     +(node.baselineAt?' · baseline first entered '+node.baselineAt.slice(0,10):'');
 }
+function fpBaselineCost(){
+  if(!ppCtx)return 0;
+  let cost=0; for(const it of ppCtx.items)cost+=fpCalc(it).cost;
+  return cost;
+}
 function fpCalc(it){
   const node=ppCtx.node;
   let tot=0; const pre=it.label+'|';
@@ -1799,6 +1825,12 @@ function renderFpTotals(){
   kpi('Baseline cost',fmtMoney(cost));
   kpi('Total revenue (price to owner)',fmtMoney(rev));
   kpi('Margin',fmtMoney(rev-cost), rev?(100*(rev-cost)/rev).toFixed(1)+'% of revenue':'');
+  const cont=ppCtx.meta._contBudget||0, risk=ppCtx.meta._riskBudget||0;
+  if(cont||risk){
+    kpi('Contingency + risk',fmtMoney(cont+risk), cost?(100*(cont+risk)/cost).toFixed(1)+'% of cost':'');
+    kpi('Cost incl. reserves',fmtMoney(cost+cont+risk));
+    kpi('Margin after reserves',fmtMoney(rev-cost-cont-risk), rev?(100*(rev-cost-cont-risk)/rev).toFixed(1)+'% of revenue':'');
+  }
   if(missingBill) kpi('⚠ Missing bill rates',String(missingBill),'labor row(s) counted at $0 revenue');
 }
 function exportFpCsv(){
@@ -1812,6 +1844,12 @@ function exportFpCsv(){
       ...ppCtx.visWeeks.map(wk=>node.baseline[it.label+'|'+wk]??''),
       c.tot,it.isLabor?c.rate.toFixed(2):'',it.isLabor&&c.bill?c.bill.toFixed(2):'',
       c.cost.toFixed(2),c.rev.toFixed(2),c.margin.toFixed(2)]);
+  }
+  {
+    const cont=ppCtx.meta._contBudget||0, risk=ppCtx.meta._riskBudget||0;
+    const pad=ppCtx.visWeeks.map(()=>'');
+    out.push(['Contingency budget','','',...pad,'','','',cont.toFixed(2),'','']);
+    out.push(['Risk allowance','','',...pad,'','','',risk.toFixed(2),'','']);
   }
   downloadCSV('project-baseline-'+ppCtx.proj+'.csv',out);
 }
@@ -2046,6 +2084,27 @@ function renderApTotals(){
   };
   row('Labor hours',B.h,E.h,A.h,v=>fmtNum(v,1));
   row('Cost',B.c,E.c,A.c,fmtMoney);
+  const cont=ppCtx.meta._contBudget||0, risk=ppCtx.meta._riskBudget||0, reserves=cont+risk;
+  if(reserves>0||hasBase){
+    const used=hasBase? Math.max(0,E.c-B.c) : 0;
+    const remaining=reserves-used;
+    tb.append(el('tr',null,
+      el('td',{title:'Contingency '+fmtMoney(cont)+' + risk allowance '+fmtMoney(risk)+' (set on the Project Forecast tab). Drawdown = EAC cost overrun vs the original cost.'},'Contingency + risk reserve'),
+      el('td',{class:'num'},fmtMoney(reserves)),
+      el('td',{class:'num'+(remaining<-0.5?' neg':' pos')},fmtMoney(remaining)+' left'),
+      el('td',{class:'num'},''),
+      el('td',{class:'num'+(used>0.5?' neg':'')},used>0.5?'−'+fmtMoney(used)+' drawn':'')));
+    if(hasBase){
+      const totBud=B.c+reserves;
+      const dd=E.c-totBud;
+      tb.append(el('tr',null,
+        el('td',{title:'Original cost + contingency + risk = the total authorized cost budget'},'Cost vs budget incl. reserves'),
+        el('td',{class:'num'},fmtMoney(totBud)),
+        el('td',{class:'num'},fmtMoney(E.c)),
+        el('td',{class:'num'},fmtMoney(A.c)),
+        el('td',{class:'num '+(dd>0.5?'neg':'pos')},(dd>0?'+':'')+fmtMoney(dd))));
+    }
+  }
   row('Revenue (price to owner)',B.r,E.r,A.r,fmtMoney,true);
   row('Margin',B.r-B.c,E.r-E.c,A.r-A.c,fmtMoney,true);
   const pct=(r,c2)=>r? (100*(r-c2)/r).toFixed(1)+'%':'—';
@@ -2582,6 +2641,12 @@ function seedDemoPlan(){
   node.baseStart=firstWk;
   node.baseWeeks=wkDiff(firstWk,wkAdd(lastWk,aheadWeeks))+1;
   node.baselineAt=new Date(Date.now()-56*864e5).toISOString();
+  { let h=0,s2=0; for(const e2 in es){h+=es[e2].h;s2+=es[e2].s;}
+    const avgRate=h?(s2/h)*2.3474:0;
+    let bh=0; for(const k in node.baseline)bh+=node.baseline[k];
+    meta._contBudget=Math.max(1000,Math.round(bh*avgRate*0.08/1000)*1000);
+    meta._riskBudget=Math.max(1000,Math.round(bh*avgRate*0.05/1000)*1000);
+  }
   // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
   state.budgets={};
   const names=new Map();
