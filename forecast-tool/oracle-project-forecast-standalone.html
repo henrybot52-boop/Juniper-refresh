@@ -2149,9 +2149,88 @@ function loadSample(){
   // mark every canonical field as "mapped" so all features light up
   state.mapping={}; FIELDS.forEach(f=>state.mapping[f.key]=f.label);
   recomputePeriods();
+  seedDemoPlan();
   $('#dataStatus').textContent=data.length.toLocaleString()+' sample rows loaded';
   buildAllFilterbars();
   switchTab('dashboard');
+}
+// deterministic pseudo-random from a string, so the demo looks the same every time
+function demoRand(s){ let h=0; for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0; return ((h>>>0)%1000)/1000; }
+function seedDemoPlan(){
+  // pre-populate the project pages for the biggest sample project: rate table,
+  // baseline forecast, an already-revised updated forecast, plus demo budgets,
+  // so every page shows realistic numbers immediately
+  const totals=new Map();
+  for(const r of data){ const k=r.projectNumber||r.projectName; totals.set(k,(totals.get(k)||0)+(r.totalCost||0)); }
+  const ranked=[...totals.entries()].sort((a,b)=>b[1]-a[1]);
+  const proj=ranked[0][0];
+  state.settings.ppProject=proj;
+  state.settings.ppLevel='topTaskEmployee';
+  const level='topTaskEmployee';
+  const node=planNode(proj,level);
+  const meta=projMeta(proj);
+  node.current={}; node.baseline={}; node.manual=[]; node.rates={};
+  meta._rateTable={}; meta._nlMarkup=5;
+  const projRows=data.filter(r=>(r.projectNumber||r.projectName)===proj);
+  // bill rates ~2.6x burdened cost
+  const es={};
+  for(const r of projRows){
+    if(!(r.hours||r.salaries))continue;
+    const e2=r.employee||''; if(!es[e2])es[e2]={h:0,c:0};
+    es[e2].h+=r.hours||0; es[e2].c+=r.totalCost||0;
+  }
+  for(const e2 in es){
+    const rate=es[e2].h? es[e2].c/es[e2].h : 0;
+    if(rate>0) meta._rateTable[e2]={bill:Math.round(rate*2.6)};
+  }
+  // weekly actual hours per item
+  const items=new Map();
+  for(const r of projRows){
+    if(!r.hours)continue;
+    const d=r.transactionDate||r.glDate; if(!d)continue;
+    const label=ppItemLabel(r,level);
+    const wk=wkKey(d);
+    if(!items.has(label))items.set(label,new Map());
+    const m=items.get(label);
+    m.set(wk,(m.get(wk)||0)+r.hours);
+  }
+  let firstWk='9999',lastWk='';
+  for(const m of items.values())for(const wk of m.keys()){ if(wk<firstWk)firstWk=wk; if(wk>lastWk)lastWk=wk; }
+  if(!lastWk)return;
+  const aheadWeeks=8;
+  for(const [label,m] of items){
+    const weeks=[...m.keys()].sort();
+    let tot=0; for(const wk of weeks)tot+=m.get(wk);
+    const avg=tot/weeks.length;
+    // baseline over the actual period: close to actuals but deliberately off
+    // in places so weekly overruns and variances show up
+    for(const wk of weeks){
+      const act=m.get(wk);
+      const base=Math.round(act*(0.7+demoRand(label+wk)*0.42)*2)/2;
+      if(base>0){ node.baseline[label+'|'+wk]=base; node.current[label+'|'+wk]=base; }
+    }
+    // plan continues for 8 future weeks; the updated forecast has been revised
+    // upward near-term (as if scope grew after the baseline was set)
+    for(let i=1;i<=aheadWeeks;i++){
+      const wk=wkAdd(lastWk,i);
+      const base=Math.round(avg*2)/2;
+      if(base>0){
+        node.baseline[label+'|'+wk]=base;
+        node.current[label+'|'+wk]=i<=4? Math.round(base*1.2*2)/2 : base;
+      }
+    }
+  }
+  node.baseStart=firstWk;
+  node.baseWeeks=wkDiff(firstWk,wkAdd(lastWk,aheadWeeks))+1;
+  node.baselineAt=new Date(Date.now()-56*864e5).toISOString();
+  // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
+  state.budgets={};
+  const names=new Map();
+  for(const r of data){ const k=r.projectNumber||r.projectName; if(!names.has(k))names.set(k,r.projectName||''); }
+  for(const [pn,tot] of ranked){
+    state.budgets['projectNumber,projectName::'+pn+' | '+names.get(pn)]=Math.round(tot*1.3/10000)*10000;
+  }
+  saveState();
 }
 
 /* ===================== Init ===================== */

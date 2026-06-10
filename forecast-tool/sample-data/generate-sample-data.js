@@ -167,7 +167,7 @@ for (const p of projects) {
       const sal = -(200 + rand() * 1200);
       addRow(p, period, ['1.0', 'Project Management'], { n: 1, name: 'Admin' }, 'Cost Transfer', emp,
         { hours: round2(sal / emp.rate), sal, fringe: sal * 0.38, oncost: (sal * 1.38) * 0.045, expType: 'Professional Staff Labor' },
-        'Transfer to ' + (parseInt(p.num) + 1) + ' per PM request');
+        'Timesheet correction — prior period hours adjusted');
     }
   }
 }
