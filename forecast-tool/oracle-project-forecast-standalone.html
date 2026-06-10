@@ -165,7 +165,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   <button data-tab="forecast">4 · Forecast</button>
   <button data-tab="pforecast">5 · Project Forecast</button>
   <button data-tab="pactuals">6 · Actuals vs Forecast</button>
-  <button data-tab="settings">7 · Settings</button>
+  <button data-tab="subs">7 · Cost Actuals</button>
+  <button data-tab="settings">8 · Settings</button>
 </nav>
 
 <main>
@@ -400,6 +401,46 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   </div>
 </section>
 
+<!-- ============ COST ACTUALS TAB ============ -->
+<section id="tab-subs" class="hidden">
+  <div class="card">
+    <h2>Cost actuals — from the weekly extract <span class="pill" style="color:var(--accent);border-color:var(--accent)">read-only</span></h2>
+    <div class="row">
+      <label>Project: <select id="scProject" style="max-width:430px"></select></label>
+      <label>Rows:
+        <select id="scLevel">
+          <option value="employee">Employee/Vendor</option>
+          <option value="topTaskEmployee">Top Task + Employee/Vendor</option>
+          <option value="topTask">Top Task</option>
+          <option value="task">Task</option>
+          <option value="transactionType">Transaction Type</option>
+          <option value="expenditureType">Expenditure/Event Type</option>
+        </select>
+      </label>
+      <label>Show:
+        <select id="scMetric">
+          <option value="totalCost">Total Cost</option>
+          <option value="hours">Hours</option>
+          <option value="salaries">Salaries</option>
+          <option value="fringe">Fringe</option>
+          <option value="subsCost">Subs Cost</option>
+          <option value="expensesCost">Expenses</option>
+          <option value="oncost">Oncost</option>
+        </select>
+      </label>
+      <label>Columns: <select id="scPeriod"><option value="month">Months</option><option value="week">Weeks</option></select></label>
+      <button id="btnScCsv" class="small">Export CSV</button>
+    </div>
+    <p class="hint">Every charge — labor, subs, expenses, oncost — pulled straight from the uploaded extract. Nothing on this page is editable:
+      it always reflects the import exactly. Click a row to see each transaction behind it.</p>
+  </div>
+  <div class="kpis" id="scKpis"></div>
+  <div class="card">
+    <div class="tablewrap" style="max-height:620px"><table id="scTable"></table></div>
+    <div class="hint" id="scInfo" style="margin-top:8px"></div>
+  </div>
+</section>
+
 <!-- ============ SETTINGS TAB ============ -->
 
 <section id="tab-settings" class="hidden">
@@ -527,6 +568,7 @@ let state = {
     fcLevel:'projectNumber,projectName', fcMetric:'totalCost', fcMethod:'avgN',
     fcLookback:3, fcHorizon:6, fcGrowth:0, fcExcludeLatest:true,
     ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12,
+    scProject:'__ALL__', scLevel:'employee', scMetric:'totalCost', scPeriod:'month',
   },
   budgets:{},                  // `${level}::${groupKey}` -> number
   plans:{},                    // projectNum -> level -> {current:{itemKey|weekKey:num}, baseline:{...}, rates:{item:rate}, baselineAt}
@@ -2048,6 +2090,133 @@ function exportPlanCsv(){
   downloadCSV('project-actuals-vs-forecast-'+ppCtx.proj+'.csv',out);
 }
 
+/* ===================== Cost Actuals (read-only, straight from the import) ===================== */
+let lastScCsv=null;
+function setupCostActuals(){
+  const s=state.settings;
+  $('#scLevel').value=s.scLevel; $('#scMetric').value=s.scMetric; $('#scPeriod').value=s.scPeriod;
+  $('#scProject').addEventListener('change',e=>{ s.scProject=e.target.value; saveState(); renderCostActuals(); });
+  $('#scLevel').addEventListener('change',e=>{ s.scLevel=e.target.value; saveState(); renderCostActuals(); });
+  $('#scMetric').addEventListener('change',e=>{ s.scMetric=e.target.value; saveState(); renderCostActuals(); });
+  $('#scPeriod').addEventListener('change',e=>{ s.scPeriod=e.target.value; saveState(); renderCostActuals(); });
+  $('#btnScCsv').addEventListener('click',()=>{ if(lastScCsv)downloadCSV('cost-actuals.csv',lastScCsv); else alert('Nothing to export yet.'); });
+}
+function scRowLabel(r,level){
+  if(level==='employee')return r.employee||'(blank)';
+  if(level==='transactionType')return r.transactionType||'(blank)';
+  if(level==='expenditureType')return r.expenditureType||'(blank)';
+  return ppItemLabel(r,level);
+}
+function renderCostActuals(){
+  if(!data.length)return;
+  const s=state.settings;
+  // project picker (All + each project)
+  const pick=$('#scProject');
+  const projMap=new Map();
+  for(const r of data){ const k=r.projectNumber||r.projectName; if(k&&!projMap.has(k)) projMap.set(k,(r.projectNumber?r.projectNumber+' — ':'')+(r.projectName||'')); }
+  pick.innerHTML='';
+  pick.append(el('option',{value:'__ALL__'},'(all projects)'));
+  [...projMap.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([k,lbl])=>pick.append(el('option',{value:k},lbl)));
+  pick.value = (s.scProject==='__ALL__'||projMap.has(s.scProject))? s.scProject : '__ALL__';
+  s.scProject=pick.value;
+
+  const rows = s.scProject==='__ALL__' ? data : data.filter(r=>(r.projectNumber||r.projectName)===s.scProject);
+  const metric=s.scMetric;
+  const mObj=METRICS.find(m=>m.key===metric);
+  const byWeek=s.scPeriod==='week';
+  // group rows
+  const groups=new Map(); let undated=0;
+  const colSort=new Map(); // colKey -> sort value
+  for(const r of rows){
+    const label=scRowLabel(r,s.scLevel);
+    let g=groups.get(label);
+    if(!g){ g={label,cols:new Map(),tot:initMetrics(),billed:0,unbilled:0,invoices:new Set(),last:null,rows:[]}; groups.set(label,g); }
+    let colKey=null;
+    if(byWeek){
+      const d=r.transactionDate||r.glDate;
+      if(d){ colKey=wkKey(d); colSort.set(colKey,colKey); } else undated++;
+    } else {
+      if(r._pk!=null||r._plabel){ colKey=r._plabel; colSort.set(colKey,r._pk==null?Infinity:r._pk); } else undated++;
+    }
+    if(colKey!=null) g.cols.set(colKey,(g.cols.get(colKey)||0)+(r[metric]||0));
+    for(const m of METRICS) g.tot[m.key]+=r[m.key]||0;
+    if(state.mapping.billedStatus){ if(isBilled(r.billedStatus)) g.billed+=r.totalCost||0; else g.unbilled+=r.totalCost||0; }
+    if(r.invoiceNumber) g.invoices.add(r.invoiceNumber);
+    const d2=r.transactionDate||r.glDate;
+    if(d2&&(!g.last||d2>g.last)) g.last=d2;
+    g.rows.push(r);
+  }
+  const groupList=[...groups.values()].sort((a,b)=>b.tot.totalCost-a.tot.totalCost);
+  const cols=[...colSort.keys()].sort((a,b)=>{
+    const sa=colSort.get(a),sb=colSort.get(b);
+    return sa<sb?-1:sa>sb?1:String(a).localeCompare(String(b));
+  });
+  // KPIs
+  const tot=initMetrics(); let unb=0;
+  for(const g of groupList){ for(const m of METRICS)tot[m.key]+=g.tot[m.key]; unb+=g.unbilled; }
+  const k=$('#scKpis'); k.innerHTML='';
+  const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
+  kpi('Total cost',fmtMoney(tot.totalCost),rows.length.toLocaleString()+' transactions');
+  kpi('Hours',fmtNum(tot.hours,1),'Labor: '+fmtMoney(tot.salaries+tot.fringe));
+  kpi('Subs / Expenses',fmtMoney(tot.subsCost+tot.expensesCost),'Oncost: '+fmtMoney(tot.oncost));
+  if(state.mapping.billedStatus) kpi('Unbilled',fmtMoney(unb),tot.totalCost?(100*unb/tot.totalCost).toFixed(1)+'% of total':'');
+  kpi('Rows',String(groupList.length),s.scLevel==='employee'?'employees/vendors':'groups');
+  // table
+  const fmt=v=>mObj&&!mObj.money? fmtNum(v,1):fmtMoney(v);
+  const t=$('#scTable'); t.innerHTML='';
+  const sumHdr=['Hours','Total cost','Billed','Unbilled','Invoices','Last charge'];
+  const headCells=[el('th',null,'Item'),
+    ...cols.map(c=>el('th',{class:'num',title:byWeek?'Week ending '+c:''},byWeek?'WE '+wkLabel(c):c)),
+    ...sumHdr.map((h,i)=>el('th',{class:'num'+(i===0?' sumcol':'')},h))];
+  t.append(el('thead',null,el('tr',null,...headCells)));
+  const tb=el('tbody');
+  const colCount=headCells.length;
+  const LIMIT=400;
+  for(const g of groupList.slice(0,LIMIT)){
+    const tr=el('tr');
+    const name=el('span',{class:'item-link',onclick:()=>toggleDetail(g,tr,colCount)},g.label);
+    tr.append(el('td',{title:g.label},name));
+    for(const c of cols){
+      const v=g.cols.get(c)||0;
+      tr.append(el('td',{class:numCls(v)},v?fmt(v):''));
+    }
+    tr.append(
+      el('td',{class:'num sumcol'},g.tot.hours?fmtNum(g.tot.hours,1):''),
+      el('td',{class:numCls(g.tot.totalCost)},fmtMoney(g.tot.totalCost)),
+      el('td',{class:'num'},state.mapping.billedStatus?fmtMoney(g.billed):'—'),
+      el('td',{class:'num'+(g.unbilled>0.5?' neg':'')},state.mapping.billedStatus?fmtMoney(g.unbilled):'—'),
+      el('td',{class:'num'},g.invoices.size?String(g.invoices.size):''),
+      el('td',null,g.last?g.last.toISOString().slice(0,10):''));
+    tb.append(tr);
+  }
+  // total row
+  const trTot=el('tr',{class:'total'});
+  trTot.append(el('td',null,'TOTAL'));
+  for(const c of cols){
+    const v=groupList.reduce((a,g)=>a+(g.cols.get(c)||0),0);
+    trTot.append(el('td',{class:'num'},v?fmt(v):''));
+  }
+  trTot.append(
+    el('td',{class:'num sumcol'},fmtNum(tot.hours,1)),
+    el('td',{class:'num'},fmtMoney(tot.totalCost)),
+    el('td',{class:'num'},state.mapping.billedStatus?fmtMoney(tot.totalCost-unb):'—'),
+    el('td',{class:'num'},state.mapping.billedStatus?fmtMoney(unb):'—'),
+    el('td',{class:'num'},''),el('td'));
+  tb.append(trTot);
+  t.append(tb);
+  $('#scInfo').textContent=groupList.length.toLocaleString()+' rows'
+    +(groupList.length>LIMIT?` (showing top ${LIMIT} — export CSV for all)`:'')
+    +' · '+cols.length+(byWeek?' weeks':' periods')
+    +(undated?' · '+undated+' undated transactions excluded from period columns (still in totals)':'');
+  // CSV
+  const head=['Item',...cols.map(c=>byWeek?'WE '+c:c),'Hours','Total cost','Billed','Unbilled','Invoices','Last charge'];
+  lastScCsv=[head,...groupList.map(g=>[g.label,
+    ...cols.map(c=>g.cols.get(c)||0),
+    g.tot.hours,g.tot.totalCost,
+    state.mapping.billedStatus?g.billed:'',state.mapping.billedStatus?g.unbilled:'',
+    g.invoices.size,g.last?g.last.toISOString().slice(0,10):''])];
+}
+
 /* ===================== Settings ===================== */
 function setupSettings(){
   const s=state.settings;
@@ -2084,7 +2253,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','pforecast','pactuals','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -2096,6 +2265,7 @@ function refreshActiveTab(){
   else if(t==='forecast') renderForecast();
   else if(t==='pforecast') renderForecastPage();
   else if(t==='pactuals') renderActualsPage();
+  else if(t==='subs') renderCostActuals();
 }
 
 /* ===================== Sample data ===================== */
@@ -2255,7 +2425,7 @@ function init(){
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
   $('#btnSample').addEventListener('click',loadSample);
-  setupExplorer(); setupForecast(); setupProjectPages(); setupSettings();
+  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
