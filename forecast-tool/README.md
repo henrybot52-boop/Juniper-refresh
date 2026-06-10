@@ -55,6 +55,22 @@ Click **Load sample data** in the header to try the tool without a real extract.
 Plans and baselines are saved per project *and* per row-level, so a Top
 Task + Employee plan and an Employee-only plan can coexist.
 
+### Rate table, revenue and project totals
+
+- The **rate table** (below the grid) lists every employee on the project with
+  their derived burdened cost rate, an overridable **cost rate**, and a
+  **bill rate (price to owner)**, plus margin per hour. Add people who haven't
+  charged yet, and use *Set bill = cost × N* to fill empty bill rates from a
+  multiplier. Rates are stored per project and shared across row levels.
+- **Add plan row** above the grid creates rows for tasks/people with no
+  charges yet (marked with a yellow *plan* pill, removable with ✕) — so a full
+  baseline job plan can be built before the first timesheet hits.
+- The **Project totals** card shows Labor hours, Cost, **Revenue** and
+  **Margin** ($ and %) side by side for the *original baseline*, the *current
+  forecast (EAC)* and *actuals to date*, with an EAC-vs-baseline variance
+  column. Revenue = hours × bill rate; subs/expenses are billed at cost plus
+  the adjustable non-labor markup %.
+
 ## Persistence
 
 Column mapping, filters, forecast configuration and budgets are stored in the

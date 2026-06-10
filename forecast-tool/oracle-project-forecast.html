@@ -283,8 +283,37 @@
       Forecasts and rates are saved in your browser per project and survive next week's upload. Global filters do not apply here — the grid always shows the whole project.</p>
   </div>
   <div class="card">
+    <h2>Project totals — cost &amp; revenue <span class="hint">— original baseline vs current forecast vs actuals</span></h2>
+    <div class="row" style="margin-bottom:8px">
+      <label>Non-labor markup %: <input type="number" id="ppNlMarkup" step="0.5" value="0" style="width:74px" title="Applied to subs/expense cost to compute price to owner"></label>
+      <span class="hint">Revenue = hours × bill rate from the rate table below; subs/expenses are billed at cost plus this markup.</span>
+    </div>
+    <div class="tablewrap" style="max-height:280px"><table id="ppTotals"></table></div>
+  </div>
+  <div class="card">
+    <div class="row" style="margin-bottom:10px">
+      <span class="hint" style="font-weight:600">Add plan row:</span>
+      <input id="ppNewTask" list="ppTaskList" placeholder="Task" style="width:230px">
+      <input id="ppNewEmp" list="ppEmpList" placeholder="Employee/Vendor" style="width:200px">
+      <select id="ppNewUnit"><option value="hours">hours</option><option value="cost">cost ($)</option></select>
+      <button id="btnPpAddRow" class="small">Add row</button>
+      <datalist id="ppTaskList"></datalist><datalist id="ppEmpList"></datalist>
+      <span class="hint">— for tasks/people in the plan that have no charges yet</span>
+    </div>
     <div class="tablewrap" style="max-height:640px"><table id="ppTable"></table></div>
     <div class="hint" id="ppInfo" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>Rate table — cost &amp; price to owner per employee</h2>
+    <p class="hint">Cost rate defaults to the burdened rate derived from this project's actuals (total cost ÷ hours, so fringe and oncost are included) — type to override.
+      Enter each person's <b>bill rate (price to owner)</b> to get revenue and margin. Names must match the Employee/Vendor column exactly. Rates are saved per project.</p>
+    <div class="row" style="margin-bottom:8px">
+      <input id="rtNewEmp" placeholder="Add employee not yet in actuals…" style="width:250px">
+      <button id="btnRtAdd" class="small">Add</button>
+      <label style="margin-left:14px">Set bill = cost × <input type="number" id="rtMult" step="0.05" value="2.5" style="width:74px"></label>
+      <button id="btnRtFill" class="small">Fill empty bill rates</button>
+    </div>
+    <div class="tablewrap" style="max-height:320px"><table id="rateTable"></table></div>
   </div>
   <div class="card">
     <h2>Hours by week — actual vs forecast vs original</h2>
@@ -1175,6 +1204,86 @@ function setupProjectPlan(){
     }
   });
   $('#btnPpCsv').addEventListener('click',exportPlanCsv);
+  $('#ppNlMarkup').addEventListener('change',()=>{
+    if(!ppCtx)return;
+    ppCtx.meta._nlMarkup=+$('#ppNlMarkup').value||0;
+    saveState(); updateAllSummaries();
+  });
+  $('#btnPpAddRow').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    const task=$('#ppNewTask').value.trim(), emp=$('#ppNewEmp').value.trim(), unit=$('#ppNewUnit').value;
+    const lvl=ppCtx.level;
+    const needsTask=lvl!=='employee', needsEmp=lvl==='employee'||lvl==='topTaskEmployee'||lvl==='taskEmployee';
+    if(needsTask&&!task){alert('Enter a task (e.g. "1.0 Project Management").');return;}
+    if(needsEmp&&!emp){alert('Enter an employee/vendor name.');return;}
+    let label;
+    if(lvl==='employee')label=emp;
+    else if(lvl==='topTask'||lvl==='task')label=task;
+    else label=task+' · '+emp;
+    if(ppCtx.items.some(it=>it.label===label)){alert('That row already exists in the grid.');return;}
+    ppCtx.node.manual=ppCtx.node.manual||[];
+    ppCtx.node.manual.push({label,emp:needsEmp?emp:null,isLabor:unit==='hours'});
+    if(needsEmp&&emp){ const rt=ppCtx.meta._rateTable; if(!rt[emp])rt[emp]={}; }
+    $('#ppNewTask').value='';$('#ppNewEmp').value='';
+    saveState(); renderProjectPlan();
+  });
+  $('#btnRtAdd').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    const name=$('#rtNewEmp').value.trim();
+    if(!name)return;
+    const rt=ppCtx.meta._rateTable;
+    if(!rt[name])rt[name]={};
+    $('#rtNewEmp').value='';
+    saveState(); renderRateTable(); updateAllSummaries();
+  });
+  $('#btnRtFill').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    const mult=+$('#rtMult').value||0;
+    if(mult<=0){alert('Enter a multiplier > 0.');return;}
+    const rt=ppCtx.meta._rateTable;
+    for(const emp of rateTableEmps()){
+      if(!rt[emp])rt[emp]={};
+      if(rt[emp].bill==null){
+        const cost=rt[emp].cost!=null?rt[emp].cost:(ppCtx.empStats[emp]?ppCtx.empStats[emp].rate:0);
+        if(cost>0)rt[emp].bill=Math.round(cost*mult*100)/100;
+      }
+    }
+    saveState(); renderRateTable(); updateAllSummaries();
+  });
+}
+function projMeta(proj){
+  if(!state.plans[proj])state.plans[proj]={};
+  const p=state.plans[proj];
+  p._rateTable=p._rateTable||{};
+  if(p._nlMarkup==null)p._nlMarkup=0;
+  return p;
+}
+function rateTableEmps(){
+  const set=new Set(Object.keys(ppCtx.empStats));
+  for(const k of Object.keys(ppCtx.meta._rateTable))set.add(k);
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+function costRateOf(it){
+  const rt=ppCtx.meta._rateTable;
+  if(it.emp){
+    if(rt[it.emp]&&rt[it.emp].cost!=null)return rt[it.emp].cost;
+    const es=ppCtx.empStats[it.emp];
+    if(es&&es.rate)return es.rate;
+  }
+  if(ppCtx.node.rates[it.label]!=null)return ppCtx.node.rates[it.label];
+  if(it.hours)return it.cost/it.hours;
+  return ppCtx.avgCostRate||0;
+}
+function billRateOf(it){
+  const rt=ppCtx.meta._rateTable;
+  if(it.emp&&rt[it.emp]&&rt[it.emp].bill!=null)return rt[it.emp].bill;
+  if(!it.emp)return ppCtx.avgBillRate||0;
+  return 0;
+}
+function updateAllSummaries(){
+  if(!ppCtx)return;
+  for(const it of ppCtx.items)updateItemSummary(it);
+  updatePlanTotals();
 }
 function weekEndOf(d){
   const e=new Date(d.getFullYear(),d.getMonth(),d.getDate());
@@ -1218,22 +1327,57 @@ function renderProjectPlan(){
   const projRows=data.filter(r=>(r.projectNumber||r.projectName)===proj);
   const level=s.ppLevel;
   const node=planNode(proj,level);
+  const meta=projMeta(proj);
+  const hasEmp=level==='employee'||level==='topTaskEmployee'||level==='taskEmployee';
 
-  // build items
+  // per-employee actuals (for derived burdened rates)
+  const empStats={};
+  for(const r of projRows){
+    if(!(r.hours||r.salaries))continue;
+    const e2=r.employee||'(blank)';
+    if(!empStats[e2])empStats[e2]={hours:0,cost:0};
+    empStats[e2].hours+=r.hours||0; empStats[e2].cost+=r.totalCost||0;
+  }
+  for(const e2 in empStats)empStats[e2].rate=empStats[e2].hours?empStats[e2].cost/empStats[e2].hours:0;
+
+  // build items from actuals
   const items=new Map(); let undated=0;
   for(const r of projRows){
     const label=ppItemLabel(r,level);
     let it=items.get(label);
-    if(!it){ it={label,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[]}; items.set(label,it); }
+    if(!it){ it={label,emp:hasEmp?(r.employee||'(blank)'):null,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[]}; items.set(label,it); }
     const d=r.transactionDate||r.glDate;
     if(d){ const wk=wkKey(d);
       it.hoursW.set(wk,(it.hoursW.get(wk)||0)+(r.hours||0));
       it.costW.set(wk,(it.costW.get(wk)||0)+(r.totalCost||0));
     } else undated++;
     it.hours+=r.hours||0; it.cost+=r.totalCost||0; it.rows.push(r);
+    if(!(r.hours||r.salaries)) it.nlCost=(it.nlCost||0)+(r.totalCost||0); // expense/subs charges inside a labor row
+  }
+  for(const it of items.values()) it.isLabor=Math.abs(it.hours)>0.01;
+  // manually added plan rows (no actuals yet)
+  node.manual=node.manual||[];
+  for(const m of node.manual){
+    if(items.has(m.label)){ items.get(m.label)._manual=true; continue; }
+    items.set(m.label,{label:m.label,emp:m.emp||null,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[],isLabor:m.isLabor!==false,_manual:true});
+  }
+  // rows that exist only in saved plan/baseline keys (e.g. level was rebuilt)
+  for(const store of [node.current,node.baseline]){
+    for(const k of Object.keys(store)){
+      const label=k.slice(0,k.lastIndexOf('|'));
+      if(!label||items.has(label))continue;
+      items.set(label,{label,emp:hasEmp?label.split(' · ').pop():null,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[],isLabor:true,_manual:true});
+    }
   }
   const itemList=[...items.values()];
-  for(const it of itemList) it.isLabor=Math.abs(it.hours)>0.01;
+  // migrate legacy per-row cost-rate overrides into the rate table
+  for(const it of itemList){
+    if(it.emp&&node.rates[it.label]!=null){
+      if(!meta._rateTable[it.emp])meta._rateTable[it.emp]={};
+      if(meta._rateTable[it.emp].cost==null)meta._rateTable[it.emp].cost=node.rates[it.label];
+      delete node.rates[it.label];
+    }
+  }
   itemList.sort((a,b)=>(b.isLabor-a.isLabor)||a.label.localeCompare(b.label));
 
   // week columns
@@ -1251,11 +1395,30 @@ function renderProjectPlan(){
   const hiddenWeeks = actualWeeks.slice(0,actualWeeks.length-shownPast.length);
   const visWeeks=[...shownPast,...futureWeeks];
 
-  ppCtx={proj,level,node,items:itemList,actualWeeks,futureWeeks,shownPast,hiddenWeeks,visWeeks,lastActualWeek,inputs:[]};
+  ppCtx={proj,level,node,meta,empStats,items:itemList,actualWeeks,futureWeeks,shownPast,hiddenWeeks,visWeeks,lastActualWeek,inputs:[]};
+  // blended rates used when a row has no employee (task-level plans)
+  {
+    let h=0,c2=0; for(const e2 in empStats){h+=empStats[e2].hours;c2+=empStats[e2].cost;}
+    ppCtx.avgCostRate=h?c2/h:0;
+    const bills=Object.values(meta._rateTable).map(r=>r.bill).filter(v=>v!=null&&v>0);
+    ppCtx.avgBillRate=bills.length?bills.reduce((a,b)=>a+b,0)/bills.length:0;
+  }
+  $('#ppNlMarkup').value=meta._nlMarkup;
+  // datalists for the add-row form
+  const taskSet=new Set(), empSet=new Set(Object.keys(empStats));
+  for(const r of projRows){
+    const tt=((r.topTaskNumber||'')+' '+(r.topTaskName||'')).trim();
+    const tk=((r.taskNumber||'')+' '+(r.taskName||'')).trim();
+    if(level==='task'||level==='taskEmployee'){ if(tk)taskSet.add(tk); } else if(tt)taskSet.add(tt);
+    if(r.employee)empSet.add(r.employee);
+  }
+  for(const k of Object.keys(meta._rateTable))empSet.add(k);
+  $('#ppTaskList').innerHTML='';[...taskSet].sort().forEach(v=>$('#ppTaskList').append(el('option',{value:v})));
+  $('#ppEmpList').innerHTML='';[...empSet].sort().forEach(v=>$('#ppEmpList').append(el('option',{value:v})));
 
   // ===== table =====
   const t=$('#ppTable'); t.innerHTML='';
-  const sumCols=['Act hrs/cost','Plan to date','Var to date','Plan to go','EAC','Rate','Act cost','EAC cost','Orig EAC','Overrun'];
+  const sumCols=['Act hrs/cost','Plan to date','Var to date','Plan to go','EAC','Cost rate','Act cost','EAC cost','EAC rev','Orig EAC','Overrun'];
   const headCells=[el('th',null,'Item')];
   if(hiddenWeeks.length) headCells.push(el('th',{class:'num',title:hiddenWeeks.length+' earlier weeks ('+wkLabel(hiddenWeeks[0])+' … '+wkLabel(hiddenWeeks[hiddenWeeks.length-1])+')'},'Earlier'));
   for(const wk of visWeeks){
@@ -1272,7 +1435,20 @@ function renderProjectPlan(){
     const tr=el('tr');
     const unit=it.isLabor?'hrs':'cost';
     const name=el('span',{class:'item-link',onclick:()=>toggleDetail(it,tr,colCount)},it.label);
-    tr.append(el('td',{title:it.label},name,' ',el('span',{class:'pill',style:'margin-left:4px'},unit)));
+    const cell=el('td',{title:it.label},name,' ',el('span',{class:'pill',style:'margin-left:4px'},unit));
+    if(it._manual&&!it.rows.length){
+      cell.append(' ',el('span',{class:'pill',style:'color:var(--warn)'},'plan'),
+        ' ',el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove this plan row and its forecast values',
+          onclick:()=>{
+            if(!confirm('Remove plan row "'+it.label+'" and delete its forecast values?'))return;
+            ppCtx.node.manual=(ppCtx.node.manual||[]).filter(m=>m.label!==it.label);
+            const pre=it.label+'|';
+            for(const st of [ppCtx.node.current,ppCtx.node.baseline])
+              for(const k of Object.keys(st)) if(k.startsWith(pre)) delete st[k];
+            saveState(); renderProjectPlan();
+          }},'✕'));
+    }
+    tr.append(cell);
     if(hiddenWeeks.length){
       let hAct=0; for(const wk of hiddenWeeks) hAct+=(it.isLabor?it.hoursW.get(wk):it.costW.get(wk))||0;
       tr.append(el('td',{class:'num',style:'color:#8aa0bd'},hAct? (it.isLabor?fmtNum(hAct,1):fmtMoney(hAct)):''));
@@ -1307,20 +1483,29 @@ function renderProjectPlan(){
     it._sum={};
     const mk=(key,cls)=>{const td=el('td',{class:'num'+(cls||'')});it._sum[key]=td;return td;};
     tr.append(mk('act',' sumcol'),mk('planTD'),mk('varTD'),mk('toGo'),mk('eac'));
-    // rate cell
+    // cost-rate cell (writes to the project rate table when the row maps to an employee)
     const rateTd=el('td',{class:'num'});
     if(it.isLabor){
-      const derived=it.hours? it.cost/it.hours : 0;
-      const rin=el('input',{class:'rate-in',type:'text',inputmode:'decimal',title:'Burdened $/hr — derived from actuals; type to override',
-        value: node.rates[it.label]!=null? node.rates[it.label] : (derived?derived.toFixed(2):'')});
+      const rt=meta._rateTable;
+      const override=it.emp&&rt[it.emp]?rt[it.emp].cost:node.rates[it.label];
+      const eff=costRateOf(it);
+      const rin=el('input',{class:'rate-in',type:'text',inputmode:'decimal',
+        title:(it.emp?'Burdened cost $/hr for '+it.emp+' (shared with their other rows; also editable in the rate table)':'Burdened cost $/hr for this row'),
+        value: override!=null? override : (eff?eff.toFixed(2):'')});
       rin.addEventListener('input',()=>{
         const v=rin.value.trim();
-        if(v==='') delete node.rates[it.label]; else { const n=parseNumber(v); if(!isNaN(n)) node.rates[it.label]=n; }
-        saveState(); updateItemSummary(it); updatePlanTotals();
+        if(it.emp){
+          if(!rt[it.emp])rt[it.emp]={};
+          if(v==='')delete rt[it.emp].cost; else{const n=parseNumber(v);if(!isNaN(n))rt[it.emp].cost=n;}
+        } else {
+          if(v==='')delete node.rates[it.label]; else{const n=parseNumber(v);if(!isNaN(n))node.rates[it.label]=n;}
+        }
+        saveState(); updateAllSummaries();
       });
+      rin.addEventListener('change',renderRateTable);
       rateTd.append(rin);
     } else rateTd.textContent='—';
-    tr.append(rateTd, mk('actC'), mk('eacC'), mk('origEac'), mk('over'));
+    tr.append(rateTd, mk('actC'), mk('eacC'), mk('eacRev'), mk('origEac'), mk('over'));
     tb.append(tr);
     updateItemSummary(it);
   }
@@ -1331,11 +1516,12 @@ function renderProjectPlan(){
   ppCtx._totWeekTds=[];
   for(const wk of visWeeks){ const td=el('td',{class:'wk num'}); ppCtx._totWeekTds.push(td); trTot.append(td); }
   ppCtx._totSum={};
-  ['act','planTD','varTD','toGo','eac','rate','actC','eacC','origEac','over'].forEach((k,i)=>{
+  ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','origEac','over'].forEach((k,i)=>{
     const td=el('td',{class:'num'+(i===0?' sumcol':'')}); ppCtx._totSum[k]=td; trTot.append(td);
   });
   tb.append(trTot);
   t.append(tb);
+  renderRateTable();
   updatePlanTotals();
   updatePlanChart();
   $('#ppBaselineInfo').textContent = node.baselineAt
@@ -1360,12 +1546,19 @@ function itemCalc(it){
   }
   for(const k in node.baseline){ if(k.startsWith(pre)) baseTot+=node.baseline[k]; }
   const act=it.isLabor? it.hours : it.cost;
-  const rate=it.isLabor? (node.rates[it.label]!=null? node.rates[it.label] : (it.hours? it.cost/it.hours:0)) : 1;
+  const rate=it.isLabor? costRateOf(it) : 1;
   const eac=act+toGo;
   const eacCost=it.cost+toGo*rate;
-  const origEacCost=node.baselineAt? (it.isLabor? baseTot*rate : baseTot) : null;
+  const baseCost=node.baselineAt? (it.isLabor? baseTot*rate : baseTot) : null;
   const over=node.baselineAt&&baseTot? eac-baseTot : null;
-  return {planTD,toGo,baseTot,act,rate,eac,eacCost,origEacCost,over,varTD:act-planTD};
+  // revenue (price to owner): labor = hours x bill rate; non-labor = cost + markup
+  const mkup=1+(ppCtx.meta._nlMarkup||0)/100;
+  const bill=it.isLabor? billRateOf(it) : null;
+  const nl=(it.nlCost||0)*mkup; // expense/subs charges within a labor row, billed at cost + markup
+  const actRev=it.isLabor? it.hours*bill+nl : it.cost*mkup;
+  const eacRev=it.isLabor? eac*bill+nl : eacCost*mkup;
+  const baseRev=node.baselineAt? (it.isLabor? baseTot*bill : baseTot*mkup) : null;
+  return {planTD,toGo,baseTot,act,rate,bill,eac,eacCost,baseCost,actRev,eacRev,baseRev,over,varTD:act-planTD};
 }
 function updateItemSummary(it){
   const c=itemCalc(it);
@@ -1382,6 +1575,8 @@ function updateItemSummary(it){
   S.eac.textContent=f(c.eac);
   S.actC.textContent=fmtMoney(it.cost);
   S.eacC.textContent=fmtMoney(c.eacCost);
+  S.eacRev.textContent=c.eacRev?fmtMoney(c.eacRev):'';
+  S.eacRev.title=it.isLabor&&!c.bill?'No bill rate set for this person in the rate table':'';
   S.origEac.textContent=c.baseTot? f(c.baseTot):'';
   S.over.innerHTML='';
   if(c.over!=null){
@@ -1407,11 +1602,11 @@ function updatePlanTotals(){
     td.title='Labor hours — actual / planned';
   });
   // summary totals
-  let actH=0,planTD=0,toGo=0,eacH=0,actC=0,eacC=0,baseH=0,overSum=0,hasBase=false;
+  let actH=0,planTD=0,toGo=0,eacH=0,actC=0,eacC=0,eacR=0,baseH=0,overSum=0,hasBase=false;
   for(const it of ppCtx.items){
     const c=itemCalc(it);
     if(it.isLabor){ actH+=c.act; planTD+=c.planTD; toGo+=c.toGo; eacH+=c.eac; baseH+=c.baseTot; if(c.over!=null){overSum+=c.over;hasBase=true;} }
-    actC+=it.cost; eacC+=c.eacCost;
+    actC+=it.cost; eacC+=c.eacCost; eacR+=c.eacRev||0;
   }
   const T=ppCtx._totSum;
   T.act.textContent=fmtNum(actH,1)+' h';
@@ -1423,9 +1618,98 @@ function updatePlanTotals(){
   T.rate.textContent='';
   T.actC.textContent=fmtMoney(actC);
   T.eacC.textContent=fmtMoney(eacC);
+  T.eacRev.textContent=eacR?fmtMoney(eacR):'';
   T.origEac.textContent=baseH?fmtNum(baseH,1)+' h':'';
   T.over.textContent=hasBase?(overSum>0?'+':'')+fmtNum(overSum,1)+' h':'';
   T.over.className='num '+(hasBase&&overSum>0.5?'neg':hasBase?'pos':'');
+  renderPpTotals();
+}
+function renderRateTable(){
+  if(!ppCtx)return;
+  const rt=ppCtx.meta._rateTable;
+  const t=$('#rateTable'); t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,
+    el('th',null,'Employee'),el('th',{class:'num'},'Actual hrs'),el('th',{class:'num'},'Derived cost $/hr'),
+    el('th',{class:'num'},'Cost rate $/hr'),el('th',{class:'num'},'Bill rate $/hr (price to owner)'),
+    el('th',{class:'num'},'Margin $/hr'),el('th',{class:'num'},'Margin %'),el('th'))));
+  const tb=el('tbody');
+  for(const emp of rateTableEmps()){
+    const es=ppCtx.empStats[emp];
+    const e=rt[emp]||{};
+    const effCost=e.cost!=null?e.cost:(es?es.rate:0);
+    const margin=e.bill!=null&&effCost? e.bill-effCost : null;
+    const costIn=el('input',{class:'rate-in',type:'text',inputmode:'decimal',placeholder:es&&es.rate?es.rate.toFixed(2):'',
+      value:e.cost!=null?e.cost:''});
+    const billIn=el('input',{class:'rate-in',type:'text',inputmode:'decimal',value:e.bill!=null?e.bill:''});
+    const wire=(inp,key)=>{
+      inp.addEventListener('input',()=>{
+        if(!rt[emp])rt[emp]={};
+        const v=inp.value.trim();
+        if(v==='')delete rt[emp][key]; else{const n=parseNumber(v);if(!isNaN(n))rt[emp][key]=n;}
+        saveState(); updateAllSummaries();
+      });
+      inp.addEventListener('change',renderRateTable);
+    };
+    wire(costIn,'cost'); wire(billIn,'bill');
+    const del=(!es&&Object.keys(e).length>=0)? el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove from rate table',
+      onclick:()=>{ delete rt[emp]; saveState(); renderRateTable(); updateAllSummaries(); }},'✕') : null;
+    tb.append(el('tr',null,
+      el('td',null,emp),
+      el('td',{class:'num'},es?fmtNum(es.hours,1):''),
+      el('td',{class:'num',style:'color:#8aa0bd'},es&&es.rate?fmtNum(es.rate,2):''),
+      el('td',{class:'num'},costIn),
+      el('td',{class:'num'},billIn),
+      el('td',{class:margin!=null?numCls(margin):'num'},margin!=null?fmtNum(margin,2):''),
+      el('td',{class:margin!=null&&e.bill?numCls(margin):'num'},margin!=null&&e.bill?(100*margin/e.bill).toFixed(1)+'%':''),
+      el('td',null,es?null:del)));
+  }
+  t.append(tb);
+}
+function renderPpTotals(){
+  if(!ppCtx)return;
+  const node=ppCtx.node;
+  const hasBase=!!node.baselineAt;
+  let A={h:0,c:0,r:0},E={h:0,c:0,r:0},B={h:0,c:0,r:0};
+  let missingBill=0;
+  for(const it of ppCtx.items){
+    const c=itemCalc(it);
+    if(it.isLabor){
+      A.h+=it.hours; E.h+=c.eac; B.h+=c.baseTot;
+      if(!c.bill&&(c.eac||c.baseTot))missingBill++;
+    }
+    A.c+=it.cost; A.r+=c.actRev||0;
+    E.c+=c.eacCost; E.r+=c.eacRev||0;
+    if(hasBase){ B.c+=c.baseCost||0; B.r+=c.baseRev||0; }
+  }
+  const t=$('#ppTotals'); t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,el('th'),
+    el('th',{class:'num'},'Original baseline'),el('th',{class:'num'},'Current forecast (EAC)'),
+    el('th',{class:'num'},'Actuals to date'),el('th',{class:'num'},'EAC vs baseline'))));
+  const tb=el('tbody');
+  const row=(lbl,b,e,a,fmt2,invertGood)=>{
+    const d=hasBase? e-b : null;
+    const cls=d==null?'num':(invertGood? (d<-0.5?'num neg':'num pos') : (d>0.5?'num neg':'num pos'));
+    tb.append(el('tr',null,el('td',null,lbl),
+      el('td',{class:'num'},hasBase?fmt2(b):'—'),
+      el('td',{class:'num'},fmt2(e)),
+      el('td',{class:'num'},fmt2(a)),
+      el('td',{class:cls},d==null?'—':(d>0?'+':'')+fmt2(d))));
+  };
+  row('Labor hours',B.h,E.h,A.h,v=>fmtNum(v,1));
+  row('Cost',B.c,E.c,A.c,fmtMoney);
+  row('Revenue (price to owner)',B.r,E.r,A.r,fmtMoney,true);
+  row('Margin',B.r-B.c,E.r-E.c,A.r-A.c,fmtMoney,true);
+  const pct=(r,c2)=>r? (100*(r-c2)/r).toFixed(1)+'%':'—';
+  tb.append(el('tr',null,el('td',null,'Margin %'),
+    el('td',{class:'num'},hasBase?pct(B.r,B.c):'—'),
+    el('td',{class:'num'},pct(E.r,E.c)),
+    el('td',{class:'num'},pct(A.r,A.c)),
+    el('td',{class:'num'},'')));
+  t.append(tb);
+  if(missingBill){
+    t.append(el('tfoot',null,el('tr',null,el('td',{colspan:5,class:'hint',style:'color:var(--warn)'},
+      missingBill+' labor row(s) have no bill rate in the rate table — their revenue counts as 0.'))));
+  }
 }
 function handlePlanPaste(e,inp){
   const text=(e.clipboardData||window.clipboardData).getData('text');
@@ -1500,7 +1784,7 @@ function exportPlanCsv(){
   const node=ppCtx.node;
   const head=['Item','Unit'];
   for(const wk of ppCtx.visWeeks){ head.push('WE '+wk+' actual','WE '+wk+' plan','WE '+wk+' original'); }
-  head.push('Actual to date','Plan to date','Variance to date','Plan to go','EAC','Rate','Actual cost','EAC cost','Original EAC','Overrun vs original');
+  head.push('Actual to date','Plan to date','Variance to date','Plan to go','EAC','Cost rate','Bill rate','Actual cost','EAC cost','EAC revenue','Original EAC','Original cost','Original revenue','Overrun vs original');
   const out=[head];
   for(const it of ppCtx.items){
     const c=itemCalc(it);
@@ -1511,7 +1795,10 @@ function exportPlanCsv(){
       row.push(wk<=ppCtx.lastActualWeek?Math.round(act*100)/100:'', node.current[k]??'', node.baseline[k]??'');
     }
     row.push(Math.round(c.act*100)/100,c.planTD,c.varTD.toFixed(2),c.toGo,c.eac.toFixed(2),
-      it.isLabor?c.rate.toFixed(2):'',it.cost.toFixed(2),c.eacCost.toFixed(2),c.baseTot||'',c.over!=null?c.over.toFixed(2):'');
+      it.isLabor?c.rate.toFixed(2):'',it.isLabor&&c.bill?c.bill.toFixed(2):'',
+      it.cost.toFixed(2),c.eacCost.toFixed(2),c.eacRev?c.eacRev.toFixed(2):'',
+      c.baseTot||'',c.baseCost!=null?c.baseCost.toFixed(2):'',c.baseRev!=null?c.baseRev.toFixed(2):'',
+      c.over!=null?c.over.toFixed(2):'');
     out.push(row);
   }
   downloadCSV('project-plan-'+ppCtx.proj+'.csv',out);
