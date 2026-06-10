@@ -575,15 +575,24 @@ function parseNumber(v){
   return neg? -n : n;
 }
 function parseDateVal(v){
+  // always returns a LOCAL-midnight date so weekly/monthly bucketing and
+  // displayed dates agree on every tab regardless of timezone
   if(v==null||v==='') return null;
-  if(v instanceof Date) return isNaN(v)?null:v;
-  if(typeof v==='number'){ // Excel serial
-    if(v>20000 && v<80000) return new Date(Math.round((v-25569)*86400000));
+  if(v instanceof Date) return isNaN(v)?null:new Date(v.getFullYear(),v.getMonth(),v.getDate());
+  if(typeof v==='number'){ // Excel serial (days since 1900) — date-only, no timezone
+    if(v>20000 && v<80000){
+      const u=new Date(Math.round((v-25569)*86400000));
+      return new Date(u.getUTCFullYear(),u.getUTCMonth(),u.getUTCDate());
+    }
     return null;
   }
-  const d=new Date(v);
-  return isNaN(d)?null:d;
+  const s=String(v).trim();
+  let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/); // ISO dates parse as UTC in JS — force local
+  if(m) return new Date(+m[1],+m[2]-1,+m[3]);
+  const d=new Date(s);
+  return isNaN(d)?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());
 }
+function fmtDate(d){ return d? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') : ''; }
 function parsePeriodName(p){
   if(p==null||p==='') return null;
   const s=String(p).trim().toLowerCase();
@@ -787,7 +796,7 @@ function renderPreview(){
     tb.append(el('tr',null,...cols.map(c=>{
       let v=r[c.key];
       if(c.type==='num') return el('td',{class:numCls(v)},fmtNum(v,2));
-      if(c.type==='date') return el('td',null, v? v.toISOString().slice(0,10):'');
+      if(c.type==='date') return el('td',null, v? fmtDate(v):'');
       return el('td',null,String(v));
     })));
   });
@@ -2009,7 +2018,7 @@ function toggleDetail(it,tr,colCount){
   rows.slice(0,300).forEach(r=>{
     const d=r.transactionDate||r.glDate;
     db.append(el('tr',null,
-      el('td',null,d?d.toISOString().slice(0,10):''),
+      el('td',null,d?fmtDate(d):''),
       el('td',null,r.employee),
       el('td',null,((r.taskNumber||'')+' '+(r.taskName||'')).trim()),
       el('td',null,r.transactionType),
@@ -2146,7 +2155,7 @@ function renderCostActuals(){
       el('td',{class:'num'},state.mapping.billedStatus?fmtMoney(g.billed):'—'),
       el('td',{class:'num'+(g.unbilled>0.5?' neg':'')},state.mapping.billedStatus?fmtMoney(g.unbilled):'—'),
       el('td',{class:'num'},g.invoices.size?String(g.invoices.size):''),
-      el('td',null,g.last?g.last.toISOString().slice(0,10):''));
+      el('td',null,g.last?fmtDate(g.last):''));
     tb.append(tr);
   }
   // total row
@@ -2174,7 +2183,7 @@ function renderCostActuals(){
     ...cols.map(c=>g.cols.get(c)||0),
     g.tot.hours,g.tot.totalCost,
     state.mapping.billedStatus?g.billed:'',state.mapping.billedStatus?g.unbilled:'',
-    g.invoices.size,g.last?g.last.toISOString().slice(0,10):''])];
+    g.invoices.size,g.last?fmtDate(g.last):''])];
 }
 
 /* ===================== Settings ===================== */
@@ -2255,6 +2264,9 @@ function loadSample(){
         const exp=type==='Expense'? (200+Math.random()*2500)*drift*scale/60000:0;
         const on=(sal+fr+subs+exp)*0.05;
         const y=Math.floor(k/12), mo=k%12;
+        // current month is partial — never generate 'actuals' dated after today
+        const maxDay=k===endK? Math.max(1,now.getDate()-1) : 28;
+        const txDay=Math.min(maxDay,1+Math.floor(Math.random()*27));
         rows.push({
           businessUnit:'USA Infrastructure', division:mo%2?'Water':'Transportation', subDivision:'Engineering',
           costCenter:'CC-'+(400+(+pn%3)), projectManager:pm, projectNumber:pn, projectName:pname,
@@ -2263,8 +2275,8 @@ function loadSample(){
           fieldHome: Math.random()>0.5?'Home':'Field', transactionType:type, expenditureOrg:'US-East',
           expenditureType:type==='Labor'?'Professional Labor':type==='Subcontract'?'Subconsultant':'Travel & Expenses',
           periodName:MONTH_NAMES[mo].toUpperCase()+'-'+String(y).slice(2),
-          glDate:new Date(y,mo,Math.min(28,1+Math.floor(Math.random()*27))),
-          transactionDate:new Date(y,mo,Math.min(28,1+Math.floor(Math.random()*27))),
+          glDate:new Date(y,mo,Math.min(maxDay,txDay+Math.floor(Math.random()*3))),
+          transactionDate:new Date(y,mo,txDay),
           transactionId:String(id++),
           hours, salaries:Math.round(sal*100)/100, fringe:Math.round(fr*100)/100, subsCost:Math.round(subs*100)/100,
           expensesCost:Math.round(exp*100)/100, oncost:Math.round(on*100)/100,
