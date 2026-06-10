@@ -384,7 +384,11 @@
     <div class="row" style="margin-bottom:10px">
       <label>Project: <select id="rtProject" style="max-width:430px"></select></label>
     </div>
-    <p class="hint">Cost rate defaults to the burdened rate derived from this project's actuals (total cost ÷ hours, so fringe and oncost are included) — type to override.
+    <div class="row" style="margin-bottom:8px">
+      <label>Cost rate = salary rate × <input type="number" id="rtOhMult" step="0.0001" style="width:96px" title="Overhead multiplier applied to Salaries ÷ Hours"></label>
+      <label>Exceptions: <input id="rtOhExc" style="width:300px" title="name=multiplier, comma separated. Matches when every word appears in the Employee/Vendor name, e.g. Jeff Frahm=2.1138"></label>
+    </div>
+    <p class="hint">Derived cost rate = <b>Salaries ÷ Hours × overhead multiplier</b> from this project's actuals (type in the Cost rate column to override a person).
       Enter each person's <b>bill rate (price to owner)</b> to get revenue and margin. Names must match the Employee/Vendor column exactly.
       Rates are saved per project and drive the cost, revenue and margin numbers on the Project Forecast and Actuals vs Forecast tabs.</p>
     <div class="row" style="margin-bottom:8px">
@@ -525,6 +529,7 @@ let state = {
     fcLevel:'projectNumber,projectName', fcMetric:'totalCost', fcMethod:'avgN',
     fcLookback:3, fcHorizon:6, fcGrowth:0, fcExcludeLatest:true,
     ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12,
+    ohMult:2.3474, ohExceptions:'Jeff Frahm=2.1138',
     scProject:'__ALL__', scLevel:'employee', scMetric:'totalCost', scPeriod:'week',
   },
   budgets:{},                  // `${level}::${groupKey}` -> number
@@ -1297,6 +1302,21 @@ function rateTableEmps(){
   for(const k of Object.keys(ppCtx.meta._rateTable))set.add(k);
   return [...set].sort((a,b)=>a.localeCompare(b));
 }
+function ohMultFor(name){
+  // cost rate convention: salary rate x overhead multiplier; exceptions are
+  // "name=multiplier" entries matched if every word appears in the name
+  // (so "Jeff Frahm" matches "Frahm, Jeff" and "Frahm, Jeffrey")
+  const s=state.settings;
+  const n=String(name||'').toLowerCase();
+  for(const part of String(s.ohExceptions||'').split(/[,;\n]/)){
+    const i=part.indexOf('=');
+    if(i<0)continue;
+    const words=part.slice(0,i).toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const v=parseFloat(part.slice(i+1));
+    if(words.length&&v>0&&words.every(w2=>n.includes(w2)))return v;
+  }
+  return +s.ohMult>0? +s.ohMult : 2.3474;
+}
 function costRateOf(it){
   const rt=ppCtx.meta._rateTable;
   if(it.emp){
@@ -1305,7 +1325,7 @@ function costRateOf(it){
     if(es&&es.rate)return es.rate;
   }
   if(ppCtx.node.rates[it.label]!=null)return ppCtx.node.rates[it.label];
-  if(it.hours)return it.cost/it.hours;
+  if(it.hours&&it.sal)return (it.sal/it.hours)*ohMultFor(it.emp||it.label);
   return ppCtx.avgCostRate||0;
 }
 function billRateOf(it){
@@ -1421,6 +1441,11 @@ function setupProjectPages(){
     ppCtx.meta._nlMarkup=+$('#ppNlMarkup').value||0;
     saveState(); updateAllSummaries();
   });
+  $('#rtOhMult').addEventListener('change',e=>{
+    const v=parseFloat(e.target.value);
+    s.ohMult=v>0?v:2.3474; saveState(); reRender();
+  });
+  $('#rtOhExc').addEventListener('change',e=>{ s.ohExceptions=e.target.value; saveState(); reRender(); });
   $('#btnRtAdd').addEventListener('click',()=>{
     if(!ppCtx)return;
     const name=$('#rtNewEmp').value.trim();
@@ -1469,10 +1494,10 @@ function ppBuild(mode){
   for(const r of projRows){
     if(!(r.hours||r.salaries))continue;
     const e2=r.employee||'(blank)';
-    if(!empStats[e2])empStats[e2]={hours:0,cost:0};
-    empStats[e2].hours+=r.hours||0; empStats[e2].cost+=r.totalCost||0;
+    if(!empStats[e2])empStats[e2]={hours:0,cost:0,sal:0};
+    empStats[e2].hours+=r.hours||0; empStats[e2].cost+=r.totalCost||0; empStats[e2].sal+=r.salaries||0;
   }
-  for(const e2 in empStats)empStats[e2].rate=empStats[e2].hours?empStats[e2].cost/empStats[e2].hours:0;
+  for(const e2 in empStats)empStats[e2].rate=empStats[e2].hours? (empStats[e2].sal/empStats[e2].hours)*ohMultFor(e2) : 0;
   // build items from actuals
   const items=new Map(); let undated=0;
   for(const r of projRows){
@@ -1484,7 +1509,7 @@ function ppBuild(mode){
       it.hoursW.set(wk,(it.hoursW.get(wk)||0)+(r.hours||0));
       it.costW.set(wk,(it.costW.get(wk)||0)+(r.totalCost||0));
     } else undated++;
-    it.hours+=r.hours||0; it.cost+=r.totalCost||0; it.rows.push(r);
+    it.hours+=r.hours||0; it.cost+=r.totalCost||0; it.sal=(it.sal||0)+(r.salaries||0); it.rows.push(r);
     if(!(r.hours||r.salaries)) it.nlCost=(it.nlCost||0)+(r.totalCost||0); // expense/subs charges inside a labor row
   }
   for(const it of items.values()) it.isLabor=Math.abs(it.hours)>0.01;
@@ -1518,8 +1543,8 @@ function ppBuild(mode){
   ppCtx={mode,proj,level,node,meta,empStats,items:itemList,projRows,actualWeeks,
     lastActualWeek:actualWeeks[actualWeeks.length-1]||null,undated,inputs:[]};
   {
-    let h=0,c2=0; for(const e2 in empStats){h+=empStats[e2].hours;c2+=empStats[e2].cost;}
-    ppCtx.avgCostRate=h?c2/h:0;
+    let h=0,s2=0; for(const e2 in empStats){h+=empStats[e2].hours;s2+=empStats[e2].sal;}
+    ppCtx.avgCostRate=h?(s2/h)*(+state.settings.ohMult||2.3474):0;
     const bills=Object.values(meta._rateTable).map(r=>r.bill).filter(v=>v!=null&&v>0);
     ppCtx.avgBillRate=bills.length?bills.reduce((a,b)=>a+b,0)/bills.length:0;
   }
@@ -1992,6 +2017,8 @@ function renderApTotals(){
 function renderRatesTab(){
   if(!data.length)return;
   if(!ppBuild('r'))return;
+  $('#rtOhMult').value=state.settings.ohMult;
+  $('#rtOhExc').value=state.settings.ohExceptions;
   renderRateTable();
 }
 function renderRtKpis(){
@@ -2018,7 +2045,7 @@ function renderRateTable(){
   const rt=ppCtx.meta._rateTable;
   const t=$('#rateTable'); t.innerHTML='';
   t.append(el('thead',null,el('tr',null,
-    el('th',null,'Employee'),el('th',{class:'num'},'Actual hrs'),el('th',{class:'num'},'Derived cost $/hr'),
+    el('th',null,'Employee'),el('th',{class:'num'},'Actual hrs'),el('th',{class:'num',title:'Salaries ÷ Hours × overhead multiplier, from this project\'s actuals'},'Derived cost $/hr'),
     el('th',{class:'num'},'Cost rate $/hr'),el('th',{class:'num'},'Bill rate $/hr (price to owner)'),
     el('th',{class:'num'},'Margin $/hr'),el('th',{class:'num'},'Margin %'),el('th'))));
   const tb=el('tbody');
@@ -2427,12 +2454,12 @@ function seedDemoPlan(){
   const es={};
   for(const r of projRows){
     if(!(r.hours||r.salaries))continue;
-    const e2=r.employee||''; if(!es[e2])es[e2]={h:0,c:0};
-    es[e2].h+=r.hours||0; es[e2].c+=r.totalCost||0;
+    const e2=r.employee||''; if(!es[e2])es[e2]={h:0,s:0};
+    es[e2].h+=r.hours||0; es[e2].s+=r.salaries||0;
   }
   for(const e2 in es){
-    const rate=es[e2].h? es[e2].c/es[e2].h : 0;
-    if(rate>0) meta._rateTable[e2]={bill:Math.round(rate*2.6)};
+    const rate=es[e2].h? (es[e2].s/es[e2].h)*ohMultFor(e2) : 0;
+    if(rate>0) meta._rateTable[e2]={bill:Math.round(rate*1.4)};
   }
   // weekly actual hours per item
   const items=new Map();
