@@ -332,10 +332,7 @@
           <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
         </select>
       </label>
-      <label>Past weeks shown:
-        <select id="apPast"><option value="8">8</option><option value="13">13</option><option value="26">26</option><option value="all">all</option></select>
-      </label>
-      <label>Forecast weeks ahead: <input type="number" id="apAhead" min="1" max="52" value="12" style="width:66px"></label>
+      <span class="hint">Week columns match the plan window set on the Project Forecast tab</span>
     </div>
     <div class="row" style="margin-top:10px">
       <button id="btnApSeed">Copy original forecast → updated forecast</button>
@@ -388,7 +385,7 @@
           <option value="oncost">Oncost</option>
         </select>
       </label>
-      <label>Columns: <select id="scPeriod"><option value="month">Months</option><option value="week">Weeks</option></select></label>
+      <label>Columns: <select id="scPeriod"><option value="week">Weeks</option><option value="month">Months</option></select></label>
       <button id="btnScCsv" class="small">Export CSV</button>
     </div>
     <p class="hint">Every charge — labor, subs, expenses, oncost — pulled straight from the uploaded extract. Nothing on this page is editable:
@@ -528,7 +525,7 @@ let state = {
     fcLevel:'projectNumber,projectName', fcMetric:'totalCost', fcMethod:'avgN',
     fcLookback:3, fcHorizon:6, fcGrowth:0, fcExcludeLatest:true,
     ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12,
-    scProject:'__ALL__', scLevel:'employee', scMetric:'totalCost', scPeriod:'month',
+    scProject:'__ALL__', scLevel:'employee', scMetric:'totalCost', scPeriod:'week',
   },
   budgets:{},                  // `${level}::${groupKey}` -> number
   plans:{},                    // projectNum -> level -> {current:{itemKey|weekKey:num}, baseline:{...}, rates:{item:rate}, baselineAt}
@@ -543,7 +540,8 @@ function loadState(){
   try{
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
     if(s){ state.mapping=s.mapping||{}; state.filters=s.filters||{};
-      state.settings=Object.assign(state.settings, s.settings||{}); state.budgets=s.budgets||{}; state.plans=s.plans||{}; }
+      state.settings=Object.assign(state.settings, s.settings||{}); state.budgets=s.budgets||{}; state.plans=s.plans||{};
+      if(!state.settings._scWeek){ state.settings.scPeriod='week'; state.settings._scWeek=1; } }
   }catch(e){}
 }
 function saveState(){
@@ -1316,6 +1314,26 @@ function billRateOf(it){
   if(!it.emp)return ppCtx.avgBillRate||0;
   return 0;
 }
+function projWeekWindow(node,actualWeeks){
+  // ONE date range shared by Project Forecast, Actuals vs Forecast and Cost
+  // Actuals: plan start + plan length, auto-extended through the latest
+  // actual/forecast week so nothing is ever clipped
+  const keyWeeks=[];
+  for(const store of [node.baseline,node.current])
+    for(const k of Object.keys(store)){ const wk=k.slice(k.lastIndexOf('|')+1); if(/^\d{4}-\d{2}-\d{2}$/.test(wk)) keyWeeks.push(wk); }
+  keyWeeks.sort();
+  if(!node.baseStart) node.baseStart = [keyWeeks[0],actualWeeks[0]].filter(Boolean).sort()[0]||wkKey(new Date());
+  { const [y,m,d]=node.baseStart.split('-').map(Number); node.baseStart=wkKey(new Date(y,m-1,d)); }
+  if(!node.baseWeeks) node.baseWeeks = Math.max(12, keyWeeks.length? wkDiff(node.baseStart,keyWeeks[keyWeeks.length-1])+1 : 12);
+  let end=wkAdd(node.baseStart,node.baseWeeks-1);
+  const lastActual=actualWeeks[actualWeeks.length-1];
+  if(lastActual&&lastActual>end)end=lastActual;
+  const lastKey=keyWeeks[keyWeeks.length-1];
+  if(lastKey&&lastKey>end)end=lastKey;
+  const weeks=[];
+  for(let k=node.baseStart,i=0;k<=end&&i<312;k=wkAdd(k,1),i++)weeks.push(k);
+  return weeks;
+}
 function updateAllSummaries(){
   if(!ppCtx)return;
   if(ppCtx.mode==='f'){ for(const it of ppCtx.items)updateFpSummary(it); updateFpTotalsRow(); renderFpTotals(); }
@@ -1329,9 +1347,6 @@ function setupProjectPages(){
   }
   $('#fpLevel').value=s.ppLevel; $('#apLevel').value=s.ppLevel;
   $('#fpWeekEnd').value=String(s.ppWeekEnd); $('#apWeekEnd').value=String(s.ppWeekEnd);
-  $('#apPast').value=s.ppPast; $('#apAhead').value=s.ppAhead;
-  $('#apPast').addEventListener('change',e=>{ s.ppPast=e.target.value; saveState(); renderActualsPage(); });
-  $('#apAhead').addEventListener('change',e=>{ s.ppAhead=Math.max(1,Math.min(52,+e.target.value||12)); saveState(); renderActualsPage(); });
   $('#fpStart').addEventListener('change',e=>{
     if(!ppCtx)return; const v=e.target.value; if(!v)return;
     const [y,m,d]=v.split('-').map(Number);
@@ -1543,14 +1558,10 @@ function makeItemCell(it,tr,colCount){
 function renderForecastPage(){
   if(!ppBuild('f'))return;
   const node=ppCtx.node;
-  const baseKeys=[...new Set(Object.keys(node.baseline).map(k=>k.slice(k.lastIndexOf('|')+1)))].filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-  if(!node.baseStart) node.baseStart = baseKeys[0]||ppCtx.actualWeeks[0]||wkKey(new Date());
-  // re-snap to the current week-end day in case the setting changed
-  { const [y,m,d]=node.baseStart.split('-').map(Number); node.baseStart=wkKey(new Date(y,m-1,d)); }
-  if(!node.baseWeeks) node.baseWeeks = Math.max(12, baseKeys.length? wkDiff(node.baseStart,baseKeys[baseKeys.length-1])+1 : 12);
+  const weeks=projWeekWindow(node,ppCtx.actualWeeks);
+  saveState();
   $('#fpStart').value=node.baseStart;
   $('#fpWeeks').value=node.baseWeeks;
-  const weeks=[]; for(let i=0;i<node.baseWeeks;i++)weeks.push(wkAdd(node.baseStart,i));
   ppCtx.visWeeks=weeks;
   const t=$('#fpTable'); t.innerHTML='';
   const sumCols=['Total','Cost rate','Bill rate','Cost','Revenue','Margin'];
@@ -1598,10 +1609,9 @@ function renderForecastPage(){
   updateFpTotalsRow();
   renderRateTable();
   renderFpTotals();
-  const outOfRange=baseKeys.filter(k=>k<weeks[0]||k>weeks[weeks.length-1]).length;
   $('#fpInfo').textContent=ppCtx.items.length+' items · plan window '+weeks[0]+' → '+weeks[weeks.length-1]
-    +(node.baselineAt?' · baseline first entered '+node.baselineAt.slice(0,10):'')
-    +(outOfRange?' · '+outOfRange+' baseline week(s) outside this window (still counted in totals)':'');
+    +(weeks.length>node.baseWeeks?' (extended through latest actuals)':'')
+    +(node.baselineAt?' · baseline first entered '+node.baselineAt.slice(0,10):'');
 }
 function fpCalc(it){
   const node=ppCtx.node;
@@ -1676,7 +1686,6 @@ function exportFpCsv(){
 function renderActualsPage(){
   if(!ppBuild('a'))return;
   const s=state.settings;
-  $('#apPast').value=s.ppPast; $('#apAhead').value=s.ppAhead;
   const node=ppCtx.node, meta=ppCtx.meta;
   const todayWk=wkKey(new Date());
   if(!ppCtx.lastActualWeek)ppCtx.lastActualWeek=todayWk;
@@ -1685,16 +1694,11 @@ function renderActualsPage(){
     $('#ppTable').innerHTML=''; renderApTotals(); updatePlanChart(); return;
   }
   const lastActualWeek=ppCtx.lastActualWeek;
-  const wkSet=new Set(ppCtx.actualWeeks);
-  for(const store of [node.current,node.baseline])
-    for(const k of Object.keys(store)){ const wk=k.slice(k.lastIndexOf('|')+1); if(/^\d{4}-\d{2}-\d{2}$/.test(wk)) wkSet.add(wk); }
-  const allWeeks=[...wkSet].sort();
-  const actualWeeks=allWeeks.filter(w=>w<=lastActualWeek);
-  const futureWeeks=[]; for(let i=1;i<=s.ppAhead;i++)futureWeeks.push(wkAdd(lastActualWeek,i));
-  const shownPast = s.ppPast==='all'? actualWeeks : actualWeeks.slice(-(+s.ppPast));
-  const hiddenWeeks = actualWeeks.slice(0,actualWeeks.length-shownPast.length);
-  const visWeeks=[...shownPast,...futureWeeks];
-  Object.assign(ppCtx,{actualWeeks,futureWeeks,shownPast,hiddenWeeks,visWeeks});
+  const visWeeks=projWeekWindow(node,ppCtx.actualWeeks);
+  saveState();
+  const hiddenWeeks=ppCtx.actualWeeks.filter(w=>w<visWeeks[0]);
+  const futureWeeks=visWeeks.filter(w=>w>lastActualWeek);
+  Object.assign(ppCtx,{futureWeeks,hiddenWeeks,visWeeks});
   const t=$('#ppTable'); t.innerHTML='';
   const sumCols=['Act hrs/cost','Plan to date','Var to date','Plan to go','EAC','Cost rate','Act cost','EAC cost','EAC rev','Orig EAC','Overrun'];
   const headCells=[el('th',null,'Item')];
@@ -1781,8 +1785,7 @@ function renderActualsPage(){
   updatePlanTotals();
   updatePlanChart();
   $('#ppInfo').textContent = ppCtx.items.length+' items · '+ppCtx.projRows.length.toLocaleString()+' transactions'
-    +(ppCtx.actualWeeks.length?' · actual weeks '+wkLabel(ppCtx.actualWeeks[0])+' – '+wkLabel(lastActualWeek):'')
-    +' · +'+s.ppAhead+' forecast weeks'
+    +' · window '+visWeeks[0]+' → '+visWeeks[visWeeks.length-1]
     +(node.baselineAt?' · original forecast entered '+node.baselineAt.slice(0,10):' · no original forecast yet')
     +(ppCtx.undated?' · '+ppCtx.undated+' undated rows excluded from weekly columns':'');
 }
@@ -2093,6 +2096,14 @@ function renderCostActuals(){
   const metric=s.scMetric;
   const mObj=METRICS.find(m=>m.key===metric);
   const byWeek=s.scPeriod==='week';
+  // single project + weekly: lock the columns to the shared plan window so
+  // this tab lines up 1:1 with Project Forecast and Actuals vs Forecast
+  let windowCols=null;
+  if(byWeek && s.scProject!=='__ALL__'){
+    const node=planNode(s.scProject, s.ppLevel);
+    const aw=[...new Set(rows.map(r=>{const d=r.transactionDate||r.glDate;return d?wkKey(d):null;}).filter(Boolean))].sort();
+    windowCols=projWeekWindow(node,aw);
+  }
   // group rows
   const groups=new Map(); let undated=0;
   const colSort=new Map(); // colKey -> sort value
@@ -2103,7 +2114,11 @@ function renderCostActuals(){
     let colKey=null;
     if(byWeek){
       const d=r.transactionDate||r.glDate;
-      if(d){ colKey=wkKey(d); colSort.set(colKey,colKey); } else undated++;
+      if(d){
+        colKey=wkKey(d);
+        if(windowCols && colKey<windowCols[0]) colKey='__EARLIER__';
+        colSort.set(colKey, colKey==='__EARLIER__'?'':colKey);
+      } else undated++;
     } else {
       if(r._pk!=null||r._plabel){ colKey=r._plabel; colSort.set(colKey,r._pk==null?Infinity:r._pk); } else undated++;
     }
@@ -2116,10 +2131,16 @@ function renderCostActuals(){
     g.rows.push(r);
   }
   const groupList=[...groups.values()].sort((a,b)=>b.tot.totalCost-a.tot.totalCost);
-  const cols=[...colSort.keys()].sort((a,b)=>{
-    const sa=colSort.get(a),sb=colSort.get(b);
-    return sa<sb?-1:sa>sb?1:String(a).localeCompare(String(b));
-  });
+  let cols;
+  if(windowCols){
+    cols=colSort.has('__EARLIER__')? ['__EARLIER__',...windowCols] : [...windowCols];
+  } else {
+    cols=[...colSort.keys()].sort((a,b)=>{
+      const sa=colSort.get(a),sb=colSort.get(b);
+      return sa<sb?-1:sa>sb?1:String(a).localeCompare(String(b));
+    });
+  }
+  const colLabel=c=>c==='__EARLIER__'?'Earlier':(byWeek?'WE '+wkLabel(c):c);
   // KPIs
   const tot=initMetrics(); let unb=0;
   for(const g of groupList){ for(const m of METRICS)tot[m.key]+=g.tot[m.key]; unb+=g.unbilled; }
@@ -2135,7 +2156,7 @@ function renderCostActuals(){
   const t=$('#scTable'); t.innerHTML='';
   const sumHdr=['Hours','Total cost','Billed','Unbilled','Invoices','Last charge'];
   const headCells=[el('th',null,'Item'),
-    ...cols.map(c=>el('th',{class:'num',title:byWeek?'Week ending '+c:''},byWeek?'WE '+wkLabel(c):c)),
+    ...cols.map(c=>el('th',{class:'num',title:byWeek&&c!=='__EARLIER__'?'Week ending '+c:''},colLabel(c))),
     ...sumHdr.map((h,i)=>el('th',{class:'num'+(i===0?' sumcol':'')},h))];
   t.append(el('thead',null,el('tr',null,...headCells)));
   const tb=el('tbody');
@@ -2178,7 +2199,7 @@ function renderCostActuals(){
     +' · '+cols.length+(byWeek?' weeks':' periods')
     +(undated?' · '+undated+' undated transactions excluded from period columns (still in totals)':'');
   // CSV
-  const head=['Item',...cols.map(c=>byWeek?'WE '+c:c),'Hours','Total cost','Billed','Unbilled','Invoices','Last charge'];
+  const head=['Item',...cols.map(c=>c==='__EARLIER__'?'Earlier':(byWeek?'WE '+c:c)),'Hours','Total cost','Billed','Unbilled','Invoices','Last charge'];
   lastScCsv=[head,...groupList.map(g=>[g.label,
     ...cols.map(c=>g.cols.get(c)||0),
     g.tot.hours,g.tot.totalCost,

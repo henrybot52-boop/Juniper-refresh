@@ -24,7 +24,7 @@ Click **Load sample data** in the header to try the tool without a real extract.
 | **Forecast** | Pick a level (Project, Project + Top Task, PM, Cost Center, BU/Division, Expenditure Type), a method, look-back window, horizon and a monthly adjustment %. Enter a **Budget / EAC** per row to get remaining budget, % used, runway in months and a projected depletion period. Actuals-vs-forecast chart per group. Export to CSV. |
 | **Project Forecast** | Single page for the **baseline job plan**: add rows per task/person (before any charges exist), enter hours per person per week over a plan window you set (start date + number of weeks), with the rate table (burdened cost rate + bill rate / price to owner per employee) and baseline totals: labor hours, cost, total revenue and margin. This page stays fixed as the original forecast. |
 | **Actuals vs Forecast** | The weekly working page: actuals from each upload shown next to an editable **updated forecast** per cell, red weekly overruns, per-item EAC/variance columns, and a **comparison table — original vs updated vs actual** (hours, cost, revenue, margin) with a variance column. Buttons to seed the updated forecast from the original, copy actuals into past cells, or re-baseline. |
-| **Cost Actuals** | Read-only view of every cost straight from the import — labor, subs, expenses, oncost. Group by employee/vendor, task, transaction type or expenditure type; columns by month or week; billed/unbilled per row, invoice counts, last charge date, click-through to each transaction. Nothing on this page is editable, so it always matches the extract exactly. |
+| **Cost Actuals** | Read-only view of every cost straight from the import — labor, subs, expenses, oncost. Group by employee/vendor, task, transaction type or expenditure type; weekly columns by default (or monthly), locked to the same plan window as the two project tabs when a project is selected; billed/unbilled per row, invoice counts, last charge date, click-through to each transaction. Nothing on this page is editable, so it always matches the extract exactly. |
 | **Settings** | Period source (Period Name vs GL/Transaction Date month), currency, decimals, what counts as "billed". |
 
 ## Forecast methods (all adjustable)
@@ -52,7 +52,10 @@ Click **Load sample data** in the header to try the tool without a real extract.
    re-baselines the job.
 
 Plans, baselines and rates are saved per project (and per row-level) in the
-browser and survive weekly uploads.
+browser and survive weekly uploads. **Project Forecast, Actuals vs Forecast
+and Cost Actuals all share one date range** — the plan window (start week +
+number of weeks) set on the Project Forecast tab, automatically extended
+through the latest actual week — so the week columns line up 1:1 across tabs.
 
 ## Persistence
 
