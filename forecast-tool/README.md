@@ -58,13 +58,15 @@ and Cost Actuals all share one date range** — the plan window (start week +
 number of weeks) set on the Project Forecast tab, automatically extended
 through the latest actual week — so the week columns line up 1:1 across tabs.
 
-## Persistence
+## Saving your work
 
-Column mapping, filters, forecast configuration and budgets are stored in the
-browser's localStorage, so next week you just upload the new extract and
-everything is already set up. Use **Export settings / Import settings** in the
-header to back up the configuration or move it to another machine. Transaction
-data itself is never stored.
+Everything you type auto-saves in the browser as you work and is restored when
+you reopen the file on the same machine. For a durable copy, **Save workbook**
+in the header writes one .json file containing the loaded extract *plus* all
+forecasts, rates, budgets, mapping and settings — keep it on your desktop,
+OneDrive or a shared drive like any other file, and **Open workbook** restores
+it exactly (including on a different computer). **Export / Import settings**
+does the same without the transaction data.
 
 ## Sample data (try it in 30 seconds)
 

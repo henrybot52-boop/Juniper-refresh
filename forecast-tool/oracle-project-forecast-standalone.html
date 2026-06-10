@@ -157,6 +157,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   <span id="dataStatus" class="pill">No data loaded</span>
   <div class="spacer"></div>
   <button id="btnSample" class="small">Load sample data</button>
+  <button id="btnSaveWb" class="small" title="Save everything — data, forecasts, rates, budgets, settings — to one file you can keep or move">Save workbook</button>
+  <button id="btnOpenWb" class="small" title="Reopen a saved workbook exactly where you left off">Open workbook</button>
+  <input type="file" id="wbFile" accept=".json,.fwb" class="hidden">
   <button id="btnExportCfg" class="small">Export settings</button>
   <button id="btnImportCfg" class="small">Import settings</button>
   <input type="file" id="cfgFile" accept=".json" class="hidden">
@@ -468,7 +471,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   </div>
   <div class="card">
     <h2>Saved data</h2>
-    <p class="hint">Column mapping, filters, forecast settings and budgets are stored in this browser (localStorage). Use Export settings in the header to back them up or move to another machine. Your transaction data itself is never stored — re-upload each week.</p>
+    <p class="hint">Everything you type — forecasts, rates, budgets, mapping — is auto-saved in this browser as you work, and is restored when you reopen the file on this machine.
+      For a durable copy (or to move machines), use <b>Save workbook</b> in the header: it writes one file containing your loaded data <em>plus</em> all forecasts, rates, budgets and settings.
+      <b>Open workbook</b> restores it exactly. Keep workbooks on your desktop, OneDrive or a shared drive like any other file.
+      Export/Import settings does the same but without the transaction data.</p>
     <div class="row">
       <button id="btnClearBudgets">Clear saved budgets</button>
       <button id="btnClearAll" style="border-color:var(--bad);color:var(--bad)">Reset everything</button>
@@ -2376,6 +2382,41 @@ function setupSettings(){
   $('#btnClearAll').addEventListener('click',()=>{ if(confirm('Reset mapping, filters, settings and budgets?')){ localStorage.removeItem(STORE_KEY); location.reload(); } });
 }
 
+/* ===================== Workbook save/open (data + all work in one file) ===================== */
+function saveWorkbook(){
+  if(!data.length){ alert('Load an extract (or sample data) first — the workbook saves your data plus all forecasts, rates, budgets and settings.'); return; }
+  const rows=data.map(r=>{ const o={}; for(const f of FIELDS){ const v=r[f.key]; o[f.key]= f.type==='date'? (v?fmtDate(v):null) : v; } return o; });
+  const wb={app:'project-forecast-tool', version:1, savedAt:new Date().toISOString(),
+    settings:state.settings, mapping:state.mapping, filters:state.filters,
+    budgets:state.budgets, plans:state.plans, rows};
+  const blob=new Blob([JSON.stringify(wb)],{type:'application/json'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'forecast-workbook-'+fmtDate(new Date())+'.json'});
+  document.body.append(a); a.click(); a.remove();
+  $('#dataStatus').textContent=data.length.toLocaleString()+' rows · workbook saved';
+}
+function openWorkbook(file){
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=JSON.parse(e.target.result);
+      if(!wb || wb.app!=='project-forecast-tool' || !Array.isArray(wb.rows)) throw new Error('this is not a saved workbook file');
+      state.settings=Object.assign(state.settings, wb.settings||{});
+      state.mapping=wb.mapping||state.mapping;
+      state.filters=wb.filters||{};
+      state.budgets=wb.budgets||{};
+      state.plans=wb.plans||{};
+      data=wb.rows.map(r2=>{ const o={}; for(const f of FIELDS){ const v=r2[f.key];
+        o[f.key]= f.type==='date'? parseDateVal(v) : (f.type==='num'? (typeof v==='number'?v:parseNumber(v)) : (v==null?'':String(v))); } return o; });
+      recomputePeriods();
+      saveState();
+      $('#dataStatus').textContent=data.length.toLocaleString()+' rows · workbook from '+String(wb.savedAt||'').slice(0,10);
+      buildAllFilterbars();
+      switchTab('dashboard');
+    }catch(err){ alert('Could not open workbook: '+err.message); }
+  };
+  r.readAsText(file);
+}
+
 /* ===================== Config import/export ===================== */
 function exportConfig(){
   const blob=new Blob([JSON.stringify({mapping:state.mapping,filters:state.filters,settings:state.settings,budgets:state.budgets,plans:state.plans},null,2)],{type:'application/json'});
@@ -2569,6 +2610,9 @@ function init(){
   $('#btnReparse').addEventListener('click',()=>{ raw.headerRowIdx=Math.max(0,(+$('#headerRow').value||1)-1); applyHeaderRow(raw.grid); });
   $('#btnApplyMap').addEventListener('click',applyMapping);
   // config
+  $('#btnSaveWb').addEventListener('click',saveWorkbook);
+  $('#btnOpenWb').addEventListener('click',()=>$('#wbFile').click());
+  $('#wbFile').addEventListener('change',e=>{ if(e.target.files[0])openWorkbook(e.target.files[0]); e.target.value=''; });
   $('#btnExportCfg').addEventListener('click',exportConfig);
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
