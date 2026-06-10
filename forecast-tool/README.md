@@ -115,6 +115,19 @@ months so the unbilled KPI has something to show.
 5. Filter Project Manager = "Jordan Arafat" and re-run to forecast one PM's
    portfolio only.
 
+## Standalone / offline version
+
+`oracle-project-forecast-standalone.html` is the same tool with SheetJS and
+Chart.js embedded directly in the file (~1.1 MB): it makes **zero network
+requests**, works with no internet at all, and can be emailed or dropped on a
+shared drive. `oracle-project-forecast-standalone.zip` is the same file zipped
+for mail filters that block .html attachments. Rebuild it after changing the
+main file with `node build-standalone.js` (after
+`npm install --no-save xlsx@0.18.5 chart.js@4.4.1`).
+
+Neither version uses Claude or any AI/external service — it's plain
+HTML/JavaScript running locally in the browser.
+
 ## Notes
 
 - Excel parsing (SheetJS) and charts (Chart.js) load from a CDN, so the first
