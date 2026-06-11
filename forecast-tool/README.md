@@ -66,13 +66,18 @@ through the latest actual week — so the week columns line up 1:1 across tabs.
 
 ## Saving your work
 
-Everything you type auto-saves in the browser as you work and is restored when
-you reopen the file on the same machine. For a durable copy, **Save workbook**
-in the header writes one .json file containing the loaded extract *plus* all
-forecasts, rates, budgets, mapping and settings — keep it on your desktop,
-OneDrive or a shared drive like any other file, and **Open workbook** restores
-it exactly (including on a different computer). **Export / Import settings**
-does the same without the transaction data.
+Everything you type auto-saves in the browser as you work. For durable files:
+
+- **Save** — in Edge/Chrome it asks where to put the workbook once, then writes
+  back to that same file every save (like Excel) and **auto-saves to it every
+  2 minutes**. In other browsers it downloads a copy.
+- **Save As…** — pick location and format: a real **Excel workbook (.xlsx)**
+  with readable sheets (Data, Baseline Plan, Updated Forecast, Rate Table,
+  Projects incl. reserves, Budgets) plus a hidden exact-state sheet, or compact
+  JSON. Anyone can read the .xlsx in Excel; the tool reopens either losslessly.
+- **Open** — restores a workbook exactly and keeps saving back to that file.
+- Keep workbooks in a synced SharePoint/OneDrive folder and you get version
+  history for free. Export/Import settings moves configuration only.
 
 ## Sample data (try it in 30 seconds)
 

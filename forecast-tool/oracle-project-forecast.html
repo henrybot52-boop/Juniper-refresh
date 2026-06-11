@@ -117,9 +117,10 @@
   <span id="dataStatus" class="pill">No data loaded</span>
   <div class="spacer"></div>
   <button id="btnSample" class="small">Load sample data</button>
-  <button id="btnSaveWb" class="small" title="Save everything — data, forecasts, rates, budgets, settings — to one file you can keep or move">Save workbook</button>
-  <button id="btnOpenWb" class="small" title="Reopen a saved workbook exactly where you left off">Open workbook</button>
-  <input type="file" id="wbFile" accept=".json,.fwb" class="hidden">
+  <button id="btnSaveWb" class="small" title="Save the workbook — data, forecasts, rates, budgets, settings. In Edge/Chrome it writes back to the same file, like Excel.">Save</button>
+  <button id="btnSaveAsWb" class="small" title="Choose where to save — Excel workbook (.xlsx, readable in Excel) or JSON">Save As…</button>
+  <button id="btnOpenWb" class="small" title="Open a saved workbook (.xlsx or .json) and continue where you left off">Open</button>
+  <input type="file" id="wbFile" accept=".json,.xlsx,.fwb" class="hidden">
   <button id="btnExportCfg" class="small">Export settings</button>
   <button id="btnImportCfg" class="small">Import settings</button>
   <input type="file" id="cfgFile" accept=".json" class="hidden">
@@ -439,9 +440,10 @@
   <div class="card">
     <h2>Saved data</h2>
     <p class="hint">Everything you type — forecasts, rates, budgets, mapping — is auto-saved in this browser as you work, and is restored when you reopen the file on this machine.
-      For a durable copy (or to move machines), use <b>Save workbook</b> in the header: it writes one file containing your loaded data <em>plus</em> all forecasts, rates, budgets and settings.
-      <b>Open workbook</b> restores it exactly. Keep workbooks on your desktop, OneDrive or a shared drive like any other file.
-      Export/Import settings does the same but without the transaction data.</p>
+      For a durable copy, use <b>Save</b> in the header: in Edge/Chrome it asks where to put the workbook once, then writes back to that same file every time — just like Excel — and auto-saves to it every 2 minutes while you work. <b>Save As…</b> picks a new location or format.
+      The default format is a real <b>Excel workbook (.xlsx)</b> with readable sheets (Data, Baseline Plan, Updated Forecast, Rate Table, Projects, Budgets) that anyone can open in Excel, plus a hidden state sheet so the tool reopens it exactly; JSON is available for a compact copy.
+      <b>Open</b> restores either format — and keeps writing to that file when you Save. Keep workbooks on your desktop, OneDrive or SharePoint (synced SharePoint folders give you version history for free).
+      Export/Import settings moves just the configuration, without data.</p>
     <div class="row">
       <button id="btnClearBudgets">Clear saved budgets</button>
       <button id="btnClearAll" style="border-color:var(--bad);color:var(--bad)">Reset everything</button>
@@ -563,6 +565,7 @@ function loadState(){
   }catch(e){}
 }
 function saveState(){
+  stateDirty=true;
   try{ localStorage.setItem(STORE_KEY, JSON.stringify({mapping:state.mapping, filters:state.filters, settings:state.settings, budgets:state.budgets, plans:state.plans})); }catch(e){}
 }
 
@@ -2402,38 +2405,150 @@ function setupSettings(){
 }
 
 /* ===================== Workbook save/open (data + all work in one file) ===================== */
-function saveWorkbook(){
-  if(!data.length){ alert('Load an extract (or sample data) first — the workbook saves your data plus all forecasts, rates, budgets and settings.'); return; }
+let fsHandle=null, fsFormat='xlsx', stateDirty=false;
+function buildWorkbookObj(){
   const rows=data.map(r=>{ const o={}; for(const f of FIELDS){ const v=r[f.key]; o[f.key]= f.type==='date'? (v?fmtDate(v):null) : v; } return o; });
-  const wb={app:'project-forecast-tool', version:1, savedAt:new Date().toISOString(),
+  return {app:'project-forecast-tool', version:2, savedAt:new Date().toISOString(),
     settings:state.settings, mapping:state.mapping, filters:state.filters,
     budgets:state.budgets, plans:state.plans, rows};
-  const blob=new Blob([JSON.stringify(wb)],{type:'application/json'});
-  const a=el('a',{href:URL.createObjectURL(blob),download:'forecast-workbook-'+fmtDate(new Date())+'.json'});
-  document.body.append(a); a.click(); a.remove();
-  $('#dataStatus').textContent=data.length.toLocaleString()+' rows · workbook saved';
 }
-function openWorkbook(file){
-  const r=new FileReader();
-  r.onload=e=>{
+function buildXlsx(obj){
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
+    ['Project Forecast Tool — saved workbook'],
+    ['Saved',obj.savedAt],
+    ['Transactions',obj.rows.length],
+    [''],
+    ['Open this file with the tool ("Open" in the header) to continue exactly where you left off.'],
+    ['The sheets are readable summaries. The _meta sheet holds the exact tool state — do not edit it.'],
+  ]),'README');
+  const dataAoa=[FIELDS.map(f=>f.label)];
+  for(const r of data) dataAoa.push(FIELDS.map(f=>{ const v=r[f.key]; return f.type==='date'? (v||null) : v; }));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dataAoa,{cellDates:true}),'Data');
+  const base=[['Project','Item','Week ending','Baseline hours/cost']];
+  const cur=[['Project','Item','Week ending','Updated hours/cost']];
+  for(const [proj,p] of Object.entries(state.plans)){
+    for(const [lvl,node] of Object.entries(p)){
+      if(lvl.startsWith('_')||!node||typeof node!=='object'||!node.baseline)continue;
+      for(const [k,v] of Object.entries(node.baseline)){ const i=k.lastIndexOf('|'); base.push([proj,k.slice(0,i),k.slice(i+1),v]); }
+      for(const [k,v] of Object.entries(node.current)){ const i=k.lastIndexOf('|'); cur.push([proj,k.slice(0,i),k.slice(i+1),v]); }
+    }
+  }
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(base),'Baseline Plan');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cur),'Updated Forecast');
+  const rts=[['Project','Employee','Cost rate override $/hr','Bill rate $/hr']];
+  for(const [proj,p] of Object.entries(state.plans))
+    for(const [emp,e] of Object.entries(p._rateTable||{})) rts.push([proj,emp,e.cost??'',e.bill??'']);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rts),'Rate Table');
+  const ps=[['Project','Plan start','Plan weeks','Baseline first entered','Non-labor markup %','Contingency $','Risk allowance $']];
+  for(const [proj,p] of Object.entries(state.plans)){
+    const lvls=Object.keys(p).filter(k=>!k.startsWith('_')&&p[k]&&p[k].baseline);
+    const n=lvls.length?p[lvls[0]]:null;
+    ps.push([proj,n?n.baseStart||'':'',n?n.baseWeeks||'':'',n?String(n.baselineAt||'').slice(0,10):'',p._nlMarkup||0,p._contBudget||0,p._riskBudget||0]);
+  }
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ps),'Projects');
+  const bg=[['Forecast group','Budget']];
+  for(const [k,v] of Object.entries(state.budgets)) bg.push([k,v]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(bg),'Budgets');
+  const json=JSON.stringify(obj);
+  const meta=[['Exact tool state — do not edit']];
+  for(let i=0;i<json.length;i+=30000) meta.push([json.slice(i,i+30000)]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(meta),'_meta');
+  return wb;
+}
+function workbookBlob(format){
+  const obj=buildWorkbookObj();
+  if(format==='json') return new Blob([JSON.stringify(obj)],{type:'application/json'});
+  const out=XLSX.write(buildXlsx(obj),{type:'array',bookType:'xlsx',cellDates:true});
+  return new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function savedStatus(name){
+  $('#dataStatus').textContent=data.length.toLocaleString()+' rows · saved '+new Date().toTimeString().slice(0,5)+(name?' → '+name:'');
+}
+async function doSave(saveAs){
+  if(!data.length){ alert('Load an extract (or sample data) first — the workbook saves your data plus all forecasts, rates, budgets and settings.'); return; }
+  if(typeof XLSX==='undefined'){ alert('Excel library not loaded — use the standalone build or check your connection.'); return; }
+  if(window.showSaveFilePicker){
     try{
-      const wb=JSON.parse(e.target.result);
-      if(!wb || wb.app!=='project-forecast-tool' || !Array.isArray(wb.rows)) throw new Error('this is not a saved workbook file');
-      state.settings=Object.assign(state.settings, wb.settings||{});
-      state.mapping=wb.mapping||state.mapping;
-      state.filters=wb.filters||{};
-      state.budgets=wb.budgets||{};
-      state.plans=wb.plans||{};
-      data=wb.rows.map(r2=>{ const o={}; for(const f of FIELDS){ const v=r2[f.key];
-        o[f.key]= f.type==='date'? parseDateVal(v) : (f.type==='num'? (typeof v==='number'?v:parseNumber(v)) : (v==null?'':String(v))); } return o; });
-      recomputePeriods();
-      saveState();
-      $('#dataStatus').textContent=data.length.toLocaleString()+' rows · workbook from '+String(wb.savedAt||'').slice(0,10);
-      buildAllFilterbars();
-      switchTab('dashboard');
-    }catch(err){ alert('Could not open workbook: '+err.message); }
-  };
-  r.readAsText(file);
+      if(saveAs||!fsHandle){
+        fsHandle=await window.showSaveFilePicker({
+          suggestedName:'forecast-workbook-'+fmtDate(new Date())+'.xlsx',
+          types:[
+            {description:'Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}},
+            {description:'JSON workbook',accept:{'application/json':['.json']}},
+          ]});
+      }
+      fsFormat=/\.json$/i.test(fsHandle.name)?'json':'xlsx';
+      const ws=await fsHandle.createWritable();
+      await ws.write(workbookBlob(fsFormat));
+      await ws.close();
+      stateDirty=false;
+      savedStatus(fsHandle.name);
+      return;
+    }catch(err){
+      if(err&&err.name==='AbortError')return; // user cancelled the picker
+      fsHandle=null;                          // stale handle/permission — fall back to download
+    }
+  }
+  const blob=workbookBlob('xlsx');
+  const a=el('a',{href:URL.createObjectURL(blob),download:'forecast-workbook-'+fmtDate(new Date())+'.xlsx'});
+  document.body.append(a); a.click(); a.remove();
+  stateDirty=false;
+  savedStatus(null);
+}
+async function autoSaveToFile(){
+  if(!fsHandle||!stateDirty||!data.length)return;
+  try{
+    const ws=await fsHandle.createWritable();
+    await ws.write(workbookBlob(fsFormat));
+    await ws.close();
+    stateDirty=false;
+    savedStatus(fsHandle.name+' (auto)');
+  }catch(e){ /* silent: next manual Save will surface any problem */ }
+}
+async function doOpen(){
+  if(window.showOpenFilePicker){
+    try{
+      const [h]=await window.showOpenFilePicker({types:[{description:'Forecast workbook',accept:{'application/octet-stream':['.xlsx','.json']}}]});
+      const file=await h.getFile();
+      if(await openWorkbookFile(file)){ fsHandle=h; fsFormat=/\.json$/i.test(file.name)?'json':'xlsx'; }
+      return;
+    }catch(err){ if(err&&err.name==='AbortError')return; }
+  }
+  $('#wbFile').click();
+}
+async function openWorkbookFile(file){
+  try{
+    const name=(file.name||'').toLowerCase();
+    if(name.endsWith('.json')) return applyWorkbookJson(await file.text());
+    if(typeof XLSX==='undefined'){ alert('Excel library not loaded.'); return false; }
+    const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array'});
+    if(wb.SheetNames.includes('_meta')){
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets['_meta'],{header:1,defval:''});
+      return applyWorkbookJson(rows.slice(1).map(r=>r[0]).join(''));
+    }
+    alert('No saved tool state found in this Excel file — it looks like a plain extract. Use "Upload extract" for new data.');
+    return false;
+  }catch(err){ alert('Could not open workbook: '+err.message); return false; }
+}
+function applyWorkbookJson(text){
+  try{
+    const wb=JSON.parse(text);
+    if(!wb || wb.app!=='project-forecast-tool' || !Array.isArray(wb.rows)) throw new Error('this is not a saved workbook file');
+    state.settings=Object.assign(state.settings, wb.settings||{});
+    state.mapping=wb.mapping||state.mapping;
+    state.filters=wb.filters||{};
+    state.budgets=wb.budgets||{};
+    state.plans=wb.plans||{};
+    data=wb.rows.map(r2=>{ const o={}; for(const f of FIELDS){ const v=r2[f.key];
+      o[f.key]= f.type==='date'? parseDateVal(v) : (f.type==='num'? (typeof v==='number'?v:parseNumber(v)) : (v==null?'':String(v))); } return o; });
+    recomputePeriods();
+    saveState(); stateDirty=false;
+    $('#dataStatus').textContent=data.length.toLocaleString()+' rows · workbook from '+String(wb.savedAt||'').slice(0,10);
+    buildAllFilterbars();
+    switchTab('dashboard');
+    return true;
+  }catch(err){ alert('Could not open workbook: '+err.message); return false; }
 }
 
 /* ===================== Config import/export ===================== */
@@ -2635,9 +2750,11 @@ function init(){
   $('#btnReparse').addEventListener('click',()=>{ raw.headerRowIdx=Math.max(0,(+$('#headerRow').value||1)-1); applyHeaderRow(raw.grid); });
   $('#btnApplyMap').addEventListener('click',applyMapping);
   // config
-  $('#btnSaveWb').addEventListener('click',saveWorkbook);
-  $('#btnOpenWb').addEventListener('click',()=>$('#wbFile').click());
-  $('#wbFile').addEventListener('change',e=>{ if(e.target.files[0])openWorkbook(e.target.files[0]); e.target.value=''; });
+  $('#btnSaveWb').addEventListener('click',()=>doSave(false));
+  $('#btnSaveAsWb').addEventListener('click',()=>doSave(true));
+  $('#btnOpenWb').addEventListener('click',doOpen);
+  $('#wbFile').addEventListener('change',e=>{ if(e.target.files[0])openWorkbookFile(e.target.files[0]); e.target.value=''; });
+  setInterval(autoSaveToFile,120000);
   $('#btnExportCfg').addEventListener('click',exportConfig);
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
