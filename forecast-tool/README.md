@@ -60,7 +60,11 @@ Click **Load sample data** in the header to try the tool without a real extract.
    the as-sold cost on the Project Forecast tab. Revenue stays hours × bill
    (T&M); the tool flags when the plan or the EAC bills over the cap
    (unbillable overage + margin at cap) and tracks % of cap billed and EAC
-   cost vs as-sold on the comparison table.
+   cost vs as-sold on the comparison table. For hours you already KNOW will
+   run over the cap, click the **bill / no bill** pill on any task/person row:
+   non-billable rows earn $0 revenue while their cost still counts, the
+   write-off shows where it lives, and the totals report a *Marked
+   non-billable* line on both project tabs.
 5. **Excel templates** — *Excel template* on the Project Forecast tab downloads
    a styled template for the selected project with separate **Task Number** and
    lower-level **Task Name** columns (straight from the extract), one row per

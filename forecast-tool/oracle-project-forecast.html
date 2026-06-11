@@ -1326,7 +1326,7 @@ function planNode(proj,level){
   if(!state.plans[proj])state.plans[proj]={};
   if(!state.plans[proj][level])state.plans[proj][level]={current:{},baseline:{},rates:{},baselineAt:''};
   const n=state.plans[proj][level];
-  n.current=n.current||{}; n.baseline=n.baseline||{}; n.rates=n.rates||{};
+  n.current=n.current||{}; n.baseline=n.baseline||{}; n.rates=n.rates||{}; n.nb=n.nb||{};
   return n;
 }
 function projMeta(proj){
@@ -1638,10 +1638,23 @@ function ppBuild(mode){
   $('#fpSold').value=meta._soldCost||'';
   return ppCtx;
 }
+function makeNbPill(it){
+  const nb=!!ppCtx.node.nb[it.label];
+  const p=el('span',{class:'pill'+(nb?' bad':''),style:'margin-left:4px;cursor:pointer',
+    title:nb?'Non-billable — earns $0 revenue, cost still counts. Click to make billable again.'
+            :'Billable — click to mark non-billable (e.g. hours expected to run over the NTE cap).'},
+    nb?'no bill':'bill');
+  p.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(nb)delete ppCtx.node.nb[it.label]; else ppCtx.node.nb[it.label]=true;
+    saveState(); ppRender();
+  });
+  return p;
+}
 function makeItemCell(it,tr,colCount){
   const unit=it.isLabor?'hrs':'cost';
   const name=el('span',{class:'item-link',onclick:()=>toggleDetail(it,tr,colCount)},it.label);
-  const cell=el('td',{title:it.label},name,' ',el('span',{class:'pill',style:'margin-left:4px'},unit));
+  const cell=el('td',{title:it.label},name,' ',el('span',{class:'pill',style:'margin-left:4px'},unit),makeNbPill(it));
   if(it._manual&&!it.rows.length){
     cell.append(' ',el('span',{class:'pill',style:'color:var(--warn)'},'plan'),
       ' ',el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove this plan row and its forecast values',
@@ -1738,7 +1751,7 @@ function renderForecastPage(){
         const tr=el('tr',{class:'childrow'});
         const unit=it.isLabor?'hrs':'cost';
         const name=el('span',{class:'item-link',onclick:()=>toggleDetail(it,tr,colCount)},fpEmpOf(it));
-        const cell=el('td',{class:'childlabel',title:it.label},name,' ',el('span',{class:'pill'},unit));
+        const cell=el('td',{class:'childlabel',title:it.label},name,' ',el('span',{class:'pill'},unit),makeNbPill(it));
         if(it._manual&&!it.rows.length){
           cell.append(' ',el('span',{class:'pill',style:'color:var(--warn)'},'plan'),
             ' ',el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove this plan row and its forecast values',
@@ -1806,9 +1819,10 @@ function fpCalc(it){
   const mkup=1+(ppCtx.meta._nlMarkup||0)/100;
   const rate=it.isLabor?costRateOf(it):1;
   const bill=it.isLabor?billRateOf(it):null;
+  const nb=!!node.nb[it.label];
   const cost=it.isLabor?tot*rate:tot;
-  const rev=it.isLabor?tot*bill:tot*mkup;
-  return {tot,rate,bill,cost,rev,margin:rev-cost};
+  const rev=nb?0:(it.isLabor?tot*bill:tot*mkup);
+  return {tot,rate,bill,nb,cost,rev,margin:rev-cost};
 }
 function updateFpSummary(it){
   const c=fpCalc(it); const S=it._sum;
@@ -1816,8 +1830,9 @@ function updateFpSummary(it){
   const f=v=>it.isLabor?fmtNum(v,1):fmtMoney(v);
   S.tot.textContent=c.tot?f(c.tot):'';
   S.rate.textContent=it.isLabor?fmtNum(c.rate,2):'—';
-  S.bill.textContent=it.isLabor?(c.bill?fmtNum(c.bill,2):''):'—';
-  S.bill.title=it.isLabor&&!c.bill?'No bill rate in the rate table':'';
+  S.bill.textContent=c.nb?'NB':(it.isLabor?(c.bill?fmtNum(c.bill,2):''):'—');
+  S.bill.className=c.nb?'num neg':'num';
+  S.bill.title=c.nb?'Marked non-billable — $0 revenue':(it.isLabor&&!c.bill?'No bill rate in the rate table':'');
   S.cost.textContent=c.tot?fmtMoney(c.cost):'';
   S.rev.textContent=c.tot?fmtMoney(c.rev):'';
   S.margin.textContent=c.tot?fmtMoney(c.margin):'';
@@ -1840,11 +1855,12 @@ function updateFpTotalsRow(){
 }
 function renderFpTotals(){
   if(!ppCtx)return;
-  let hrs=0,cost=0,rev=0,missingBill=0;
+  let hrs=0,cost=0,rev=0,missingBill=0,nbCost=0,nbH=0;
   for(const it of ppCtx.items){
     const c=fpCalc(it);
-    if(it.isLabor){ hrs+=c.tot; if(!c.bill&&c.tot)missingBill++; }
+    if(it.isLabor){ hrs+=c.tot; if(!c.bill&&c.tot&&!c.nb)missingBill++; }
     cost+=c.cost; rev+=c.rev;
+    if(c.nb){ nbCost+=c.cost; if(it.isLabor)nbH+=c.tot; }
   }
   const k=$('#fpTotals'); k.innerHTML='';
   const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
@@ -1852,6 +1868,7 @@ function renderFpTotals(){
   kpi('Baseline cost',fmtMoney(cost));
   kpi('Total revenue (price to owner)',fmtMoney(rev));
   kpi('Margin',fmtMoney(rev-cost), rev?(100*(rev-cost)/rev).toFixed(1)+'% of revenue':'');
+  if(nbCost>0.5) kpi('Marked non-billable',fmtMoney(nbCost),(nbH?fmtNum(nbH,1)+' h ':'')+'planned at $0 revenue');
   const cont=ppCtx.meta._contBudget||0, risk=ppCtx.meta._riskBudget||0;
   if(cont||risk){
     kpi('Contingency + risk',fmtMoney(cont+risk), cost?(100*(cont+risk)/cost).toFixed(1)+'% of cost':'');
@@ -2183,12 +2200,14 @@ function itemCalc(it){
   const baseCost=node.baselineAt? (it.isLabor? baseTot*rate : baseTot) : null;
   const over=node.baselineAt&&baseTot? eac-baseTot : null;
   const mkup=1+(ppCtx.meta._nlMarkup||0)/100;
+  const nb=!!node.nb[it.label];
   const bill=it.isLabor? billRateOf(it) : null;
   const nl=(it.nlCost||0)*mkup; // expense/subs charges within a labor row, billed at cost + markup
-  const actRev=it.isLabor? it.hours*bill+nl : it.cost*mkup;
-  const eacRev=it.isLabor? eac*bill+nl : eacCost*mkup;
-  const baseRev=node.baselineAt? (it.isLabor? baseTot*bill : baseTot*mkup) : null;
-  return {planTD,toGo,baseTot,act,rate,bill,eac,eacCost,baseCost,actRev,eacRev,baseRev,over,varTD:act-planTD};
+  const nbf=nb?0:1;             // non-billable rows earn $0 revenue; cost is unaffected
+  const actRev=nbf*(it.isLabor? it.hours*bill+nl : it.cost*mkup);
+  const eacRev=nbf*(it.isLabor? eac*bill+nl : eacCost*mkup);
+  const baseRev=node.baselineAt? nbf*(it.isLabor? baseTot*bill : baseTot*mkup) : null;
+  return {planTD,toGo,baseTot,act,rate,bill,nb,eac,eacCost,baseCost,actRev,eacRev,baseRev,over,varTD:act-planTD};
 }
 function updateItemSummary(it){
   if(ppCtx.mode!=='a')return;
@@ -2207,8 +2226,9 @@ function updateItemSummary(it){
   S.eac.textContent=f(c.eac);
   S.actC.textContent=fmtMoney(it.cost);
   S.eacC.textContent=fmtMoney(c.eacCost);
-  S.eacRev.textContent=c.eacRev?fmtMoney(c.eacRev):'';
-  S.eacRev.title=it.isLabor&&!c.bill?'No bill rate set for this person in the rate table':'';
+  S.eacRev.textContent=c.nb?'$0 NB':(c.eacRev?fmtMoney(c.eacRev):'');
+  S.eacRev.className=c.nb?'num neg':'num';
+  S.eacRev.title=c.nb?'Marked non-billable':(it.isLabor&&!c.bill?'No bill rate set for this person in the rate table':'');
   S.origEac.textContent=c.baseTot? f(c.baseTot):'';
   S.over.innerHTML='';
   if(c.over!=null){
@@ -2259,16 +2279,18 @@ function renderApTotals(){
   const node=ppCtx.node;
   const hasBase=!!node.baselineAt;
   let A={h:0,c:0,r:0},E={h:0,c:0,r:0},B={h:0,c:0,r:0};
+  const NB={b:0,e:0,a:0,h:0};
   let missingBill=0;
   for(const it of ppCtx.items){
     const c=itemCalc(it);
     if(it.isLabor){
       A.h+=it.hours; E.h+=c.eac; B.h+=c.baseTot;
-      if(!c.bill&&(c.eac||c.baseTot))missingBill++;
+      if(!c.bill&&(c.eac||c.baseTot)&&!c.nb)missingBill++;
     }
     A.c+=it.cost; A.r+=c.actRev||0;
     E.c+=c.eacCost; E.r+=c.eacRev||0;
     if(hasBase){ B.c+=c.baseCost||0; B.r+=c.baseRev||0; }
+    if(c.nb){ NB.b+=c.baseCost||0; NB.e+=c.eacCost; NB.a+=it.cost; if(it.isLabor)NB.h+=c.eac; }
   }
   const t=$('#ppTotals'); t.innerHTML='';
   t.append(el('thead',null,el('tr',null,el('th'),
@@ -2334,6 +2356,14 @@ function renderApTotals(){
       el('td',{class:'num'},fmtMoney(E.c)),
       el('td',{class:'num'},fmtMoney(A.c)),
       el('td',{class:'num '+(dc>0.5?'neg':'pos')},(dc>0?'+':'')+fmtMoney(dc))));
+  }
+  if(NB.e>0.5||NB.b>0.5||NB.a>0.5){
+    tb.append(el('tr',null,
+      el('td',{title:'Rows marked non-billable (the "no bill" pill) — cost is incurred but revenue is $0. Already excluded from the revenue and margin rows.'},'Marked non-billable (cost)'),
+      el('td',{class:'num'},hasBase?fmtMoney(NB.b):'—'),
+      el('td',{class:'num neg'},fmtMoney(NB.e)),
+      el('td',{class:'num'},fmtMoney(NB.a)),
+      el('td',{class:'num'},NB.h?fmtNum(NB.h,1)+' h':'')));
   }
   row('Margin',B.r-B.c,E.r-E.c,A.r-A.c,fmtMoney,true);
   const pct=(r,c2)=>r? (100*(r-c2)/r).toFixed(1)+'%':'—';
