@@ -106,6 +106,8 @@
   tr.detailrow table{font-size:11.5px}
   tr.detailrow th{position:static;background:#1b2a44}
   .hidden{display:none !important}
+  th[title]:not([title=""]){cursor:help}
+  .kpi[title]:not([title=""]){cursor:help}
   details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:8px}
   .footer-note{color:var(--muted);font-size:11.5px;text-align:center;padding:14px}
 </style>
@@ -1719,10 +1721,17 @@ function renderForecastPage(){
   $('#fpWeeks').value=node.baseWeeks;
   ppCtx.visWeeks=weeks;
   const t=$('#fpTable'); t.innerHTML='';
-  const sumCols=['Total','Cost rate','Bill rate','Cost','Revenue','Margin'];
+  const sumCols=[
+    ['Total','Baseline total for the row — the sum of its weekly cells (hours, or dollars for cost rows)'],
+    ['Cost rate','Burdened cost $/hr = Salaries ÷ Hours × overhead multiplier (Rate Table tab)'],
+    ['Bill rate','Price to owner $/hr, from the Rate Table tab'],
+    ['Cost','Total hours × cost rate (cost rows: dollars at face value)'],
+    ['Revenue','Total hours × bill rate; subs/expenses at cost + non-labor markup. $0 if marked no-bill'],
+    ['Margin','Revenue − cost'],
+  ];
   const headCells=[el('th',null,'Task / Person'),
     ...weeks.map(wk=>el('th',{class:'num',title:'Week ending '+wk},'WE '+wkLabel(wk))),
-    ...sumCols.map((c,i)=>el('th',{class:'num'+(i===0?' sumcol':'')},c))];
+    ...sumCols.map((c,i)=>el('th',{class:'num'+(i===0?' sumcol':''),title:c[1]},c[0]))];
   t.append(el('thead',null,el('tr',null,...headCells)));
   const tb=el('tbody');
   const colCount=headCells.length;
@@ -1863,17 +1872,17 @@ function renderFpTotals(){
     if(c.nb){ nbCost+=c.cost; if(it.isLabor)nbH+=c.tot; }
   }
   const k=$('#fpTotals'); k.innerHTML='';
-  const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
-  kpi('Baseline labor hours',fmtNum(hrs,1));
-  kpi('Baseline cost',fmtMoney(cost));
-  kpi('Total revenue (price to owner)',fmtMoney(rev));
-  kpi('Margin',fmtMoney(rev-cost), rev?(100*(rev-cost)/rev).toFixed(1)+'% of revenue':'');
-  if(nbCost>0.5) kpi('Marked non-billable',fmtMoney(nbCost),(nbH?fmtNum(nbH,1)+' h ':'')+'planned at $0 revenue');
+  const kpi=(lbl,val,sub,ttl)=>k.append(el('div',{class:'kpi',title:ttl||''},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
+  kpi('Baseline labor hours',fmtNum(hrs,1),'','Sum of every hours cell in the baseline grid');
+  kpi('Baseline cost',fmtMoney(cost),'','Σ rows: hours × cost rate (Salaries ÷ Hours × OH multiplier), plus cost rows at face value');
+  kpi('Total revenue (price to owner)',fmtMoney(rev),'','Σ rows: hours × bill rate; subs/expenses at cost + markup; no-bill rows $0');
+  kpi('Margin',fmtMoney(rev-cost), rev?(100*(rev-cost)/rev).toFixed(1)+'% of revenue':'','Revenue − cost');
+  if(nbCost>0.5) kpi('Marked non-billable',fmtMoney(nbCost),(nbH?fmtNum(nbH,1)+' h ':'')+'planned at $0 revenue','Cost of rows with the no-bill pill — counted in cost, excluded from revenue');
   const cont=ppCtx.meta._contBudget||0, risk=ppCtx.meta._riskBudget||0;
   if(cont||risk){
-    kpi('Contingency + risk',fmtMoney(cont+risk), cost?(100*(cont+risk)/cost).toFixed(1)+'% of cost':'');
-    kpi('Cost incl. reserves',fmtMoney(cost+cont+risk));
-    kpi('Margin after reserves',fmtMoney(rev-cost-cont-risk), rev?(100*(rev-cost-cont-risk)/rev).toFixed(1)+'% of revenue':'');
+    kpi('Contingency + risk',fmtMoney(cont+risk), cost?(100*(cont+risk)/cost).toFixed(1)+'% of cost':'','The reserve amounts entered above');
+    kpi('Cost incl. reserves',fmtMoney(cost+cont+risk),'','Baseline cost + contingency + risk allowance — the total authorized cost budget');
+    kpi('Margin after reserves',fmtMoney(rev-cost-cont-risk), rev?(100*(rev-cost-cont-risk)/rev).toFixed(1)+'% of revenue':'','Revenue − cost − contingency − risk: the margin if the reserves are fully spent');
   }
   const cap=ppCtx.meta._capRev||0, sold=ppCtx.meta._soldCost||0;
   if(cap>0){
@@ -2090,7 +2099,19 @@ function renderActualsPage(){
   const futureWeeks=visWeeks.filter(w=>w>lastActualWeek);
   Object.assign(ppCtx,{futureWeeks,hiddenWeeks,visWeeks});
   const t=$('#ppTable'); t.innerHTML='';
-  const sumCols=['Act hrs/cost','Plan to date','Var to date','Plan to go','EAC','Cost rate','Act cost','EAC cost','EAC rev','Orig EAC','Overrun'];
+  const sumCols=[
+    ['Act hrs/cost','Actuals to date, straight from the uploaded extract (hours for people, dollars for cost rows)'],
+    ['Plan to date','Updated forecast summed over weeks up to and including the last actual week'],
+    ['Var to date','Actual to date − plan to date. Red = ran over the forecast so far'],
+    ['Plan to go','Updated forecast summed over weeks AFTER the last actual week — the remaining work'],
+    ['EAC','Estimate at completion = actual to date + plan to go'],
+    ['Cost rate','Burdened cost $/hr = Salaries ÷ Hours × overhead multiplier (see Rate Table tab). Type to override'],
+    ['Act cost','Actual Total Cost charged to date, from the extract'],
+    ['EAC cost','Actual cost to date + plan-to-go hours × cost rate (cost rows: + plan-to-go dollars)'],
+    ['EAC rev','EAC hours × bill rate, plus non-labor at cost + markup. $0 for rows marked no-bill'],
+    ['Orig EAC','The original baseline total for this row (hours, or dollars for cost rows)'],
+    ['Overrun','EAC − original baseline. Red = more than originally planned'],
+  ];
   const headCells=[el('th',null,'Item')];
   if(hiddenWeeks.length) headCells.push(el('th',{class:'num',title:hiddenWeeks.length+' earlier weeks ('+wkLabel(hiddenWeeks[0])+' … '+wkLabel(hiddenWeeks[hiddenWeeks.length-1])+')'},'Earlier'));
   for(const wk of visWeeks){
@@ -2098,7 +2119,7 @@ function renderActualsPage(){
     headCells.push(el('th',{class:'num'+(fut?' fut':''),title:'Week ending '+wk+(wk===todayWk?' (current week — likely partial)':'')},
       'WE '+wkLabel(wk)+(wk===todayWk?' •':'')));
   }
-  sumCols.forEach((c,i)=>headCells.push(el('th',{class:'num'+(i===0?' sumcol':'')},c)));
+  sumCols.forEach((c,i)=>headCells.push(el('th',{class:'num'+(i===0?' sumcol':''),title:c[1]},c[0])));
   t.append(el('thead',null,el('tr',null,...headCells)));
   const tb=el('tbody');
   const colCount=headCells.length;
@@ -2294,20 +2315,24 @@ function renderApTotals(){
   }
   const t=$('#ppTotals'); t.innerHTML='';
   t.append(el('thead',null,el('tr',null,el('th'),
-    el('th',{class:'num'},'Original forecast'),el('th',{class:'num'},'Updated forecast (EAC)'),
-    el('th',{class:'num'},'Actuals to date'),el('th',{class:'num'},'Updated vs original'))));
+    el('th',{class:'num',title:'The fixed baseline entered on the Project Forecast tab'},'Original forecast'),
+    el('th',{class:'num',title:'Estimate at completion = actuals to date + forecast in weeks after the last actual week'},'Updated forecast (EAC)'),
+    el('th',{class:'num',title:'Straight from the latest uploaded extract'},'Actuals to date'),
+    el('th',{class:'num',title:'Updated EAC − original baseline'},'Updated vs original'))));
   const tb=el('tbody');
-  const row=(lbl,b,e,a,fmt2,invertGood)=>{
+  const row=(lbl,b,e,a,fmt2,invertGood,ttl)=>{
     const d=hasBase? e-b : null;
     const cls=d==null?'num':(invertGood? (d<-0.5?'num neg':'num pos') : (d>0.5?'num neg':'num pos'));
-    tb.append(el('tr',null,el('td',null,lbl),
+    tb.append(el('tr',null,el('td',{title:ttl||''},lbl),
       el('td',{class:'num'},hasBase?fmt2(b):'—'),
       el('td',{class:'num'},fmt2(e)),
       el('td',{class:'num'},fmt2(a)),
       el('td',{class:cls},d==null?'—':(d>0?'+':'')+fmt2(d))));
   };
-  row('Labor hours',B.h,E.h,A.h,v=>fmtNum(v,1));
-  row('Cost',B.c,E.c,A.c,fmtMoney);
+  row('Labor hours',B.h,E.h,A.h,v=>fmtNum(v,1),false,
+    'Original = baseline hours. Updated EAC = actual hours + plan-to-go. Actuals from the extract');
+  row('Cost',B.c,E.c,A.c,fmtMoney,false,
+    'Original = baseline hours × cost rate. Updated EAC = actual cost + plan-to-go × cost rate. Actuals = Total Cost from the extract');
   const cont=ppCtx.meta._contBudget||0, risk=ppCtx.meta._riskBudget||0, reserves=cont+risk;
   if(reserves>0||hasBase){
     const used=hasBase? Math.max(0,E.c-B.c) : 0;
@@ -2329,7 +2354,8 @@ function renderApTotals(){
         el('td',{class:'num '+(dd>0.5?'neg':'pos')},(dd>0?'+':'')+fmtMoney(dd))));
     }
   }
-  row('Revenue (price to owner)',B.r,E.r,A.r,fmtMoney,true);
+  row('Revenue (price to owner)',B.r,E.r,A.r,fmtMoney,true,
+    'Hours × bill rate, plus non-labor at cost + markup. Rows marked no-bill earn $0');
   const cap=ppCtx.meta._capRev||0, sold=ppCtx.meta._soldCost||0;
   if(cap>0){
     const left=cap-E.r;
@@ -2365,9 +2391,10 @@ function renderApTotals(){
       el('td',{class:'num'},fmtMoney(NB.a)),
       el('td',{class:'num'},NB.h?fmtNum(NB.h,1)+' h':'')));
   }
-  row('Margin',B.r-B.c,E.r-E.c,A.r-A.c,fmtMoney,true);
+  row('Margin',B.r-B.c,E.r-E.c,A.r-A.c,fmtMoney,true,
+    'Revenue − cost, in each column');
   const pct=(r,c2)=>r? (100*(r-c2)/r).toFixed(1)+'%':'—';
-  tb.append(el('tr',null,el('td',null,'Margin %'),
+  tb.append(el('tr',null,el('td',{title:'Margin ÷ revenue'},'Margin %'),
     el('td',{class:'num'},hasBase?pct(B.r,B.c):'—'),
     el('td',{class:'num'},pct(E.r,E.c)),
     el('td',{class:'num'},pct(A.r,A.c)),
@@ -2599,19 +2626,30 @@ function renderEvTab(){
   const tcpi=(T.bac-T.ac)>0?(T.bac-T.ev)/(T.bac-T.ac):null;
   // KPIs
   const k=$('#evKpis'); k.innerHTML='';
-  const kpi=(lbl,val,sub,cls)=>{const d2=el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'+(cls?' '+cls:'')},val),sub?el('div',{class:'sub'},sub):null);if(cls)d2.querySelector('.val').style.color=cls==='neg'?'var(--bad)':'var(--good)';k.append(d2);};
-  kpi('BAC (baseline cost)',fmtMoney(T.bac));
-  kpi('PV — planned value',fmtMoney(T.pv),T.bac?(100*T.pv/T.bac).toFixed(1)+'% scheduled':'');
-  kpi('EV — earned value',fmtMoney(T.ev),T.bac?(100*T.ev/T.bac).toFixed(1)+'% complete':'');
-  kpi('AC — actual cost',fmtMoney(T.ac),T.bac?(100*T.ac/T.bac).toFixed(1)+'% spent':'');
-  kpi('Schedule SV / SPI',(T.ev-T.pv>=0?'+':'')+fmtMoney(T.ev-T.pv),spi!=null?'SPI '+spi.toFixed(2)+(spi<1?' — behind schedule':' — on/ahead'):'',(T.ev-T.pv)<-0.5?'neg':'pos');
-  kpi('Cost CV / CPI',(T.ev-T.ac>=0?'+':'')+fmtMoney(T.ev-T.ac),cpi!=null?'CPI '+cpi.toFixed(2)+(cpi<1?' — over cost':' — on/under'):'',(T.ev-T.ac)<-0.5?'neg':'pos');
-  kpi('EAC (BAC ÷ CPI)',eacCpi!=null?fmtMoney(eacCpi):'—',eacCpi!=null?'VAC '+fmtMoney(T.bac-eacCpi):'');
-  kpi('EAC (your forecast)',fmtMoney(T.eacC),'ETC '+fmtMoney(T.eacC-T.ac));
-  if(tcpi!=null) kpi('TCPI',tcpi.toFixed(2),'efficiency needed on remaining work'+(tcpi>1.1?' — demanding':''));
+  const kpi=(lbl,val,sub,cls,ttl)=>{const d2=el('div',{class:'kpi',title:ttl||''},el('div',{class:'lbl'},lbl),el('div',{class:'val'+(cls?' '+cls:'')},val),sub?el('div',{class:'sub'},sub):null);if(cls)d2.querySelector('.val').style.color=cls==='neg'?'var(--bad)':'var(--good)';k.append(d2);};
+  kpi('BAC (baseline cost)',fmtMoney(T.bac),'','','Budget at completion: total baseline cost = Σ baseline hours × cost rate');
+  kpi('PV — planned value',fmtMoney(T.pv),T.bac?(100*T.pv/T.bac).toFixed(1)+'% scheduled':'','','Baseline cost scheduled through the status date');
+  kpi('EV — earned value',fmtMoney(T.ev),T.bac?(100*T.ev/T.bac).toFixed(1)+'% complete':'','','Σ tasks: % complete × task BAC');
+  kpi('AC — actual cost',fmtMoney(T.ac),T.bac?(100*T.ac/T.bac).toFixed(1)+'% spent':'','','Actual cost charged through the status date, from the extract');
+  kpi('Schedule SV / SPI',(T.ev-T.pv>=0?'+':'')+fmtMoney(T.ev-T.pv),spi!=null?'SPI '+spi.toFixed(2)+(spi<1?' — behind schedule':' — on/ahead'):'',(T.ev-T.pv)<-0.5?'neg':'pos','Schedule variance = EV − PV; SPI = EV ÷ PV (1.00 = on schedule)');
+  kpi('Cost CV / CPI',(T.ev-T.ac>=0?'+':'')+fmtMoney(T.ev-T.ac),cpi!=null?'CPI '+cpi.toFixed(2)+(cpi<1?' — over cost':' — on/under'):'',(T.ev-T.ac)<-0.5?'neg':'pos','Cost variance = EV − AC; CPI = EV ÷ AC (1.00 = on budget)');
+  kpi('EAC (BAC ÷ CPI)',eacCpi!=null?fmtMoney(eacCpi):'—',eacCpi!=null?'VAC '+fmtMoney(T.bac-eacCpi):'','','Statistical EAC assuming current cost efficiency continues. VAC = BAC − EAC');
+  kpi('EAC (your forecast)',fmtMoney(T.eacC),'ETC '+fmtMoney(T.eacC-T.ac),'','Your own estimate: Σ row EACs from Actuals vs Forecast (actuals + plan-to-go × rates). ETC = EAC − AC');
+  if(tcpi!=null) kpi('TCPI',tcpi.toFixed(2),'efficiency needed on remaining work'+(tcpi>1.1?' — demanding':''),'','To-complete performance index = (BAC − EV) ÷ (BAC − AC): the CPI you must achieve on remaining work to finish on budget');
   // per-task table
   const t2=$('#evTable'); t2.innerHTML='';
-  t2.append(el('thead',null,el('tr',null,...['Task','BAC','% complete','PV','EV','AC','SV','CV','SPI','CPI'].map((h,i)=>el('th',{class:i?'num':''},h)))));
+  t2.append(el('thead',null,el('tr',null,...[
+    ['Task',''],
+    ['BAC','Task baseline cost = Σ baseline hours × cost rate'],
+    ['% complete','Auto = actual hours ÷ EAC hours (capped 100%). Type a physical % to override; M = manual'],
+    ['PV','Baseline cost scheduled through the status date'],
+    ['EV','% complete × BAC'],
+    ['AC','Actual cost through the status date'],
+    ['SV','EV − PV (negative = behind schedule)'],
+    ['CV','EV − AC (negative = over cost)'],
+    ['SPI','EV ÷ PV'],
+    ['CPI','EV ÷ AC'],
+  ].map((h,i)=>el('th',{class:i?'num':'',title:h[1]},h[0])))));
   const tb=el('tbody');
   for(const t of list){
     if(!t.bac&&!t.ac)continue;
