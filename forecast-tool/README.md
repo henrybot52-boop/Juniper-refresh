@@ -55,7 +55,12 @@ Click **Load sample data** in the header to try the tool without a real extract.
    tracks the **drawdown**: how much of the reserve the EAC cost overrun has
    consumed, what remains (red when blown), and EAC vs the total authorized
    budget including reserves.
-4. If scope changes are approved, *Set new baseline from updated forecast*
+4. **Contract values (T&M)** — enter the contract value / not-to-exceed cap and
+   the as-sold cost on the Project Forecast tab. Revenue stays hours × bill
+   (T&M); the tool flags when the plan or the EAC bills over the cap
+   (unbillable overage + margin at cap) and tracks % of cap billed and EAC
+   cost vs as-sold on the comparison table.
+5. If scope changes are approved, *Set new baseline from updated forecast*
    re-baselines the job.
 
 Plans, baselines and rates are saved per project (and per row-level) in the

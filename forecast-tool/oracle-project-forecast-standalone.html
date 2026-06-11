@@ -346,6 +346,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       <label class="hint">or <input type="number" id="fpRiskPct" step="0.5" value="5" style="width:62px"> % <button id="btnFpRiskPct" class="small">Set</button></label>
       <span class="hint">— held against the budget; drawdown is tracked on the Actuals vs Forecast tab</span>
     </div>
+    <div class="row" style="margin-bottom:10px">
+      <label>Contract value (T&amp;M cap) $: <input id="fpCap" class="rate-in" style="width:124px" inputmode="decimal" placeholder="0" title="Not-to-exceed contract value — revenue above this is unbillable"></label>
+      <label style="margin-left:18px">As-sold cost $: <input id="fpSold" class="rate-in" style="width:124px" inputmode="decimal" placeholder="0" title="The cost budget the job was priced on"></label>
+      <span class="hint">— entered contract numbers. Revenue stays hours × bill (T&amp;M); the cap flags unbillable overage on both project tabs.</span>
+    </div>
     <div class="kpis" id="fpTotals"></div>
   </div>
 </section>
@@ -1343,6 +1348,8 @@ function projMeta(proj){
   if(p._nlMarkup==null)p._nlMarkup=0;
   if(p._contBudget==null)p._contBudget=0;
   if(p._riskBudget==null)p._riskBudget=0;
+  if(p._capRev==null)p._capRev=0;
+  if(p._soldCost==null)p._soldCost=0;
   return p;
 }
 function ppItemLabel(r,level){
@@ -1509,6 +1516,8 @@ function setupProjectPages(){
     const pct=+$('#fpRiskPct').value||0;
     ppCtx.meta._riskBudget=Math.round(fpBaselineCost()*pct/100);
     $('#fpRisk').value=ppCtx.meta._riskBudget; saveState(); renderFpTotals(); });
+  $('#fpCap').addEventListener('change',e=>{ if(!ppCtx)return; ppCtx.meta._capRev=parseNumber(e.target.value)||0; saveState(); renderFpTotals(); });
+  $('#fpSold').addEventListener('change',e=>{ if(!ppCtx)return; ppCtx.meta._soldCost=parseNumber(e.target.value)||0; saveState(); renderFpTotals(); });
   $('#rtOhMult').addEventListener('change',e=>{
     const v=parseFloat(e.target.value);
     s.ohMult=v>0?v:2.3474; saveState(); reRender();
@@ -1630,6 +1639,8 @@ function ppBuild(mode){
   $('#ppNlMarkup').value=meta._nlMarkup;
   $('#fpCont').value=meta._contBudget||'';
   $('#fpRisk').value=meta._riskBudget||'';
+  $('#fpCap').value=meta._capRev||'';
+  $('#fpSold').value=meta._soldCost||'';
   return ppCtx;
 }
 function makeItemCell(it,tr,colCount){
@@ -1833,6 +1844,16 @@ function renderFpTotals(){
     kpi('Contingency + risk',fmtMoney(cont+risk), cost?(100*(cont+risk)/cost).toFixed(1)+'% of cost':'');
     kpi('Cost incl. reserves',fmtMoney(cost+cont+risk));
     kpi('Margin after reserves',fmtMoney(rev-cost-cont-risk), rev?(100*(rev-cost-cont-risk)/rev).toFixed(1)+'% of revenue':'');
+  }
+  const cap=ppCtx.meta._capRev||0, sold=ppCtx.meta._soldCost||0;
+  if(cap>0){
+    const over=rev-cap;
+    kpi('Contract value (T&M cap)',fmtMoney(cap), over>0.5? 'plan bills '+fmtMoney(over)+' OVER the cap' : 'plan bills '+fmtMoney(-over)+' under the cap');
+    if(over>0.5) kpi('⚠ Above cap',fmtMoney(over),'unbillable at current plan — margin at cap '+fmtMoney(cap-cost));
+  }
+  if(sold>0){
+    const dc=cost-sold;
+    kpi('As-sold cost',fmtMoney(sold), Math.abs(dc)>0.5? 'plan is '+fmtMoney(Math.abs(dc))+(dc>0?' over':' under') : 'matches the plan');
   }
   if(missingBill) kpi('⚠ Missing bill rates',String(missingBill),'labor row(s) counted at $0 revenue');
 }
@@ -2109,6 +2130,33 @@ function renderApTotals(){
     }
   }
   row('Revenue (price to owner)',B.r,E.r,A.r,fmtMoney,true);
+  const cap=ppCtx.meta._capRev||0, sold=ppCtx.meta._soldCost||0;
+  if(cap>0){
+    const left=cap-E.r;
+    tb.append(el('tr',null,
+      el('td',{title:'T&M contract value / not-to-exceed cap (entered on the Project Forecast tab). Left = cap − EAC revenue.'},'Contract value (T&M cap)'),
+      el('td',{class:'num'},fmtMoney(cap)),
+      el('td',{class:'num'+(left<-0.5?' neg':' pos')},fmtMoney(left)+' left'),
+      el('td',{class:'num'},(100*A.r/cap).toFixed(1)+'% billed'),
+      el('td',{class:'num'+(left<-0.5?' neg':'')},left<-0.5?'+'+fmtMoney(-left)+' over cap (unbillable)':'')));
+    if(left<-0.5){
+      tb.append(el('tr',null,
+        el('td',{title:'Margin if revenue is capped at the contract value: cap − EAC cost'},'Margin at cap'),
+        el('td',{class:'num'},hasBase?fmtMoney(Math.min(B.r,cap)-B.c):'—'),
+        el('td',{class:'num'+((cap-E.c)<0?' neg':'')},fmtMoney(cap-E.c)),
+        el('td',{class:'num'},''),
+        el('td',{class:'num neg'},'−'+fmtMoney(E.r-cap)+' vs uncapped')));
+    }
+  }
+  if(sold>0){
+    const dc=E.c-sold;
+    tb.append(el('tr',null,
+      el('td',{title:'The cost budget the job was priced on (entered on the Project Forecast tab)'},'As-sold cost'),
+      el('td',{class:'num'},fmtMoney(sold)),
+      el('td',{class:'num'},fmtMoney(E.c)),
+      el('td',{class:'num'},fmtMoney(A.c)),
+      el('td',{class:'num '+(dc>0.5?'neg':'pos')},(dc>0?'+':'')+fmtMoney(dc))));
+  }
   row('Margin',B.r-B.c,E.r-E.c,A.r-A.c,fmtMoney,true);
   const pct=(r,c2)=>r? (100*(r-c2)/r).toFixed(1)+'%':'—';
   tb.append(el('tr',null,el('td',null,'Margin %'),
@@ -2480,11 +2528,11 @@ function buildXlsx(obj){
   for(const [proj,p] of Object.entries(state.plans))
     for(const [emp,e] of Object.entries(p._rateTable||{})) rts.push([proj,emp,e.cost??'',e.bill??'']);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rts),'Rate Table');
-  const ps=[['Project','Plan start','Plan weeks','Baseline first entered','Non-labor markup %','Contingency $','Risk allowance $']];
+  const ps=[['Project','Plan start','Plan weeks','Baseline first entered','Non-labor markup %','Contingency $','Risk allowance $','Contract value (cap) $','As-sold cost $']];
   for(const [proj,p] of Object.entries(state.plans)){
     const lvls=Object.keys(p).filter(k=>!k.startsWith('_')&&p[k]&&p[k].baseline);
     const n=lvls.length?p[lvls[0]]:null;
-    ps.push([proj,n?n.baseStart||'':'',n?n.baseWeeks||'':'',n?String(n.baselineAt||'').slice(0,10):'',p._nlMarkup||0,p._contBudget||0,p._riskBudget||0]);
+    ps.push([proj,n?n.baseStart||'':'',n?n.baseWeeks||'':'',n?String(n.baselineAt||'').slice(0,10):'',p._nlMarkup||0,p._contBudget||0,p._riskBudget||0,p._capRev||0,p._soldCost||0]);
   }
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ps),'Projects');
   const bg=[['Forecast group','Budget']];
@@ -2761,6 +2809,8 @@ function seedDemoPlan(){
     let bh=0; for(const k in node.baseline)bh+=node.baseline[k];
     meta._contBudget=Math.max(1000,Math.round(bh*avgRate*0.08/1000)*1000);
     meta._riskBudget=Math.max(1000,Math.round(bh*avgRate*0.05/1000)*1000);
+    meta._capRev=Math.max(1000,Math.round(bh*avgRate*1.4*1.05/1000)*1000);  // ~5% above baseline revenue
+    meta._soldCost=Math.max(1000,Math.round(bh*avgRate*1.03/1000)*1000);
   }
   // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
   state.budgets={};
