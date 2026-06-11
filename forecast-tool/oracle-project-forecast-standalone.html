@@ -303,6 +303,9 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
       <span class="spacer"></span>
       <button id="btnFpExpandAll" class="small">Expand all</button>
       <button id="btnFpCollapseAll" class="small">Collapse all</button>
+      <button id="btnFpTpl" class="small" title="Download a styled Excel template for this project — task/person rows, week columns, current baseline pre-filled, plus a Rates sheet">Excel template</button>
+      <button id="btnFpTplImp" class="small" title="Import a filled template: populates the baseline forecast, adds new rows, updates rates">Import template</button>
+      <input type="file" id="tplFile" accept=".xlsx" class="hidden">
       <button id="btnFpCsv" class="small">Export CSV</button>
       <button id="btnFpClear" class="small" style="border-color:var(--bad);color:var(--bad)">Clear baseline</button>
     </div>
@@ -427,7 +430,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
     </div>
     <p class="hint">Derived cost rate = <b>Salaries ÷ Hours × overhead multiplier</b> from this project's actuals (type in the Cost rate column to override a person).
       Enter each person's <b>bill rate (price to owner)</b> to get revenue and margin. Names must match the Employee/Vendor column exactly.
-      Rates are saved per project and drive the cost, revenue and margin numbers on the Project Forecast and Actuals vs Forecast tabs.</p>
+      Rates are saved per project and drive the cost, revenue and margin numbers on the Project Forecast and Actuals vs Forecast tabs. Rates can also be filled in Excel via the template on the Project Forecast tab (Rates sheet) and imported back.</p>
     <div class="row" style="margin-bottom:8px">
       <input id="rtNewEmp" placeholder="Add employee not yet in actuals…" style="width:250px">
       <button id="btnRtAdd" class="small">Add</button>
@@ -1451,6 +1454,9 @@ function setupProjectPages(){
     }
   });
   $('#btnFpCsv').addEventListener('click',exportFpCsv);
+  $('#btnFpTpl').addEventListener('click',downloadTemplate);
+  $('#btnFpTplImp').addEventListener('click',()=>$('#tplFile').click());
+  $('#tplFile').addEventListener('change',e=>{ if(e.target.files[0])importTemplate(e.target.files[0]); e.target.value=''; });
   $('#btnApSeed').addEventListener('click',()=>{
     if(!ppCtx)return;
     if(Object.keys(ppCtx.node.current).length && !confirm('Overwrite the updated forecast with the original forecast?'))return;
@@ -1859,6 +1865,138 @@ function renderFpTotals(){
     kpi('As-sold cost',fmtMoney(sold), Math.abs(dc)>0.5? 'plan is '+fmtMoney(Math.abs(dc))+(dc>0?' over':' under') : 'matches the plan');
   }
   if(missingBill) kpi('⚠ Missing bill rates',String(missingBill),'labor row(s) counted at $0 revenue');
+}
+function downloadTemplate(){
+  if(!data.length){ alert('Load an extract (or sample data) first.'); return; }
+  if(typeof XLSX==='undefined'){ alert('Excel library not loaded.'); return; }
+  if(!ppCtx||ppCtx.mode!=='f')renderForecastPage();
+  if(!ppCtx)return;
+  const node=ppCtx.node, weeks=ppCtx.visWeeks;
+  const BRAND='1F4E79';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const LBL={font:{bold:true,color:{rgb:'33475B'}}};
+  const styleHeaderRow=(ws,rowIdx)=>{
+    const rng=XLSX.utils.decode_range(ws['!ref']);
+    for(let C=rng.s.c;C<=rng.e.c;C++){ const cell=ws[XLSX.utils.encode_cell({r:rowIdx,c:C})]; if(cell)cell.s=HDR; }
+  };
+  const wb=XLSX.utils.book_new();
+  const wsI=XLSX.utils.aoa_to_sheet([
+    ['Forecast template — how to fill it in'],
+    [''],
+    ['Forecast sheet: one row per task + person. Enter planned HOURS in the week columns'],
+    ['(dollars for rows with Unit = cost, e.g. subs). Blank means no hours that week.'],
+    ['Add new rows freely — keep the Task and Employee/Vendor spellings consistent with the extract.'],
+    ['Do not change the header row or the "WE yyyy-mm-dd" week headings.'],
+    [''],
+    ['Rates sheet: cost rate $/hr (leave blank to use the derived salary x overhead rate)'],
+    ['and bill rate $/hr (price to owner) per person.'],
+    [''],
+    ['When done: in the tool, Project Forecast tab -> Import template.'],
+  ]);
+  wsI['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  wsI['!cols']=[{wch:100}];
+  XLSX.utils.book_append_sheet(wb,wsI,'Instructions');
+  const hdr=['Task','Employee/Vendor','Unit',...weeks.map(wk=>'WE '+wk)];
+  const aoa=[['Project',ppCtx.proj],['Generated',fmtDate(new Date())],[],hdr];
+  for(const it of ppCtx.items){
+    aoa.push([fpTaskOf(it), it.emp?fpEmpOf(it):'', it.isLabor?'hours':'cost',
+      ...weeks.map(wk=>{ const v=node.baseline[it.label+'|'+wk]; return v!=null?v:''; })]);
+  }
+  const wsF=XLSX.utils.aoa_to_sheet(aoa);
+  styleHeaderRow(wsF,3);
+  if(wsF['A1'])wsF['A1'].s=LBL; if(wsF['A2'])wsF['A2'].s=LBL;
+  wsF['!cols']=[{wch:34},{wch:22},{wch:8},...weeks.map(()=>({wch:11}))];
+  XLSX.utils.book_append_sheet(wb,wsF,'Forecast');
+  const rt=ppCtx.meta._rateTable;
+  const aoa2=[['Project',ppCtx.proj],[],['Employee','Cost rate $/hr (blank = derived)','Bill rate $/hr (price to owner)']];
+  for(const emp of rateTableEmps()){
+    const e=rt[emp]||{};
+    aoa2.push([emp, e.cost!=null?e.cost:'', e.bill!=null?e.bill:'']);
+  }
+  const wsR=XLSX.utils.aoa_to_sheet(aoa2);
+  styleHeaderRow(wsR,2);
+  if(wsR['A1'])wsR['A1'].s=LBL;
+  wsR['!cols']=[{wch:26},{wch:28},{wch:28}];
+  XLSX.utils.book_append_sheet(wb,wsR,'Rates');
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'forecast-template-'+ppCtx.proj+'.xlsx'});
+  document.body.append(a); a.click(); a.remove();
+}
+async function importTemplate(file){
+  try{
+    if(typeof XLSX==='undefined'){ alert('Excel library not loaded.'); return; }
+    const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:'array'});
+    if(!wb.SheetNames.includes('Forecast')&&!wb.SheetNames.includes('Rates'))
+      throw new Error('no "Forecast" or "Rates" sheet found — is this a template?');
+    if(!ppCtx||ppCtx.mode!=='f')renderForecastPage();
+    if(!ppCtx)throw new Error('load data first');
+    // template generated for a different project? switch if we have it
+    let tplProj='';
+    const fsheet=wb.SheetNames.includes('Forecast')?'Forecast':'Rates';
+    const probe=XLSX.utils.sheet_to_json(wb.Sheets[fsheet],{header:1,defval:'',range:0});
+    if(probe[0]&&String(probe[0][0]).trim()==='Project') tplProj=String(probe[0][1]||'').trim();
+    if(tplProj && tplProj!==ppCtx.proj){
+      const known=new Set(data.map(r=>r.projectNumber||r.projectName));
+      if(known.has(tplProj)){
+        state.settings.ppProject=tplProj;
+        renderForecastPage();
+      } else if(!confirm('This template was generated for project "'+tplProj+'", which is not in the loaded data. Import into "'+ppCtx.proj+'" instead?')) return;
+    }
+    const node=ppCtx.node, meta=ppCtx.meta;
+    let cells=0, rowCount=0, newRows=0, rateCount=0;
+    if(wb.SheetNames.includes('Forecast')){
+      const aoa=XLSX.utils.sheet_to_json(wb.Sheets['Forecast'],{header:1,defval:''});
+      const hi=aoa.findIndex(r=>String(r[0]).trim()==='Task');
+      if(hi<0)throw new Error('Forecast sheet: header row starting with "Task" not found');
+      const weekCols=[];
+      aoa[hi].forEach((h,ci)=>{
+        const m=String(h).trim().match(/^WE\s+(\d{4}-\d{2}-\d{2})$/i);
+        if(m){ const [y,mo,d2]=m[1].split('-').map(Number); weekCols.push([ci,wkKey(new Date(y,mo-1,d2))]); }
+      });
+      if(!weekCols.length)throw new Error('Forecast sheet: no week columns ("WE yyyy-mm-dd" headers)');
+      for(let ri=hi+1;ri<aoa.length;ri++){
+        const r=aoa[ri]||[];
+        const task=String(r[0]||'').trim(), emp=String(r[1]||'').trim();
+        if(!task&&!emp)continue;
+        const unit=String(r[2]||'hours').trim().toLowerCase();
+        const label=emp? task+' · '+emp : task;
+        if(!ppCtx.items.some(it=>it.label===label)){
+          node.manual=node.manual||[];
+          if(!node.manual.some(m2=>m2.label===label)){ node.manual.push({label,emp:emp||null,isLabor:unit!=='cost'}); newRows++; }
+          if(emp&&!meta._rateTable[emp])meta._rateTable[emp]={};
+        }
+        rowCount++;
+        for(const [ci,wk] of weekCols){
+          const raw=r[ci];
+          const k=label+'|'+wk;
+          if(raw===''||raw==null){ delete node.baseline[k]; continue; }
+          const n=typeof raw==='number'?raw:parseNumber(raw);
+          if(isNaN(n)||n===0){ delete node.baseline[k]; }
+          else { node.baseline[k]=n; cells++; }
+        }
+      }
+      if(Object.keys(node.baseline).length && !node.baselineAt) node.baselineAt=new Date().toISOString();
+    }
+    if(wb.SheetNames.includes('Rates')){
+      const aoa=XLSX.utils.sheet_to_json(wb.Sheets['Rates'],{header:1,defval:''});
+      const hi=aoa.findIndex(r=>String(r[0]).trim()==='Employee');
+      if(hi>=0){
+        for(let ri=hi+1;ri<aoa.length;ri++){
+          const r=aoa[ri]||[];
+          const emp=String(r[0]||'').trim(); if(!emp)continue;
+          if(!meta._rateTable[emp])meta._rateTable[emp]={};
+          if(String(r[1]).trim()!==''){ const c=typeof r[1]==='number'?r[1]:parseNumber(r[1]); if(!isNaN(c)&&c>0){meta._rateTable[emp].cost=c;rateCount++;} }
+          if(String(r[2]).trim()!==''){ const b=typeof r[2]==='number'?r[2]:parseNumber(r[2]); if(!isNaN(b)&&b>0){meta._rateTable[emp].bill=b;rateCount++;} }
+        }
+      }
+    }
+    saveState();
+    renderForecastPage();
+    alert('Template imported: '+cells+' plan cells across '+rowCount+' rows'
+      +(newRows?' ('+newRows+' new row'+(newRows>1?'s':'')+')':'')
+      +(rateCount?', '+rateCount+' rates updated':'')+'.');
+  }catch(err){ alert('Could not import template: '+err.message); }
 }
 function exportFpCsv(){
   if(!ppCtx||ppCtx.mode!=='f'){alert('Open the Project Forecast tab first.');return;}

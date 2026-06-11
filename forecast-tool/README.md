@@ -60,7 +60,14 @@ Click **Load sample data** in the header to try the tool without a real extract.
    (T&M); the tool flags when the plan or the EAC bills over the cap
    (unbillable overage + margin at cap) and tracks % of cap billed and EAC
    cost vs as-sold on the comparison table.
-5. If scope changes are approved, *Set new baseline from updated forecast*
+5. **Excel templates** — *Excel template* on the Project Forecast tab downloads
+   a styled template for the selected project (task/person rows, week columns
+   from the plan window, current baseline pre-filled, plus a Rates sheet).
+   Fill it in Excel — or send it to task leads to fill — then *Import template*
+   populates the baseline forecast, adds any new task/person rows, and updates
+   the rate table. Blank cells clear, numbers set; the project number is
+   stamped on the sheet so imports land on the right project.
+6. If scope changes are approved, *Set new baseline from updated forecast*
    re-baselines the job.
 
 Plans, baselines and rates are saved per project (and per row-level) in the
