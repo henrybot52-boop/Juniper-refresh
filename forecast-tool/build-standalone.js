@@ -1,7 +1,7 @@
 // Builds the fully self-contained (offline) version of the forecasting tool:
 // embeds SheetJS and Chart.js into the HTML so the file makes zero network
 // requests and can be emailed / opened anywhere.
-// Run from forecast-tool/:  npm install --no-save xlsx@0.18.5 chart.js@4.4.1
+// Run from forecast-tool/:  npm install --no-save xlsx-js-style chart.js@4.4.1
 //                           node build-standalone.js
 const fs = require('fs');
 const path = require('path');
@@ -21,12 +21,12 @@ function lib(p) {
   return js;
 }
 
-const xlsxJs = lib('xlsx/dist/xlsx.full.min.js');
+const xlsxJs = lib('xlsx-js-style/dist/xlsx.bundle.js');
 const chartJs = lib('chart.js/dist/chart.umd.js');
 
 let out = src
   .replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/xlsx[^"]*"><\/script>/,
-    () => '<script>/* SheetJS 0.18.5 (Apache-2.0) — embedded for offline use */\n' + xlsxJs + '\n</script>')
+    () => '<script>/* SheetJS 0.18.5 via xlsx-js-style (Apache-2.0) — embedded for offline use, with styled .xlsx output */\n' + xlsxJs + '\n</script>')
   .replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/chart\.js[^"]*"><\/script>/,
     () => '<script>/* Chart.js 4.4.1 (MIT) — embedded for offline use */\n' + chartJs + '\n</script>');
 

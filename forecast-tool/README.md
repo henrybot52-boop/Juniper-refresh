@@ -76,10 +76,12 @@ Everything you type auto-saves in the browser as you work. For durable files:
 - **Save** — in Edge/Chrome it asks where to put the workbook once, then writes
   back to that same file every save (like Excel) and **auto-saves to it every
   2 minutes**. In other browsers it downloads a copy.
-- **Save As…** — pick location and format: a real **Excel workbook (.xlsx)**
-  with readable sheets (Data, Baseline Plan, Updated Forecast, Rate Table,
-  Projects incl. reserves, Budgets) plus a hidden exact-state sheet, or compact
-  JSON. Anyone can read the .xlsx in Excel; the tool reopens either losslessly.
+- **Save As…** — pick location and format: a **styled Excel workbook (.xlsx)**
+  with a cover sheet and formatted, filterable sheets (Data, Baseline Plan,
+  Updated Forecast, Rate Table, Projects incl. reserves/contract values,
+  Budgets — branded headers, banded rows, currency/hour/date formats, column
+  widths) plus a hidden exact-state sheet, or compact JSON. Anyone can read
+  the .xlsx in Excel; the tool reopens either losslessly.
 - **Open** — restores a workbook exactly and keeps saving back to that file.
 - Keep workbooks in a synced SharePoint/OneDrive folder and you get version
   history for free. Export/Import settings moves configuration only.

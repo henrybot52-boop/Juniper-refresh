@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Oracle Project Forecasting Tool</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
@@ -2483,47 +2483,112 @@ function buildWorkbookObj(){
     budgets:state.budgets, plans:state.plans, rows};
 }
 function buildXlsx(obj){
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
-    ['Project Forecast Tool — saved workbook'],
-    ['Saved',obj.savedAt],
-    ['Transactions',obj.rows.length],
-    [''],
-    ['Open this file with the tool ("Open" in the header) to continue exactly where you left off.'],
-    ['The sheets are readable summaries. The _meta sheet holds the exact tool state — do not edit it.'],
-  ]),'README');
-  const dataAoa=[FIELDS.map(f=>f.label)];
-  for(const r of data) dataAoa.push(FIELDS.map(f=>{ const v=r[f.key]; return f.type==='date'? (v||null) : v; }));
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dataAoa,{cellDates:true}),'Data');
-  const base=[['Project','Item','Week ending','Baseline hours/cost']];
-  const cur=[['Project','Item','Week ending','Updated hours/cost']];
-  for(const [proj,p] of Object.entries(state.plans)){
-    for(const [lvl,node] of Object.entries(p)){
-      if(lvl.startsWith('_')||!node||typeof node!=='object'||!node.baseline)continue;
-      for(const [k,v] of Object.entries(node.baseline)){ const i=k.lastIndexOf('|'); base.push([proj,k.slice(0,i),k.slice(i+1),v]); }
-      for(const [k,v] of Object.entries(node.current)){ const i=k.lastIndexOf('|'); cur.push([proj,k.slice(0,i),k.slice(i+1),v]); }
+  const BRAND='1F4E79', BRAND_LT='9BC2E6', BAND='F2F7FB';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},
+    alignment:{vertical:'center'},border:{bottom:{style:'thin',color:{rgb:BRAND_LT}}}};
+  const TITLE={font:{bold:true,sz:20,color:{rgb:BRAND}}};
+  const SUB={font:{sz:10,color:{rgb:'6B7B8C'}}};
+  const LBL={font:{bold:true,color:{rgb:'33475B'}}};
+  const MONEY='"$"#,##0.00', MONEY0='"$"#,##0', HRS='#,##0.0', DATE='yyyy-mm-dd';
+  function style(ws,o){
+    o=o||{};
+    const ref=ws['!ref']; if(!ref)return;
+    const rng=XLSX.utils.decode_range(ref);
+    if(o.widths)ws['!cols']=o.widths.map(w2=>({wch:w2}));
+    if(o.filter)ws['!autofilter']={ref:ref};
+    const bandMax=o.bandMax==null?2500:o.bandMax;
+    for(let R=rng.s.r;R<=rng.e.r;R++){
+      for(let C=rng.s.c;C<=rng.e.c;C++){
+        const cell=ws[XLSX.utils.encode_cell({r:R,c:C})];
+        if(!cell)continue;
+        if(R===0){ cell.s=HDR; continue; }
+        const fmt=o.fmts&&o.fmts[C];
+        if(fmt&&!(typeof cell.v==='string'))cell.z=fmt;
+        if(o.band && R%2===0 && R<=bandMax) cell.s={fill:{fgColor:{rgb:BAND}}};
+      }
     }
   }
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(base),'Baseline Plan');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cur),'Updated Forecast');
+  const wb=XLSX.utils.book_new();
+  // ---- cover ----
+  const nProj=Object.keys(state.plans).filter(k=>Object.keys(state.plans[k]).some(x=>!x.startsWith('_'))).length;
+  const cover=XLSX.utils.aoa_to_sheet([
+    ['Project Forecast Workbook'],
+    [''],
+    ['Saved',String(obj.savedAt).replace('T',' ').slice(0,16)],
+    ['Transactions',obj.rows.length],
+    ['Projects planned',nProj||''],
+    [''],
+    ['Open this file with the forecast tool ("Open" in the header) to continue exactly where you left off.'],
+    ['The sheets are readable summaries; the hidden _meta sheet holds the exact tool state — do not edit or remove it.'],
+  ]);
+  cover['A1'].s=TITLE;
+  ['A3','A4','A5'].forEach(a=>{ if(cover[a])cover[a].s=LBL; });
+  ['A7','A8'].forEach(a=>{ if(cover[a])cover[a].s=SUB; });
+  cover['!cols']=[{wch:18},{wch:95}];
+  XLSX.utils.book_append_sheet(wb,cover,'Cover');
+  // ---- data ----
+  const dataAoa=[FIELDS.map(f=>f.label)];
+  for(const r of data) dataAoa.push(FIELDS.map(f=>{ const v=r[f.key]; return f.type==='date'? (v||null) : v; }));
+  const wsData=XLSX.utils.aoa_to_sheet(dataAoa,{cellDates:true});
+  const dataFmts={};
+  FIELDS.forEach((f,i)=>{
+    if(f.type==='date')dataFmts[i]=DATE;
+    else if(f.key==='hours')dataFmts[i]=HRS;
+    else if(f.type==='num')dataFmts[i]=MONEY;
+  });
+  style(wsData,{filter:true,band:false,fmts:dataFmts,
+    widths:FIELDS.map(f=>f.type==='date'?12:
+      (['projectName','taskName','topTaskName','comments'].includes(f.key)?28:
+      (f.key==='employee'?22:13)))});
+  XLSX.utils.book_append_sheet(wb,wsData,'Data');
+  // ---- plans ----
+  const planSheet=(title,store)=>{
+    const aoa=[['Project','Task','Employee/Vendor','Week ending','Hours / Cost']];
+    for(const [proj,p] of Object.entries(state.plans)){
+      for(const [lvl,node] of Object.entries(p)){
+        if(lvl.startsWith('_')||!node||typeof node!=='object'||!node[store])continue;
+        for(const [k,v] of Object.entries(node[store])){
+          const i=k.lastIndexOf('|'); const item=k.slice(0,i);
+          const j=item.lastIndexOf(' · ');
+          aoa.push([proj, j>=0?item.slice(0,j):item, j>=0?item.slice(j+3):'', k.slice(i+1), v]);
+        }
+      }
+    }
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    style(ws,{widths:[12,36,22,12,13],filter:true,band:true,fmts:{4:HRS}});
+    XLSX.utils.book_append_sheet(wb,ws,title);
+  };
+  planSheet('Baseline Plan','baseline');
+  planSheet('Updated Forecast','current');
+  // ---- rates ----
   const rts=[['Project','Employee','Cost rate override $/hr','Bill rate $/hr']];
   for(const [proj,p] of Object.entries(state.plans))
     for(const [emp,e] of Object.entries(p._rateTable||{})) rts.push([proj,emp,e.cost??'',e.bill??'']);
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rts),'Rate Table');
+  const wsR=XLSX.utils.aoa_to_sheet(rts);
+  style(wsR,{widths:[12,26,21,21],filter:true,band:true,fmts:{2:MONEY,3:MONEY}});
+  XLSX.utils.book_append_sheet(wb,wsR,'Rate Table');
+  // ---- projects ----
   const ps=[['Project','Plan start','Plan weeks','Baseline first entered','Non-labor markup %','Contingency $','Risk allowance $','Contract value (cap) $','As-sold cost $']];
   for(const [proj,p] of Object.entries(state.plans)){
     const lvls=Object.keys(p).filter(k=>!k.startsWith('_')&&p[k]&&p[k].baseline);
     const n=lvls.length?p[lvls[0]]:null;
     ps.push([proj,n?n.baseStart||'':'',n?n.baseWeeks||'':'',n?String(n.baselineAt||'').slice(0,10):'',p._nlMarkup||0,p._contBudget||0,p._riskBudget||0,p._capRev||0,p._soldCost||0]);
   }
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ps),'Projects');
+  const wsP=XLSX.utils.aoa_to_sheet(ps);
+  style(wsP,{widths:[12,12,11,19,17,14,15,19,14],band:true,fmts:{5:MONEY0,6:MONEY0,7:MONEY0,8:MONEY0}});
+  XLSX.utils.book_append_sheet(wb,wsP,'Projects');
+  // ---- budgets ----
   const bg=[['Forecast group','Budget']];
   for(const [k,v] of Object.entries(state.budgets)) bg.push([k,v]);
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(bg),'Budgets');
+  const wsB=XLSX.utils.aoa_to_sheet(bg);
+  style(wsB,{widths:[52,14],band:true,fmts:{1:MONEY0}});
+  XLSX.utils.book_append_sheet(wb,wsB,'Budgets');
+  // ---- meta (hidden) ----
   const json=JSON.stringify(obj);
   const meta=[['Exact tool state — do not edit']];
   for(let i=0;i<json.length;i+=30000) meta.push([json.slice(i,i+30000)]);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(meta),'_meta');
+  wb.Workbook={Sheets:wb.SheetNames.map(n=>({name:n,Hidden:n==='_meta'?1:0}))};
   return wb;
 }
 function workbookBlob(format){
