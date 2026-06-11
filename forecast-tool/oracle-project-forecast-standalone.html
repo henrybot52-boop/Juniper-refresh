@@ -158,7 +158,8 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
   <button data-tab="pactuals">6 · Actuals vs Forecast</button>
   <button data-tab="subs">7 · Cost Actuals</button>
   <button data-tab="rates">8 · Rate Table</button>
-  <button data-tab="settings">9 · Settings</button>
+  <button data-tab="ev">9 · Earned Value</button>
+  <button data-tab="settings">10 · Settings</button>
 </nav>
 
 <main>
@@ -440,6 +441,30 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
     <div class="tablewrap" style="max-height:520px"><table id="rateTable"></table></div>
   </div>
   <div class="kpis" id="rtKpis"></div>
+</section>
+
+<!-- ============ EARNED VALUE TAB ============ -->
+<section id="tab-ev" class="hidden">
+  <div class="card">
+    <h2>Earned value <span class="hint">— PV / EV / AC against the original baseline; cost basis = hours × cost rate</span></h2>
+    <div class="row">
+      <label>Project: <select id="evProject" style="max-width:430px"></select></label>
+      <label>Status date (week ending): <select id="evWeek"></select></label>
+      <button id="btnEvCsv" class="small">Export CSV</button>
+    </div>
+    <p class="hint"><b>PV</b> = baseline cost planned through the status date · <b>AC</b> = actual cost charged through it ·
+      <b>EV</b> = % complete × BAC per task. % complete defaults to an automatic measure (actual hours ÷ EAC hours from the
+      updated forecast, capped at 100%) — type a physical % complete to override it; blank returns to auto. Overrides are saved per project.</p>
+  </div>
+  <div class="kpis" id="evKpis"></div>
+  <div class="card">
+    <div class="tablewrap" style="max-height:480px"><table id="evTable"></table></div>
+    <div class="hint" id="evInfo" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>S-curve — cumulative PV / EV / AC</h2>
+    <div class="chartbox" style="height:340px"><canvas id="chEv"></canvas></div>
+  </div>
 </section>
 
 <!-- ============ SETTINGS TAB ============ -->
@@ -1410,8 +1435,8 @@ function updateAllSummaries(){
 }
 function setupProjectPages(){
   const s=state.settings;
-  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); };
-  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
+  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); };
+  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['evProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
     $('#'+id).addEventListener('change',e=>{ s[key]=isNum?+e.target.value:e.target.value; saveState(); reRender(); });
   }
   $('#fpWeekEnd').value=String(s.ppWeekEnd); $('#apWeekEnd').value=String(s.ppWeekEnd);
@@ -1538,13 +1563,13 @@ function setupProjectPages(){
 function ppBuild(mode){
   if(!data.length)return null;
   const s=state.settings;
-  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':'#apProject');
+  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':mode==='e'?'#evProject':'#apProject');
   const projMap=new Map();
   for(const r of data){ const k=r.projectNumber||r.projectName; if(k && !projMap.has(k)) projMap.set(k,(r.projectNumber? r.projectNumber+' — ':'')+(r.projectName||'')); }
   const prev=s.ppProject; pick.innerHTML='';
   [...projMap.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([k,lbl])=>pick.append(el('option',{value:k},lbl)));
   if(projMap.has(prev)) pick.value=prev; else s.ppProject=pick.value;
-  if(mode!=='r') $(mode==='f'?'#fpWeekEnd':'#apWeekEnd').value=String(s.ppWeekEnd);
+  if(mode==='f'||mode==='a') $(mode==='f'?'#fpWeekEnd':'#apWeekEnd').value=String(s.ppWeekEnd);
   const proj=pick.value;
   if(!proj)return null;
   s.ppLevel='taskEmployee';               // plan pages are always Task (number + name) -> Employee
@@ -2506,6 +2531,146 @@ function exportPlanCsv(){
   downloadCSV('project-actuals-vs-forecast-'+ppCtx.proj+'.csv',out);
 }
 
+/* ===================== Earned Value ===================== */
+let evLast=null;
+function setupEvTab(){
+  $('#evWeek').addEventListener('change',renderEvTab);
+  $('#btnEvCsv').addEventListener('click',()=>{ if(evLast&&evLast.csv)downloadCSV('earned-value-'+evLast.proj+'.csv',evLast.csv); else alert('Nothing to export yet.'); });
+}
+function renderEvTab(){
+  if(!data.length)return;
+  if(!ppBuild('e'))return;
+  const node=ppCtx.node;
+  node.evPct=node.evPct||{};
+  const weeks=projWeekWindow(node,ppCtx.actualWeeks);
+  saveState();
+  ppCtx.visWeeks=weeks;
+  const sel=$('#evWeek');
+  const prev=sel.value;
+  sel.innerHTML='';
+  weeks.forEach(wk=>sel.append(el('option',{value:wk},'WE '+wk)));
+  const lastActual=ppCtx.lastActualWeek;
+  sel.value = weeks.includes(prev)? prev : (lastActual&&weeks.includes(lastActual)? lastActual : weeks[weeks.length-1]);
+  const status=sel.value;
+  // per-task aggregation on the cost basis (hours x cost rate; cost rows at face value)
+  const tasks=new Map();
+  for(const it of ppCtx.items){
+    const tk=fpTaskOf(it);
+    let t=tasks.get(tk);
+    if(!t){ t={task:tk,bac:0,pv:0,ac:0,acH:0,eacC:0,eacH:0,pvSeries:weeks.map(()=>0)}; tasks.set(tk,t); }
+    const rate=it.isLabor?costRateOf(it):1;
+    const pre=it.label+'|';
+    for(const k in node.baseline){
+      if(!k.startsWith(pre))continue;
+      const wk=k.slice(pre.length);
+      const c=node.baseline[k]*rate;
+      t.bac+=c;
+      if(wk<=status)t.pv+=c;
+      const wi=weeks.indexOf(wk); if(wi>=0)t.pvSeries[wi]+=c;
+    }
+    for(const [wk,cw] of it.costW){
+      if(wk<=status){ t.ac+=cw; t.acH+=(it.hoursW.get(wk)||0); }
+    }
+    const c=itemCalc(it);
+    t.eacC+=c.eacCost;
+    if(it.isLabor)t.eacH+=c.eac;
+  }
+  const list=[...tasks.values()].sort((a,b)=>taskCompare(a.task,b.task));
+  for(const t of list){
+    t.auto = t.eacH>0 ? Math.min(1,t.acH/t.eacH) : (t.eacC>0? Math.min(1,t.ac/t.eacC) : 0);
+    const manual=node.evPct[t.task];
+    t.manual = manual!=null;
+    t.pct = t.manual? Math.min(1,Math.max(0,manual/100)) : t.auto;
+    t.ev = t.bac*t.pct;
+  }
+  const T={bac:0,pv:0,ev:0,ac:0,eacC:0};
+  for(const t of list){ T.bac+=t.bac; T.pv+=t.pv; T.ev+=t.ev; T.ac+=t.ac; T.eacC+=t.eacC; }
+  const spi=T.pv>0?T.ev/T.pv:null, cpi=T.ac>0?T.ev/T.ac:null;
+  const eacCpi=cpi>0?T.bac/cpi:null;
+  const tcpi=(T.bac-T.ac)>0?(T.bac-T.ev)/(T.bac-T.ac):null;
+  // KPIs
+  const k=$('#evKpis'); k.innerHTML='';
+  const kpi=(lbl,val,sub,cls)=>{const d2=el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'+(cls?' '+cls:'')},val),sub?el('div',{class:'sub'},sub):null);if(cls)d2.querySelector('.val').style.color=cls==='neg'?'var(--bad)':'var(--good)';k.append(d2);};
+  kpi('BAC (baseline cost)',fmtMoney(T.bac));
+  kpi('PV — planned value',fmtMoney(T.pv),T.bac?(100*T.pv/T.bac).toFixed(1)+'% scheduled':'');
+  kpi('EV — earned value',fmtMoney(T.ev),T.bac?(100*T.ev/T.bac).toFixed(1)+'% complete':'');
+  kpi('AC — actual cost',fmtMoney(T.ac),T.bac?(100*T.ac/T.bac).toFixed(1)+'% spent':'');
+  kpi('Schedule SV / SPI',(T.ev-T.pv>=0?'+':'')+fmtMoney(T.ev-T.pv),spi!=null?'SPI '+spi.toFixed(2)+(spi<1?' — behind schedule':' — on/ahead'):'',(T.ev-T.pv)<-0.5?'neg':'pos');
+  kpi('Cost CV / CPI',(T.ev-T.ac>=0?'+':'')+fmtMoney(T.ev-T.ac),cpi!=null?'CPI '+cpi.toFixed(2)+(cpi<1?' — over cost':' — on/under'):'',(T.ev-T.ac)<-0.5?'neg':'pos');
+  kpi('EAC (BAC ÷ CPI)',eacCpi!=null?fmtMoney(eacCpi):'—',eacCpi!=null?'VAC '+fmtMoney(T.bac-eacCpi):'');
+  kpi('EAC (your forecast)',fmtMoney(T.eacC),'ETC '+fmtMoney(T.eacC-T.ac));
+  if(tcpi!=null) kpi('TCPI',tcpi.toFixed(2),'efficiency needed on remaining work'+(tcpi>1.1?' — demanding':''));
+  // per-task table
+  const t2=$('#evTable'); t2.innerHTML='';
+  t2.append(el('thead',null,el('tr',null,...['Task','BAC','% complete','PV','EV','AC','SV','CV','SPI','CPI'].map((h,i)=>el('th',{class:i?'num':''},h)))));
+  const tb=el('tbody');
+  for(const t of list){
+    if(!t.bac&&!t.ac)continue;
+    const inp=el('input',{class:'rate-in',type:'text',inputmode:'decimal',style:'width:58px',
+      placeholder:(t.auto*100).toFixed(0),
+      title:'Auto: '+(t.auto*100).toFixed(0)+'% (actual ÷ EAC hours). Type a physical % to override; blank = auto.',
+      value:t.manual?Math.round(node.evPct[t.task]*100)/100:''});
+    inp.addEventListener('change',()=>{
+      const v=inp.value.trim();
+      if(v==='')delete node.evPct[t.task];
+      else{ const n=parseNumber(v); if(!isNaN(n))node.evPct[t.task]=Math.min(100,Math.max(0,n)); }
+      saveState(); renderEvTab();
+    });
+    const sv=t.ev-t.pv, cv=t.ev-t.ac;
+    tb.append(el('tr',null,
+      el('td',{title:t.task},t.task+(t.manual?' ':'')),
+      el('td',{class:'num'},fmtMoney(t.bac)),
+      el('td',{class:'num'},inp,t.manual?el('span',{class:'pill',style:'margin-left:4px',title:'manual % complete'},'M'):el('span',{class:'hint',style:'margin-left:4px'},(t.pct*100).toFixed(0)+'%')),
+      el('td',{class:'num'},fmtMoney(t.pv)),
+      el('td',{class:'num'},fmtMoney(t.ev)),
+      el('td',{class:'num'},fmtMoney(t.ac)),
+      el('td',{class:numCls(sv)},(sv>=0?'+':'')+fmtMoney(sv)),
+      el('td',{class:numCls(cv)},(cv>=0?'+':'')+fmtMoney(cv)),
+      el('td',{class:'num'+(t.pv>0&&t.ev/t.pv<1?' neg':'')},t.pv>0?(t.ev/t.pv).toFixed(2):''),
+      el('td',{class:'num'+(t.ac>0&&t.ev/t.ac<1?' neg':'')},t.ac>0?(t.ev/t.ac).toFixed(2):'')));
+  }
+  tb.append(el('tr',{class:'total'},
+    el('td',null,'TOTAL'),
+    el('td',{class:'num'},fmtMoney(T.bac)),
+    el('td',{class:'num'},T.bac?(100*T.ev/T.bac).toFixed(1)+'%':''),
+    el('td',{class:'num'},fmtMoney(T.pv)),
+    el('td',{class:'num'},fmtMoney(T.ev)),
+    el('td',{class:'num'},fmtMoney(T.ac)),
+    el('td',{class:numCls(T.ev-T.pv)},(T.ev-T.pv>=0?'+':'')+fmtMoney(T.ev-T.pv)),
+    el('td',{class:numCls(T.ev-T.ac)},(T.ev-T.ac>=0?'+':'')+fmtMoney(T.ev-T.ac)),
+    el('td',{class:'num'},spi!=null?spi.toFixed(2):''),
+    el('td',{class:'num'},cpi!=null?cpi.toFixed(2):'')));
+  t2.append(tb);
+  $('#evInfo').textContent=list.length+' tasks · status WE '+status
+    +(node.baselineAt?'':' · no baseline entered yet — PV/EV are 0 until the Project Forecast is filled in')
+    +' · auto % complete = actual hours ÷ EAC hours (M = manual override)';
+  // S-curve
+  let pvC=0,acC=0;
+  const pvCum=[],acCum=[],evPt=[];
+  weeks.forEach((wk,wi)=>{
+    pvC+=list.reduce((a,t)=>a+t.pvSeries[wi],0);
+    pvCum.push(pvC);
+    let acw=0;
+    for(const it of ppCtx.items)acw+=it.costW.get(wk)||0;
+    acC+=acw;
+    acCum.push(lastActual&&wk<=lastActual?acC:null);
+    evPt.push(wk===status?T.ev:null);
+  });
+  drawChart('chEv',{type:'line',
+    data:{labels:weeks.map(wkLabel),datasets:[
+      {label:'PV (plan)',data:pvCum,borderColor:'#a78bfa',backgroundColor:'#a78bfa',tension:.2,pointRadius:0},
+      {label:'AC (actual cost)',data:acCum,borderColor:'#38bdf8',backgroundColor:'#38bdf8',tension:.2,pointRadius:0},
+      {label:'EV at status date',data:evPt,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'scatter',pointRadius:6,pointStyle:'rectRot'},
+    ]},
+    options:chartOpts()});
+  evLast={proj:ppCtx.proj,csv:[
+    ['Task','BAC','Pct complete','PV','EV','AC','SV','CV','SPI','CPI'],
+    ...list.map(t=>[t.task,t.bac.toFixed(2),(t.pct*100).toFixed(1)+(t.manual?' (manual)':' (auto)'),t.pv.toFixed(2),t.ev.toFixed(2),t.ac.toFixed(2),(t.ev-t.pv).toFixed(2),(t.ev-t.ac).toFixed(2),t.pv>0?(t.ev/t.pv).toFixed(3):'',t.ac>0?(t.ev/t.ac).toFixed(3):'']),
+    ['TOTAL',T.bac.toFixed(2),T.bac?(100*T.ev/T.bac).toFixed(1)+'%':'',T.pv.toFixed(2),T.ev.toFixed(2),T.ac.toFixed(2),(T.ev-T.pv).toFixed(2),(T.ev-T.ac).toFixed(2),spi!=null?spi.toFixed(3):'',cpi!=null?cpi.toFixed(3):''],
+    ['Status week',status],['EAC (BAC/CPI)',eacCpi!=null?eacCpi.toFixed(2):''],['EAC (forecast)',T.eacC.toFixed(2)],['TCPI',tcpi!=null?tcpi.toFixed(3):''],
+  ]};
+}
+
 /* ===================== Cost Actuals (read-only, straight from the import) ===================== */
 let lastScCsv=null;
 function setupCostActuals(){
@@ -2899,7 +3064,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -2913,6 +3078,7 @@ function refreshActiveTab(){
   else if(t==='pactuals') renderActualsPage();
   else if(t==='subs') renderCostActuals();
   else if(t==='rates') renderRatesTab();
+  else if(t==='ev') renderEvTab();
 }
 
 /* ===================== Sample data ===================== */
@@ -3088,7 +3254,7 @@ function init(){
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
   $('#btnSample').addEventListener('click',loadSample);
-  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupSettings();
+  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
