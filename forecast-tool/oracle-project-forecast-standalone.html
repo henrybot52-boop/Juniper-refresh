@@ -1449,7 +1449,7 @@ function setupProjectPages(){
     const task=$('#fpNewTask').value.trim(), emp=$('#fpNewEmp').value.trim(), unit=$('#fpNewUnit').value;
     const lvl=ppCtx.level;
     const needsTask=lvl!=='employee', needsEmp=lvl==='employee'||lvl==='topTaskEmployee'||lvl==='taskEmployee';
-    if(needsTask&&!task){alert('Enter a task (e.g. "1.0 Project Management").');return;}
+    if(needsTask&&!task){alert('Enter a task (e.g. "1.1 Survey").');return;}
     if(needsEmp&&!emp){alert('Enter an employee/vendor name.');return;}
     let label;
     if(lvl==='employee')label=emp;
@@ -1560,8 +1560,8 @@ function ppBuild(mode){
   if(mode!=='r') $(mode==='f'?'#fpWeekEnd':'#apWeekEnd').value=String(s.ppWeekEnd);
   const proj=pick.value;
   if(!proj)return null;
-  s.ppLevel='topTaskEmployee';            // plan pages are always Task -> Employee
-  const level='topTaskEmployee';
+  s.ppLevel='taskEmployee';               // plan pages are always Task (number + name) -> Employee
+  const level='taskEmployee';
   const node=planNode(proj,level);
   const meta=projMeta(proj);
   const hasEmp=level==='employee'||level==='topTaskEmployee'||level==='taskEmployee';
@@ -1613,7 +1613,11 @@ function ppBuild(mode){
       delete node.rates[it.label];
     }
   }
-  itemList.sort((a,b)=>(b.isLabor-a.isLabor)||a.label.localeCompare(b.label));
+  itemList.sort((a,b)=>{
+    const ta=a.emp? a.label.slice(0,a.label.lastIndexOf(' · ')) : a.label;
+    const tb2=b.emp? b.label.slice(0,b.label.lastIndexOf(' · ')) : b.label;
+    return taskCompare(ta,tb2) || (b.isLabor-a.isLabor) || a.label.localeCompare(b.label);
+  });
   const awSet=new Set();
   for(const it of itemList){ for(const k of it.costW.keys()) awSet.add(k); }
   const actualWeeks=[...awSet].sort();
@@ -1662,6 +1666,24 @@ function makeItemCell(it,tr,colCount){
   return cell;
 }
 /* ---------- page 1: project forecast (baseline) ---------- */
+function taskNumKey(label){
+  const m=String(label).trim().match(/^([0-9]+(?:\.[0-9]+)*)/);
+  return m? m[1].split('.').map(Number) : null;
+}
+function taskCompare(a,b){
+  // numeric-aware WBS ordering: 1.9 < 1.10 < 2.1 < 10.1 (string sort gets these wrong)
+  const ka=taskNumKey(a),kb=taskNumKey(b);
+  if(ka&&kb){
+    for(let i=0;i<Math.max(ka.length,kb.length);i++){
+      const x=ka[i]!==undefined?ka[i]:-1, y=kb[i]!==undefined?kb[i]:-1;
+      if(x!==y)return x-y;
+    }
+    return String(a).localeCompare(String(b));
+  }
+  if(ka)return -1;
+  if(kb)return 1;
+  return String(a).localeCompare(String(b));
+}
 let fpCollapsed={};                        // proj -> Set of collapsed task names (session only)
 function fpCollapsedSet(){ if(!fpCollapsed[ppCtx.proj])fpCollapsed[ppCtx.proj]=new Set(); return fpCollapsed[ppCtx.proj]; }
 function fpTaskOf(it){ const i=it.label.lastIndexOf(' · '); return (it.emp&&i>=0)? it.label.slice(0,i) : it.label; }
@@ -1703,7 +1725,7 @@ function renderForecastPage(){
   const collapsed=fpCollapsedSet();
   const taskMap=new Map();
   for(const it of ppCtx.items){ const tk=fpTaskOf(it); if(!taskMap.has(tk))taskMap.set(tk,[]); taskMap.get(tk).push(it); }
-  const tasks=[...taskMap.keys()].sort((a,b)=>a.localeCompare(b));
+  const tasks=[...taskMap.keys()].sort(taskCompare);
   ppCtx._taskRows={};
   for(const tk of tasks){
     const kids=taskMap.get(tk);
@@ -2746,8 +2768,8 @@ function seedDemoPlan(){
   const ranked=[...totals.entries()].sort((a,b)=>b[1]-a[1]);
   const proj=ranked[0][0];
   state.settings.ppProject=proj;
-  state.settings.ppLevel='topTaskEmployee';
-  const level='topTaskEmployee';
+  state.settings.ppLevel='taskEmployee';
+  const level='taskEmployee';
   const node=planNode(proj,level);
   const meta=projMeta(proj);
   node.current={}; node.baseline={}; node.manual=[]; node.rates={};
