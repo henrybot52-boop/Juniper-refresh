@@ -1862,9 +1862,11 @@ function downloadTemplate(){
   const wsI=XLSX.utils.aoa_to_sheet([
     ['Forecast template — how to fill it in'],
     [''],
-    ['Forecast sheet: one row per task + person. Enter planned HOURS in the week columns'],
-    ['(dollars for rows with Unit = cost, e.g. subs). Blank means no hours that week.'],
-    ['Add new rows freely — keep the Task and Employee/Vendor spellings consistent with the extract.'],
+    ['Forecast sheet: one row per task + person, using the Task Number and lower-level Task Name'],
+    ['from the extract. Enter planned HOURS in the week columns (dollars for rows with Unit = cost).'],
+    ['Blank means no hours that week. Each task has a spare empty line — put a name in the'],
+    ['Employee/Vendor column and hours in the weeks to add a person. Add more rows freely;'],
+    ['keep Task Number / Task Name / Employee spellings consistent with the extract.'],
     ['Do not change the header row or the "WE yyyy-mm-dd" week headings.'],
     [''],
     ['Rates sheet: cost rate $/hr (leave blank to use the derived salary x overhead rate)'],
@@ -1875,16 +1877,30 @@ function downloadTemplate(){
   wsI['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
   wsI['!cols']=[{wch:100}];
   XLSX.utils.book_append_sheet(wb,wsI,'Instructions');
-  const hdr=['Task','Employee/Vendor','Unit',...weeks.map(wk=>'WE '+wk)];
+  const hdr=['Task Number','Task Name','Employee/Vendor','Unit',...weeks.map(wk=>'WE '+wk)];
   const aoa=[['Project',ppCtx.proj],['Generated',fmtDate(new Date())],[],hdr];
+  // task number + lower-level task name straight from the extract when available
+  const taskParts=it=>{
+    if(it.rows.length){ const r0=it.rows[0]; return [String(r0.taskNumber||'').trim(),String(r0.taskName||'').trim()]; }
+    const t=fpTaskOf(it);
+    const m=String(t).match(/^([0-9]+(?:\.[0-9]+)*)\s*(.*)$/);
+    return m? [m[1],m[2]] : ['',t];
+  };
+  let prevKey=null, prevParts=null;
+  const spareRow=tp=>[tp[0],tp[1],'','hours',...weeks.map(()=>'')];
   for(const it of ppCtx.items){
-    aoa.push([fpTaskOf(it), it.emp?fpEmpOf(it):'', it.isLabor?'hours':'cost',
+    const tp=taskParts(it);
+    const tkey=tp[0]+'|'+tp[1];
+    if(prevKey!==null && tkey!==prevKey) aoa.push(spareRow(prevParts));
+    aoa.push([tp[0],tp[1], it.emp?fpEmpOf(it):'', it.isLabor?'hours':'cost',
       ...weeks.map(wk=>{ const v=node.baseline[it.label+'|'+wk]; return v!=null?v:''; })]);
+    prevKey=tkey; prevParts=tp;
   }
+  if(prevKey!==null) aoa.push(spareRow(prevParts));
   const wsF=XLSX.utils.aoa_to_sheet(aoa);
   styleHeaderRow(wsF,3);
   if(wsF['A1'])wsF['A1'].s=LBL; if(wsF['A2'])wsF['A2'].s=LBL;
-  wsF['!cols']=[{wch:34},{wch:22},{wch:8},...weeks.map(()=>({wch:11}))];
+  wsF['!cols']=[{wch:12},{wch:30},{wch:22},{wch:8},...weeks.map(()=>({wch:11}))];
   XLSX.utils.book_append_sheet(wb,wsF,'Forecast');
   const rt=ppCtx.meta._rateTable;
   const aoa2=[['Project',ppCtx.proj],[],['Employee','Cost rate $/hr (blank = derived)','Bill rate $/hr (price to owner)']];
@@ -1926,8 +1942,10 @@ async function importTemplate(file){
     let cells=0, rowCount=0, newRows=0, rateCount=0;
     if(wb.SheetNames.includes('Forecast')){
       const aoa=XLSX.utils.sheet_to_json(wb.Sheets['Forecast'],{header:1,defval:''});
-      const hi=aoa.findIndex(r=>String(r[0]).trim()==='Task');
-      if(hi<0)throw new Error('Forecast sheet: header row starting with "Task" not found');
+      let fmtNew=true;
+      let hi=aoa.findIndex(r=>String(r[0]).trim()==='Task Number');
+      if(hi<0){ hi=aoa.findIndex(r=>String(r[0]).trim()==='Task'); fmtNew=false; }
+      if(hi<0)throw new Error('Forecast sheet: header row starting with "Task Number" (or "Task") not found');
       const weekCols=[];
       aoa[hi].forEach((h,ci)=>{
         const m=String(h).trim().match(/^WE\s+(\d{4}-\d{2}-\d{2})$/i);
@@ -1936,10 +1954,25 @@ async function importTemplate(file){
       if(!weekCols.length)throw new Error('Forecast sheet: no week columns ("WE yyyy-mm-dd" headers)');
       for(let ri=hi+1;ri<aoa.length;ri++){
         const r=aoa[ri]||[];
-        const task=String(r[0]||'').trim(), emp=String(r[1]||'').trim();
+        let task,emp,unit;
+        if(fmtNew){
+          const tn=String(r[0]||'').trim(), tnm=String(r[1]||'').trim();
+          task=(tn+' '+tnm).trim();
+          emp=String(r[2]||'').trim();
+          unit=String(r[3]||'hours').trim().toLowerCase();
+        } else {
+          task=String(r[0]||'').trim();
+          emp=String(r[1]||'').trim();
+          unit=String(r[2]||'hours').trim().toLowerCase();
+        }
         if(!task&&!emp)continue;
-        const unit=String(r[2]||'hours').trim().toLowerCase();
-        const label=emp? task+' · '+emp : task;
+        if(!emp){
+          // spare line: only counts if someone actually put hours on it
+          const hasVal=weekCols.some(([ci])=>{ const v=r[ci]; if(v===''||v==null)return false; const n=typeof v==='number'?v:parseNumber(v); return !isNaN(n)&&n!==0; });
+          if(!hasVal)continue;
+          emp='(unassigned)';
+        }
+        const label=task+' · '+emp;
         if(!ppCtx.items.some(it=>it.label===label)){
           node.manual=node.manual||[];
           if(!node.manual.some(m2=>m2.label===label)){ node.manual.push({label,emp:emp||null,isLabor:unit!=='cost'}); newRows++; }
