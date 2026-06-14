@@ -130,6 +130,13 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
   th[title]:not([title=""]){cursor:help}
   .kpi[title]:not([title=""]){cursor:help}
   details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:8px}
+  .modal-back{position:fixed;inset:0;background:rgba(2,8,20,.6);z-index:200;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:28px}
+  .modal-back.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;max-width:1040px;width:100%;padding:20px 22px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .modal h2{margin:0 0 2px}
+  .modal h3{margin:14px 0 6px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .modal .close-x{float:right;cursor:pointer;color:var(--muted);font-size:22px;line-height:1}
+  .modal .close-x:hover{color:#fff}
   .footer-note{color:var(--muted);font-size:11.5px;text-align:center;padding:14px}
 </style>
 </head>
@@ -538,6 +545,26 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </section>
 
 </main>
+<div class="modal-back" id="coPriceBack">
+  <div class="modal">
+    <span class="close-x" id="coPriceClose">✕</span>
+    <h2 id="coPriceTitle">Price change order</h2>
+    <p class="hint" id="coPriceSub">Build the change-order value from staff and hours. Cost and bill rates default from the Rate Table — edit any line. <b>Apply</b> writes the cost total to the CO's Δ Cost budget and the price-to-owner total to Δ Contract value.</p>
+    <datalist id="coEmpList"></datalist>
+    <h3>Labor</h3>
+    <div class="tablewrap" style="max-height:300px"><table id="coPriceLabor"></table></div>
+    <button id="coPriceAddLabor" class="small">+ Add staff line</button>
+    <h3>Subs / Expenses</h3>
+    <div class="tablewrap" style="max-height:200px"><table id="coPriceNL"></table></div>
+    <button id="coPriceAddNL" class="small">+ Add expense / sub</button>
+    <div class="kpis" id="coPriceTotals" style="margin-top:16px"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="coPriceApply" class="primary">Apply to change order</button>
+      <button id="coPriceCancel" class="small">Close without applying</button>
+      <span class="hint" id="coPriceNote"></span>
+    </div>
+  </div>
+</div>
 <div class="footer-note">All processing happens locally in your browser. No data leaves your machine.</div>
 
 <script>
@@ -2934,6 +2961,107 @@ function coActualCost(co){
   for(const r of ppCtx.projRows){ if(coMatch(r.taskNumber,codes)){ cost+=r.totalCost||0; hours+=r.hours||0; n++; } }
   return {cost,hours,n,codes};
 }
+/* ---- CO pricing builder (staff x hours) ---- */
+let coPricing=null;
+function empRates(emp){
+  const rt=(ppCtx&&ppCtx.meta._rateTable)||{};
+  const e=rt[emp]||{};
+  const es=ppCtx&&ppCtx.empStats[emp];
+  return { cost: e.cost!=null? e.cost : (es&&es.rate? Math.round(es.rate*100)/100 : 0),
+           bill: e.bill!=null? e.bill : 0 };
+}
+function coPriceTotals(co){
+  const p=co.price||{labor:[],nl:[]};
+  let h=0,lc=0,lr=0,nc=0,nr=0;
+  for(const L of (p.labor||[])){ const hrs=+L.hours||0, cr=+L.cost||0, br=+L.bill||0; h+=hrs; lc+=hrs*cr; lr+=hrs*br; }
+  for(const N of (p.nl||[])){ const a=+N.cost||0, m=+N.markup||0; nc+=a; nr+=a*(1+m/100); }
+  return {hours:h,laborCost:lc,laborRev:lr,nlCost:nc,nlRev:nr,cost:lc+nc,rev:lr+nr};
+}
+function openCoPricing(co){
+  if(!ppCtx)return;
+  co.price=co.price||{labor:[],nl:[]};
+  co.price.labor=co.price.labor||[]; co.price.nl=co.price.nl||[];
+  coPricing=co;
+  // employee datalist
+  const dl=$('#coEmpList'); dl.innerHTML='';
+  const names=new Set(Object.keys(ppCtx.meta._rateTable||{}));
+  for(const e in ppCtx.empStats)names.add(e);
+  [...names].sort((a,b)=>a.localeCompare(b)).forEach(n=>dl.append(el('option',{value:n})));
+  $('#coPriceTitle').textContent='Price '+(co.num||'change order')+(co.desc?' — '+co.desc:'');
+  $('#coPriceBack').classList.add('open');
+  renderCoPricing();
+}
+function closeCoPricing(){ $('#coPriceBack').classList.remove('open'); coPricing=null; }
+function renderCoPricing(){
+  const co=coPricing; if(!co)return;
+  const p=co.price;
+  // labor table
+  const lt=$('#coPriceLabor'); lt.innerHTML='';
+  lt.append(el('thead',null,el('tr',null,...['Employee/Vendor','Hours','Cost $/hr','Bill $/hr','Line cost','Line revenue',''].map((h,i)=>el('th',{class:i>=1&&i<=5?'num':''},h)))));
+  const ltb=el('tbody');
+  const mkNum=(obj,key,wd)=>{const i=el('input',{class:'rate-in',type:'text',inputmode:'decimal',style:'width:'+(wd||'72px'),value:obj[key]!=null&&obj[key]!==''?obj[key]:''});i.addEventListener('input',()=>{obj[key]=parseNumber(i.value)||0;saveState();updateCoPriceTotals();syncLineCells();});return i;};
+  p.labor.forEach((L,idx)=>{
+    const emp=el('input',{class:'rate-in',list:'coEmpList',style:'width:180px;text-align:left',value:L.emp||''});
+    emp.addEventListener('change',()=>{ L.emp=emp.value;
+      if((!L.cost||L.cost==='')&&(!L.bill||L.bill==='')){ const r=empRates(L.emp); L.cost=r.cost; L.bill=r.bill; }
+      saveState(); renderCoPricing(); });
+    const lcCell=el('td',{class:'num'}), lrCell=el('td',{class:'num'});
+    const hoursIn=mkNum(L,'hours'), costIn=mkNum(L,'cost'), billIn=mkNum(L,'bill');
+    const tr=el('tr',null,
+      el('td',null,emp),
+      el('td',{class:'num'},hoursIn),
+      el('td',{class:'num'},costIn),
+      el('td',{class:'num'},billIn),
+      lcCell, lrCell,
+      el('td',null,el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove line',onclick:()=>{ p.labor.splice(idx,1); saveState(); renderCoPricing(); }},'✕')));
+    tr._L=L; tr._lc=lcCell; tr._lr=lrCell;
+    ltb.append(tr);
+  });
+  lt.append(ltb);
+  // nl table
+  const nt=$('#coPriceNL'); nt.innerHTML='';
+  nt.append(el('thead',null,el('tr',null,...['Description','Cost $','Markup %','Line revenue',''].map((h,i)=>el('th',{class:i>=1&&i<=3?'num':''},h)))));
+  const ntb=el('tbody');
+  p.nl.forEach((N,idx)=>{
+    if(N.markup==null)N.markup=ppCtx.meta._nlMarkup||0;
+    const desc=el('input',{class:'rate-in',style:'width:240px;text-align:left',value:N.desc||''});
+    desc.addEventListener('change',()=>{N.desc=desc.value;saveState();});
+    const lrCell=el('td',{class:'num'});
+    const costIn=mkNum(N,'cost'), mkIn=mkNum(N,'markup');
+    const tr=el('tr',null,
+      el('td',null,desc),
+      el('td',{class:'num'},costIn),
+      el('td',{class:'num'},mkIn),
+      lrCell,
+      el('td',null,el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove line',onclick:()=>{ p.nl.splice(idx,1); saveState(); renderCoPricing(); }},'✕')));
+    tr._N=N; tr._lr=lrCell;
+    ntb.append(tr);
+  });
+  nt.append(ntb);
+  syncLineCells(); updateCoPriceTotals();
+}
+function syncLineCells(){
+  for(const tr of $('#coPriceLabor').querySelectorAll('tbody tr')){ const L=tr._L; tr._lc.textContent=fmtMoney((+L.hours||0)*(+L.cost||0)); tr._lr.textContent=fmtMoney((+L.hours||0)*(+L.bill||0)); }
+  for(const tr of $('#coPriceNL').querySelectorAll('tbody tr')){ const N=tr._N; tr._lr.textContent=fmtMoney((+N.cost||0)*(1+(+N.markup||0)/100)); }
+}
+function updateCoPriceTotals(){
+  const co=coPricing; if(!co)return;
+  const T=coPriceTotals(co);
+  const k=$('#coPriceTotals'); k.innerHTML='';
+  const kpi=(l,v,s)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},l),el('div',{class:'val'},v),s?el('div',{class:'sub'},s):null));
+  kpi('Labor hours',fmtNum(T.hours,1));
+  kpi('Cost',fmtMoney(T.cost),'labor '+fmtMoney(T.laborCost)+(T.nlCost?' + subs/exp '+fmtMoney(T.nlCost):''));
+  kpi('Price to owner',fmtMoney(T.rev));
+  kpi('Margin',fmtMoney(T.rev-T.cost), T.rev?(100*(T.rev-T.cost)/T.rev).toFixed(1)+'%':'');
+  $('#coPriceNote').textContent='Apply will set Δ Cost budget = '+fmtMoney(T.cost)+' and Δ Contract value = '+fmtMoney(T.rev)+'.';
+}
+function applyCoPricing(){
+  const co=coPricing; if(!co)return;
+  const T=coPriceTotals(co);
+  co.dSold=Math.round(T.cost*100)/100;
+  co.dCap=Math.round(T.rev*100)/100;
+  saveState(); closeCoPricing(); renderCoTab();
+}
 function setupCoTab(){
   $('#btnCoAdd').addEventListener('click',()=>{
     if(!ppCtx)return;
@@ -2946,6 +3074,12 @@ function setupCoTab(){
   $('#btnCoCsv').addEventListener('click',exportCoXlsx);
   $('#btnCoImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#coFile').click(); });
   $('#coFile').addEventListener('change',e=>{ if(e.target.files[0])importCoFile(e.target.files[0]); e.target.value=''; });
+  $('#coPriceClose').addEventListener('click',closeCoPricing);
+  $('#coPriceCancel').addEventListener('click',()=>{ saveState(); closeCoPricing(); renderCoTab(); });
+  $('#coPriceBack').addEventListener('click',e=>{ if(e.target.id==='coPriceBack'){ saveState(); closeCoPricing(); renderCoTab(); } });
+  $('#coPriceApply').addEventListener('click',applyCoPricing);
+  $('#coPriceAddLabor').addEventListener('click',()=>{ if(coPricing){ coPricing.price.labor.push({emp:'',hours:'',cost:'',bill:''}); saveState(); renderCoPricing(); } });
+  $('#coPriceAddNL').addEventListener('click',()=>{ if(coPricing){ coPricing.price.nl.push({desc:'',cost:'',markup:ppCtx?ppCtx.meta._nlMarkup||0:0}); saveState(); renderCoPricing(); } });
 }
 function exportCoXlsx(){
   if(!ppCtx){alert('Open a project first.');return;}
@@ -3096,6 +3230,8 @@ function renderCoTab(){
     sel.addEventListener('change',()=>{co.status=sel.value;saveState();renderCoTab();});
     const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',
       onclick:()=>{ if(confirm('Delete '+(co.num||'this change order')+'?')){ meta._cos=meta._cos.filter(x=>x!==co); saveState(); renderCoTab(); } }},'✕');
+    const priced=co.price&&((co.price.labor&&co.price.labor.length)||(co.price.nl&&co.price.nl.length));
+    const priceLink=el('span',{class:'item-link',style:'color:var(--accent)',title:'Price this change order with staff & hours',onclick:()=>openCoPricing(co)}, priced?'price ✎':'price');
     const taskIn=el('input',{class:'rate-in',list:'coTaskList',style:'width:120px;text-align:left',
       title:'e.g. 5.2 or 5.2, 5.3 — matches the extract Task Number',value:co.tasks||''});
     taskIn.addEventListener('change',()=>{ co.tasks=taskIn.value; saveState(); renderCoTab(); });
@@ -3116,7 +3252,7 @@ function renderCoTab(){
       el('td',{class:'num'},acCell),
       el('td',null,txt(co,'date','108px')),
       el('td',null,txt(co,'notes','220px')),
-      el('td',null,del)));
+      el('td',null,priceLink,' ',del)));
   }
   tb.append(el('tr',{class:'total'},
     el('td',{colspan:4},'EXECUTED TOTAL (in forecast)'),
