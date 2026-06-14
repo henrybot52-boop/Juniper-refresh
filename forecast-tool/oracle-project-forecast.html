@@ -140,7 +140,8 @@
   <button data-tab="subs">7 · Cost Actuals</button>
   <button data-tab="rates">8 · Rate Table</button>
   <button data-tab="ev">9 · Earned Value</button>
-  <button data-tab="settings">10 · Settings</button>
+  <button data-tab="co">10 · Change Orders</button>
+  <button data-tab="settings">11 · Settings</button>
 </nav>
 
 <main>
@@ -445,6 +446,26 @@
   <div class="card">
     <h2>S-curve — cumulative PV / EV / AC</h2>
     <div class="chartbox" style="height:340px"><canvas id="chEv"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ CHANGE ORDERS TAB ============ -->
+<section id="tab-co" class="hidden">
+  <div class="card">
+    <h2>Change order log <span class="hint">— only <b>Executed</b> change orders flow into the forecast</span></h2>
+    <div class="row">
+      <label>Project: <select id="coProject" style="max-width:430px"></select></label>
+      <button id="btnCoAdd" class="primary small">+ Add change order</button>
+      <button id="btnCoCsv" class="small">Export CSV</button>
+    </div>
+    <p class="hint">Set each change order's status. <b>Pending</b> and <b>Approved</b> are tracked but change no numbers.
+      <b>Executed</b> adds its deltas to the contract value (NTE cap), cost budget and contingency used across the
+      Project Forecast and Actuals vs Forecast tabs. <b>Rejected</b> is archived. Δ values are positive to add scope/fee. Saved per project.</p>
+  </div>
+  <div class="kpis" id="coKpis"></div>
+  <div class="card">
+    <div class="tablewrap" style="max-height:520px"><table id="coTable"></table></div>
+    <div class="hint" id="coInfo" style="margin-top:8px"></div>
   </div>
 </section>
 
@@ -1342,6 +1363,15 @@ function projMeta(proj){
   if(p._soldCost==null)p._soldCost=0;
   return p;
 }
+function coSums(meta){
+  // sum the deltas of EXECUTED change orders only
+  let cap=0,sold=0,cont=0;
+  for(const c of (meta._cos||[])) if(c.status==='Executed'){ cap+=+c.dCap||0; sold+=+c.dSold||0; cont+=+c.dCont||0; }
+  return {cap,sold,cont};
+}
+function effCap(meta){ return (+meta._capRev||0)+coSums(meta).cap; }
+function effSold(meta){ return (+meta._soldCost||0)+coSums(meta).sold; }
+function effCont(meta){ return (+meta._contBudget||0)+coSums(meta).cont; }
 function ppItemLabel(r,level){
   const tt=((r.topTaskNumber||'')+' '+(r.topTaskName||'')).trim();
   const tk=((r.taskNumber||'')+' '+(r.taskName||'')).trim();
@@ -1416,8 +1446,8 @@ function updateAllSummaries(){
 }
 function setupProjectPages(){
   const s=state.settings;
-  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); };
-  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['evProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
+  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); else if(t==='co')renderCoTab(); };
+  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['evProject','ppProject'],['coProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
     $('#'+id).addEventListener('change',e=>{ s[key]=isNum?+e.target.value:e.target.value; saveState(); reRender(); });
   }
   $('#fpWeekEnd').value=String(s.ppWeekEnd); $('#apWeekEnd').value=String(s.ppWeekEnd);
@@ -1544,7 +1574,7 @@ function setupProjectPages(){
 function ppBuild(mode){
   if(!data.length)return null;
   const s=state.settings;
-  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':mode==='e'?'#evProject':'#apProject');
+  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':mode==='e'?'#evProject':mode==='c'?'#coProject':'#apProject');
   const projMap=new Map();
   for(const r of data){ const k=r.projectNumber||r.projectName; if(k && !projMap.has(k)) projMap.set(k,(r.projectNumber? r.projectNumber+' — ':'')+(r.projectName||'')); }
   const prev=s.ppProject; pick.innerHTML='';
@@ -1878,21 +1908,21 @@ function renderFpTotals(){
   kpi('Total revenue (price to owner)',fmtMoney(rev),'','Σ rows: hours × bill rate; subs/expenses at cost + markup; no-bill rows $0');
   kpi('Margin',fmtMoney(rev-cost), rev?(100*(rev-cost)/rev).toFixed(1)+'% of revenue':'','Revenue − cost');
   if(nbCost>0.5) kpi('Marked non-billable',fmtMoney(nbCost),(nbH?fmtNum(nbH,1)+' h ':'')+'planned at $0 revenue','Cost of rows with the no-bill pill — counted in cost, excluded from revenue');
-  const cont=ppCtx.meta._contBudget||0, risk=ppCtx.meta._riskBudget||0;
+  const cont=effCont(ppCtx.meta), risk=ppCtx.meta._riskBudget||0;
   if(cont||risk){
-    kpi('Contingency + risk',fmtMoney(cont+risk), cost?(100*(cont+risk)/cost).toFixed(1)+'% of cost':'','The reserve amounts entered above');
+    kpi('Contingency + risk',fmtMoney(cont+risk), cost?(100*(cont+risk)/cost).toFixed(1)+'% of cost':'','Reserves entered above + any executed change-order contingency');
     kpi('Cost incl. reserves',fmtMoney(cost+cont+risk),'','Baseline cost + contingency + risk allowance — the total authorized cost budget');
     kpi('Margin after reserves',fmtMoney(rev-cost-cont-risk), rev?(100*(rev-cost-cont-risk)/rev).toFixed(1)+'% of revenue':'','Revenue − cost − contingency − risk: the margin if the reserves are fully spent');
   }
-  const cap=ppCtx.meta._capRev||0, sold=ppCtx.meta._soldCost||0;
+  const cap=effCap(ppCtx.meta), sold=effSold(ppCtx.meta), coS=coSums(ppCtx.meta);
   if(cap>0){
     const over=rev-cap;
-    kpi('Contract value (T&M cap)',fmtMoney(cap), over>0.5? 'plan bills '+fmtMoney(over)+' OVER the cap' : 'plan bills '+fmtMoney(-over)+' under the cap');
+    kpi('Contract value (T&M cap)',fmtMoney(cap), (coS.cap?'incl. +'+fmtMoney(coS.cap)+' exec. COs · ':'')+(over>0.5? 'plan bills '+fmtMoney(over)+' OVER the cap' : 'plan bills '+fmtMoney(-over)+' under the cap'), 'Original contract value '+fmtMoney(ppCtx.meta._capRev||0)+' + executed change orders '+fmtMoney(coS.cap)+' (Change Orders tab)');
     if(over>0.5) kpi('⚠ Above cap',fmtMoney(over),'unbillable at current plan — margin at cap '+fmtMoney(cap-cost));
   }
   if(sold>0){
     const dc=cost-sold;
-    kpi('As-sold cost',fmtMoney(sold), Math.abs(dc)>0.5? 'plan is '+fmtMoney(Math.abs(dc))+(dc>0?' over':' under') : 'matches the plan');
+    kpi('As-sold cost',fmtMoney(sold), (coS.sold?'incl. +'+fmtMoney(coS.sold)+' exec. COs · ':'')+(Math.abs(dc)>0.5? 'plan is '+fmtMoney(Math.abs(dc))+(dc>0?' over':' under') : 'matches the plan'));
   }
   if(missingBill) kpi('⚠ Missing bill rates',String(missingBill),'labor row(s) counted at $0 revenue');
 }
@@ -2333,7 +2363,7 @@ function renderApTotals(){
     'Original = baseline hours. Updated EAC = actual hours + plan-to-go. Actuals from the extract');
   row('Cost',B.c,E.c,A.c,fmtMoney,false,
     'Original = baseline hours × cost rate. Updated EAC = actual cost + plan-to-go × cost rate. Actuals = Total Cost from the extract');
-  const cont=ppCtx.meta._contBudget||0, risk=ppCtx.meta._riskBudget||0, reserves=cont+risk;
+  const cont=effCont(ppCtx.meta), risk=ppCtx.meta._riskBudget||0, reserves=cont+risk;
   if(reserves>0||hasBase){
     const used=hasBase? Math.max(0,E.c-B.c) : 0;
     const remaining=reserves-used;
@@ -2356,7 +2386,7 @@ function renderApTotals(){
   }
   row('Revenue (price to owner)',B.r,E.r,A.r,fmtMoney,true,
     'Hours × bill rate, plus non-labor at cost + markup. Rows marked no-bill earn $0');
-  const cap=ppCtx.meta._capRev||0, sold=ppCtx.meta._soldCost||0;
+  const cap=effCap(ppCtx.meta), sold=effSold(ppCtx.meta);
   if(cap>0){
     const left=cap-E.r;
     tb.append(el('tr',null,
@@ -2863,6 +2893,78 @@ function renderCostActuals(){
     g.invoices.size,g.last?fmtDate(g.last):''])];
 }
 
+/* ===================== Change Orders ===================== */
+const CO_STATUSES=['Pending','Approved','Executed','Rejected'];
+function coStatusColor(s){ return s==='Executed'?'var(--good)':s==='Rejected'?'var(--bad)':s==='Pending'?'var(--warn)':'var(--accent)'; }
+function setupCoTab(){
+  $('#btnCoAdd').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    ppCtx.meta._cos=ppCtx.meta._cos||[];
+    ppCtx.meta._cos.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),
+      num:'CO-'+String(ppCtx.meta._cos.length+1).padStart(2,'0'),desc:'',status:'Pending',
+      dCap:0,dSold:0,dCont:0,date:fmtDate(new Date()),notes:''});
+    saveState(); renderCoTab();
+  });
+  $('#btnCoCsv').addEventListener('click',()=>{
+    if(!ppCtx){alert('Open a project first.');return;}
+    const cos=ppCtx.meta._cos||[];
+    downloadCSV('change-orders-'+ppCtx.proj+'.csv',[
+      ['CO #','Description','Status','Delta contract value','Delta cost budget','Delta contingency','Date','Notes'],
+      ...cos.map(c=>[c.num,c.desc,c.status,c.dCap||0,c.dSold||0,c.dCont||0,c.date||'',c.notes||''])]);
+  });
+}
+function renderCoTab(){
+  if(!data.length)return;
+  if(!ppBuild('c'))return;
+  const meta=ppCtx.meta; meta._cos=meta._cos||[];
+  const cos=meta._cos;
+  const sumBy=st=>{let cap=0,sold=0,cont=0,n=0;for(const c of cos)if(c.status===st){cap+=+c.dCap||0;sold+=+c.dSold||0;cont+=+c.dCont||0;n++;}return {cap,sold,cont,n};};
+  const exec=sumBy('Executed'), appr=sumBy('Approved'), pend=sumBy('Pending');
+  const k=$('#coKpis'); k.innerHTML='';
+  const kpi=(lbl,val,sub,col)=>{const e2=el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null);if(col)e2.querySelector('.val').style.color=col;k.append(e2);};
+  kpi('Executed — in forecast',fmtMoney(exec.cap),exec.n+' CO'+(exec.n===1?'':'s')+' · added to contract value',exec.cap?'var(--good)':'');
+  kpi('Executed cost budget',fmtMoney(exec.sold),exec.cont?'+'+fmtMoney(exec.cont)+' contingency':'added to as-sold cost');
+  kpi('Approved — not yet executed',fmtMoney(appr.cap),appr.n+' CO'+(appr.n===1?'':'s')+' · awaiting execution',appr.cap?'var(--accent)':'');
+  kpi('Pending',fmtMoney(pend.cap),pend.n+' CO'+(pend.n===1?'':'s')+' · in review',pend.cap?'var(--warn)':'');
+  const t=$('#coTable'); t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,...[
+    ['CO #',''],['Description',''],['Status','Only Executed change orders adjust the forecast'],
+    ['Δ Contract value','Added to the NTE cap when Executed'],['Δ Cost budget','Added to as-sold cost when Executed'],
+    ['Δ Contingency','Added to the contingency reserve when Executed'],['Date',''],['Notes',''],['','']
+  ].map((h,i)=>el('th',{class:(i>=3&&i<=5)?'num':'',title:h[1]},h[0])))));
+  const tb=el('tbody');
+  const txt=(co,key,wd,left)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+(left!==false?';text-align:left':''),value:co[key]||''});i.addEventListener('change',()=>{co[key]=i.value;saveState();});return i;};
+  const money=(co,key)=>{const i=el('input',{class:'rate-in',type:'text',inputmode:'decimal',value:co[key]||''});i.addEventListener('change',()=>{co[key]=parseNumber(i.value)||0;saveState();renderCoTab();});return i;};
+  for(const co of cos){
+    const sel=el('select',null,...CO_STATUSES.map(s=>el('option',{value:s},s)));
+    sel.value=co.status||'Pending';
+    sel.style.color=coStatusColor(sel.value); sel.style.fontWeight='600';
+    sel.addEventListener('change',()=>{co.status=sel.value;saveState();renderCoTab();});
+    const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',
+      onclick:()=>{ if(confirm('Delete '+(co.num||'this change order')+'?')){ meta._cos=meta._cos.filter(x=>x!==co); saveState(); renderCoTab(); } }},'✕');
+    tb.append(el('tr',null,
+      el('td',null,txt(co,'num','78px')),
+      el('td',null,txt(co,'desc','300px')),
+      el('td',null,sel),
+      el('td',{class:'num'},money(co,'dCap')),
+      el('td',{class:'num'},money(co,'dSold')),
+      el('td',{class:'num'},money(co,'dCont')),
+      el('td',null,txt(co,'date','108px')),
+      el('td',null,txt(co,'notes','240px')),
+      el('td',null,del)));
+  }
+  tb.append(el('tr',{class:'total'},
+    el('td',{colspan:3},'EXECUTED TOTAL (in forecast)'),
+    el('td',{class:'num'},fmtMoney(exec.cap)),
+    el('td',{class:'num'},fmtMoney(exec.sold)),
+    el('td',{class:'num'},fmtMoney(exec.cont)),
+    el('td'),el('td'),el('td')));
+  t.append(tb);
+  $('#coInfo').textContent=cos.length+' change order'+(cos.length===1?'':'s')+' · '
+    +exec.n+' executed (in forecast), '+appr.n+' approved, '+pend.n+' pending · '
+    +'effective contract value '+fmtMoney(effCap(meta))+' (orig '+fmtMoney(meta._capRev||0)+' + '+fmtMoney(exec.cap)+' executed)';
+}
+
 /* ===================== Settings ===================== */
 function setupSettings(){
   const s=state.settings;
@@ -2987,6 +3089,13 @@ function buildXlsx(obj){
   const wsB=XLSX.utils.aoa_to_sheet(bg);
   style(wsB,{widths:[52,14],band:true,fmts:{1:MONEY0}});
   XLSX.utils.book_append_sheet(wb,wsB,'Budgets');
+  // ---- change orders ----
+  const co=[['Project','CO #','Description','Status','Δ Contract value $','Δ Cost budget $','Δ Contingency $','Date','Notes']];
+  for(const [proj,p] of Object.entries(state.plans))
+    for(const c of (p._cos||[])) co.push([proj,c.num,c.desc,c.status,+c.dCap||0,+c.dSold||0,+c.dCont||0,c.date||'',c.notes||'']);
+  const wsCO=XLSX.utils.aoa_to_sheet(co);
+  style(wsCO,{widths:[12,10,36,12,17,16,16,12,30],filter:true,band:true,fmts:{4:MONEY0,5:MONEY0,6:MONEY0}});
+  XLSX.utils.book_append_sheet(wb,wsCO,'Change Orders');
   // ---- meta (hidden) ----
   const json=JSON.stringify(obj);
   const meta=[['Exact tool state — do not edit']];
@@ -3111,7 +3220,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','co','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -3126,6 +3235,7 @@ function refreshActiveTab(){
   else if(t==='subs') renderCostActuals();
   else if(t==='rates') renderRatesTab();
   else if(t==='ev') renderEvTab();
+  else if(t==='co') renderCoTab();
 }
 
 /* ===================== Sample data ===================== */
@@ -3263,6 +3373,11 @@ function seedDemoPlan(){
     meta._riskBudget=Math.max(1000,Math.round(bh*avgRate*0.05/1000)*1000);
     meta._capRev=Math.max(1000,Math.round(bh*avgRate*1.4*1.05/1000)*1000);  // ~5% above baseline revenue
     meta._soldCost=Math.max(1000,Math.round(bh*avgRate*1.03/1000)*1000);
+    meta._cos=[
+      {id:'d1',num:'CO-01',desc:'Owner-added geotechnical investigation',status:'Executed',dCap:Math.round(meta._capRev*0.09/1000)*1000,dSold:Math.round(meta._soldCost*0.09/1000)*1000,dCont:0,date:'2026-03-15',notes:'Executed — added to forecast'},
+      {id:'d2',num:'CO-02',desc:'Extended survey limits to north parcel',status:'Approved',dCap:Math.round(meta._capRev*0.05/1000)*1000,dSold:Math.round(meta._soldCost*0.05/1000)*1000,dCont:0,date:'2026-05-02',notes:'Approved — awaiting NTP to execute'},
+      {id:'d3',num:'CO-03',desc:'Design revision for alternate alignment',status:'Pending',dCap:Math.round(meta._capRev*0.04/1000)*1000,dSold:Math.round(meta._soldCost*0.04/1000)*1000,dCont:0,date:'2026-06-01',notes:'Under owner review'},
+    ];
   }
   // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
   state.budgets={};
@@ -3301,7 +3416,7 @@ function init(){
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
   $('#btnSample').addEventListener('click',loadSample);
-  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupSettings();
+  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupCoTab(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
