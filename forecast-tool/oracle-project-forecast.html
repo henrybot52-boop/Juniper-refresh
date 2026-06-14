@@ -466,6 +466,7 @@
   </div>
   <div class="kpis" id="coKpis"></div>
   <div class="card">
+    <datalist id="coTaskList"></datalist>
     <div class="tablewrap" style="max-height:520px"><table id="coTable"></table></div>
     <div class="hint" id="coInfo" style="margin-top:8px"></div>
   </div>
@@ -2898,6 +2899,20 @@ function renderCostActuals(){
 /* ===================== Change Orders ===================== */
 const CO_STATUSES=['Pending','Approved','Executed','Rejected'];
 function coStatusColor(s){ return s==='Executed'?'var(--good)':s==='Rejected'?'var(--bad)':s==='Pending'?'var(--warn)':'var(--accent)'; }
+function coCodes(co){ return String(co.tasks||'').split(/[,;\s]+/).map(s=>s.trim()).filter(Boolean); }
+function coMatch(taskNum,codes){ const tn=String(taskNum||'').trim(); if(!tn)return false; return codes.some(c=>tn===c||tn.startsWith(c+'.')); }
+function coActualFor(proj,co){
+  const codes=coCodes(co); if(!codes.length)return {cost:0,hours:0,n:0,codes};
+  let cost=0,hours=0,n=0;
+  for(const r of data){ if((r.projectNumber||r.projectName)!==proj)continue; if(coMatch(r.taskNumber,codes)){ cost+=r.totalCost||0; hours+=r.hours||0; n++; } }
+  return {cost,hours,n,codes};
+}
+function coActualCost(co){
+  const codes=coCodes(co); if(!codes.length||!ppCtx)return {cost:0,hours:0,n:0,codes};
+  let cost=0,hours=0,n=0;
+  for(const r of ppCtx.projRows){ if(coMatch(r.taskNumber,codes)){ cost+=r.totalCost||0; hours+=r.hours||0; n++; } }
+  return {cost,hours,n,codes};
+}
 function setupCoTab(){
   $('#btnCoAdd').addEventListener('click',()=>{
     if(!ppCtx)return;
@@ -2917,18 +2932,18 @@ function exportCoXlsx(){
   const cos=ppCtx.meta._cos||[];
   const BRAND='1F4E79', MONEY0='"$"#,##0';
   const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
-  const head=['CO #','Client CO #','Description','Status','Δ Contract value','Δ Cost budget','Δ Contingency','Date','Notes'];
+  const head=['CO #','Client CO #','Description','Status','Δ Contract value','Δ Cost budget','Δ Contingency','Task code(s)','Actual cost','Date','Notes'];
   const aoa=[['Change Order Log — '+ppCtx.proj],['Generated',fmtDate(new Date())],[],head];
-  for(const c of cos) aoa.push([c.num,c.clientNum||'',c.desc,c.status,+c.dCap||0,+c.dSold||0,+c.dCont||0,c.date||'',c.notes||'']);
-  const ex=cos.filter(c=>c.status==='Executed').reduce((a,c)=>({cap:a.cap+(+c.dCap||0),sold:a.sold+(+c.dSold||0),cont:a.cont+(+c.dCont||0)}),{cap:0,sold:0,cont:0});
-  aoa.push([],['EXECUTED TOTAL (in forecast)','','','',ex.cap,ex.sold,ex.cont,'','']);
+  for(const c of cos) aoa.push([c.num,c.clientNum||'',c.desc,c.status,+c.dCap||0,+c.dSold||0,+c.dCont||0,c.tasks||'',coActualCost(c).cost,c.date||'',c.notes||'']);
+  const ex=cos.filter(c=>c.status==='Executed').reduce((a,c)=>({cap:a.cap+(+c.dCap||0),sold:a.sold+(+c.dSold||0),cont:a.cont+(+c.dCont||0),act:a.act+coActualCost(c).cost}),{cap:0,sold:0,cont:0,act:0});
+  aoa.push([],['EXECUTED TOTAL (in forecast)','','','',ex.cap,ex.sold,ex.cont,'',ex.act,'','']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
   const rng=XLSX.utils.decode_range(ws['!ref']);
   for(let C=0;C<=rng.e.c;C++){ const cell=ws[XLSX.utils.encode_cell({r:3,c:C})]; if(cell)cell.s=HDR; }
-  for(let R=4;R<=rng.e.r;R++) for(const C of [4,5,6]){ const cell=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(cell&&typeof cell.v==='number')cell.z=MONEY0; }
-  ws['!cols']=[{wch:10},{wch:14},{wch:38},{wch:11},{wch:17},{wch:16},{wch:16},{wch:12},{wch:32}];
-  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:3,c:0},e:{r:Math.max(4,3+cos.length),c:8}})};
+  for(let R=4;R<=rng.e.r;R++) for(const C of [4,5,6,8]){ const cell=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(cell&&typeof cell.v==='number')cell.z=MONEY0; }
+  ws['!cols']=[{wch:10},{wch:14},{wch:34},{wch:11},{wch:17},{wch:16},{wch:16},{wch:16},{wch:14},{wch:12},{wch:30}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:3,c:0},e:{r:Math.max(4,3+cos.length),c:10}})};
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Change Orders');
   const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
@@ -2979,6 +2994,7 @@ function applyCoGrid(grid0,fname){
     dCap:find('deltacontractvalue','contractvalue','deltacap','cap'),
     dSold:find('deltacostbudget','costbudget','deltacost','cost','assoldcost'),
     dCont:find('deltacontingency','contingency','deltacont'),
+    tasks:find('taskcodes','taskcode','tasks','task','tasknumber','tasknumbers','lowleveltask','wbs'),
     date:find('date','executeddate','dateexecuted'),
     notes:find('notes','note','comments','comment'),
   };
@@ -2999,6 +3015,7 @@ function applyCoGrid(grid0,fname){
       dCap:parseNumber(cell(ci.dCap))||0,
       dSold:parseNumber(cell(ci.dSold))||0,
       dCont:parseNumber(cell(ci.dCont))||0,
+      tasks:String(cell(ci.tasks)).trim(),
       date:String(cell(ci.date)).trim(), notes:String(cell(ci.notes)).trim(),
     });
   }
@@ -3012,7 +3029,7 @@ function applyCoGrid(grid0,fname){
     for(const g of got){
       const k=String(g.num).trim().toLowerCase();
       const ex=k&&byNum.get(k);
-      if(ex){ ex.clientNum=g.clientNum; ex.desc=g.desc; ex.status=g.status; ex.dCap=g.dCap; ex.dSold=g.dSold; ex.dCont=g.dCont; ex.date=g.date; ex.notes=g.notes; }
+      if(ex){ ex.clientNum=g.clientNum; ex.desc=g.desc; ex.status=g.status; ex.dCap=g.dCap; ex.dSold=g.dSold; ex.dCont=g.dCont; ex.tasks=g.tasks; ex.date=g.date; ex.notes=g.notes; }
       else { ppCtx.meta._cos.push(g); byNum.set(k,g); }
     }
   }
@@ -3029,16 +3046,25 @@ function renderCoTab(){
   const exec=sumBy('Executed'), appr=sumBy('Approved'), pend=sumBy('Pending');
   const k=$('#coKpis'); k.innerHTML='';
   const kpi=(lbl,val,sub,col)=>{const e2=el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null);if(col)e2.querySelector('.val').style.color=col;k.append(e2);};
+  const execActualTot=cos.filter(c=>c.status==='Executed').reduce((a,c)=>a+coActualCost(c).cost,0);
   kpi('Executed — in forecast',fmtMoney(exec.cap),exec.n+' CO'+(exec.n===1?'':'s')+' · added to contract value',exec.cap?'var(--good)':'');
   kpi('Executed cost budget',fmtMoney(exec.sold),exec.cont?'+'+fmtMoney(exec.cont)+' contingency':'added to as-sold cost');
+  kpi('Actual charged to executed COs',fmtMoney(execActualTot),exec.sold?(100*execActualTot/exec.sold).toFixed(0)+'% of executed Δ cost budget':'tie task codes to track',execActualTot>exec.sold+0.5?'var(--bad)':'');
   kpi('Approved — not yet executed',fmtMoney(appr.cap),appr.n+' CO'+(appr.n===1?'':'s')+' · awaiting execution',appr.cap?'var(--accent)':'');
   kpi('Pending',fmtMoney(pend.cap),pend.n+' CO'+(pend.n===1?'':'s')+' · in review',pend.cap?'var(--warn)':'');
+  // task-code datalist for the project
+  const dl=$('#coTaskList'); dl.innerHTML='';
+  [...new Set(ppCtx.projRows.map(r=>String(r.taskNumber||'').trim()).filter(Boolean))].sort(taskCompare)
+    .forEach(tn=>dl.append(el('option',{value:tn})));
   const t=$('#coTable'); t.innerHTML='';
   t.append(el('thead',null,el('tr',null,...[
     ['CO #',''],['Client CO #',"The client's / owner's change order number"],['Description',''],['Status','Only Executed change orders adjust the forecast'],
     ['Δ Contract value','Added to the NTE cap when Executed'],['Δ Cost budget','Added to as-sold cost when Executed'],
-    ['Δ Contingency','Added to the contingency reserve when Executed'],['Date',''],['Notes',''],['','']
-  ].map(h=>el('th',{class:h[0].charAt(0)==='Δ'?'num':'',title:h[1]},h[0])))));
+    ['Δ Contingency','Added to the contingency reserve when Executed'],
+    ['Task code(s)','Low-level task number(s) charged to this CO — comma separated. Matches the extract Task Number (a code also captures its sub-tasks)'],
+    ['Actual cost','Total Cost from the extract charged to the task code(s) — read-only'],
+    ['Date',''],['Notes',''],['','']
+  ].map(h=>el('th',{class:(h[0].charAt(0)==='Δ'||h[0]==='Actual cost')?'num':'',title:h[1]},h[0])))));
   const tb=el('tbody');
   const txt=(co,key,wd,left)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+(left!==false?';text-align:left':''),value:co[key]||''});i.addEventListener('change',()=>{co[key]=i.value;saveState();});return i;};
   const money=(co,key)=>{const i=el('input',{class:'rate-in',type:'text',inputmode:'decimal',value:co[key]||''});i.addEventListener('change',()=>{co[key]=parseNumber(i.value)||0;saveState();renderCoTab();});return i;};
@@ -3049,16 +3075,26 @@ function renderCoTab(){
     sel.addEventListener('change',()=>{co.status=sel.value;saveState();renderCoTab();});
     const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',
       onclick:()=>{ if(confirm('Delete '+(co.num||'this change order')+'?')){ meta._cos=meta._cos.filter(x=>x!==co); saveState(); renderCoTab(); } }},'✕');
+    const taskIn=el('input',{class:'rate-in',list:'coTaskList',style:'width:120px;text-align:left',
+      title:'e.g. 5.2 or 5.2, 5.3 — matches the extract Task Number',value:co.tasks||''});
+    taskIn.addEventListener('change',()=>{ co.tasks=taskIn.value; saveState(); renderCoTab(); });
+    const ac=coActualCost(co);
+    const over = (+co.dSold||0)>0 && ac.cost>(+co.dSold||0)+0.5;
+    const acCell=el('span',{title: ac.codes.length? (ac.n+' transactions · '+fmtNum(ac.hours,1)+' h'+((+co.dSold||0)>0?' · '+(100*ac.cost/(+co.dSold)).toFixed(0)+'% of Δ cost budget':'')) : 'Enter task code(s) to track actuals against this CO'},
+      ac.codes.length?fmtMoney(ac.cost):'—');
+    if(over)acCell.style.color='var(--bad)';
     tb.append(el('tr',null,
       el('td',null,txt(co,'num','78px')),
       el('td',null,txt(co,'clientNum','110px')),
-      el('td',null,txt(co,'desc','280px')),
+      el('td',null,txt(co,'desc','260px')),
       el('td',null,sel),
       el('td',{class:'num'},money(co,'dCap')),
       el('td',{class:'num'},money(co,'dSold')),
       el('td',{class:'num'},money(co,'dCont')),
+      el('td',null,taskIn),
+      el('td',{class:'num'},acCell),
       el('td',null,txt(co,'date','108px')),
-      el('td',null,txt(co,'notes','240px')),
+      el('td',null,txt(co,'notes','220px')),
       el('td',null,del)));
   }
   tb.append(el('tr',{class:'total'},
@@ -3066,6 +3102,8 @@ function renderCoTab(){
     el('td',{class:'num'},fmtMoney(exec.cap)),
     el('td',{class:'num'},fmtMoney(exec.sold)),
     el('td',{class:'num'},fmtMoney(exec.cont)),
+    el('td'),
+    el('td',{class:'num'},fmtMoney(execActualTot)),
     el('td'),el('td'),el('td')));
   t.append(tb);
   $('#coInfo').textContent=cos.length+' change order'+(cos.length===1?'':'s')+' · '
@@ -3198,11 +3236,11 @@ function buildXlsx(obj){
   style(wsB,{widths:[52,14],band:true,fmts:{1:MONEY0}});
   XLSX.utils.book_append_sheet(wb,wsB,'Budgets');
   // ---- change orders ----
-  const co=[['Project','CO #','Client CO #','Description','Status','Δ Contract value $','Δ Cost budget $','Δ Contingency $','Date','Notes']];
+  const co=[['Project','CO #','Client CO #','Description','Status','Δ Contract value $','Δ Cost budget $','Δ Contingency $','Task code(s)','Actual cost $','Date','Notes']];
   for(const [proj,p] of Object.entries(state.plans))
-    for(const c of (p._cos||[])) co.push([proj,c.num,c.clientNum||'',c.desc,c.status,+c.dCap||0,+c.dSold||0,+c.dCont||0,c.date||'',c.notes||'']);
+    for(const c of (p._cos||[])) co.push([proj,c.num,c.clientNum||'',c.desc,c.status,+c.dCap||0,+c.dSold||0,+c.dCont||0,c.tasks||'',coActualFor(proj,c).cost,c.date||'',c.notes||'']);
   const wsCO=XLSX.utils.aoa_to_sheet(co);
-  style(wsCO,{widths:[12,10,14,36,12,17,16,16,12,30],filter:true,band:true,fmts:{5:MONEY0,6:MONEY0,7:MONEY0}});
+  style(wsCO,{widths:[12,10,14,36,12,17,16,16,16,14,12,30],filter:true,band:true,fmts:{5:MONEY0,6:MONEY0,7:MONEY0,9:MONEY0}});
   XLSX.utils.book_append_sheet(wb,wsCO,'Change Orders');
   // ---- meta (hidden) ----
   const json=JSON.stringify(obj);
@@ -3481,10 +3519,11 @@ function seedDemoPlan(){
     meta._riskBudget=Math.max(1000,Math.round(bh*avgRate*0.05/1000)*1000);
     meta._capRev=Math.max(1000,Math.round(bh*avgRate*1.4*1.05/1000)*1000);  // ~5% above baseline revenue
     meta._soldCost=Math.max(1000,Math.round(bh*avgRate*1.03/1000)*1000);
+    const tnums=[...new Set(projRows.map(r=>String(r.taskNumber||'').trim()).filter(Boolean))].sort();
     meta._cos=[
-      {id:'d1',num:'CO-01',clientNum:'OWN-2024-118',desc:'Owner-added geotechnical investigation',status:'Executed',dCap:Math.round(meta._capRev*0.09/1000)*1000,dSold:Math.round(meta._soldCost*0.09/1000)*1000,dCont:0,date:'2026-03-15',notes:'Executed — added to forecast'},
-      {id:'d2',num:'CO-02',clientNum:'OWN-2024-131',desc:'Extended survey limits to north parcel',status:'Approved',dCap:Math.round(meta._capRev*0.05/1000)*1000,dSold:Math.round(meta._soldCost*0.05/1000)*1000,dCont:0,date:'2026-05-02',notes:'Approved — awaiting NTP to execute'},
-      {id:'d3',num:'CO-03',clientNum:'',desc:'Design revision for alternate alignment',status:'Pending',dCap:Math.round(meta._capRev*0.04/1000)*1000,dSold:Math.round(meta._soldCost*0.04/1000)*1000,dCont:0,date:'2026-06-01',notes:'Under owner review'},
+      {id:'d1',num:'CO-01',clientNum:'OWN-2024-118',desc:'Owner-added geotechnical investigation',status:'Executed',dCap:Math.round(meta._capRev*0.09/1000)*1000,dSold:Math.round(meta._soldCost*0.09/1000)*1000,dCont:0,tasks:tnums[0]||'',date:'2026-03-15',notes:'Executed — added to forecast'},
+      {id:'d2',num:'CO-02',clientNum:'OWN-2024-131',desc:'Extended survey limits to north parcel',status:'Approved',dCap:Math.round(meta._capRev*0.05/1000)*1000,dSold:Math.round(meta._soldCost*0.05/1000)*1000,dCont:0,tasks:tnums[1]||'',date:'2026-05-02',notes:'Approved — awaiting NTP to execute'},
+      {id:'d3',num:'CO-03',clientNum:'',desc:'Design revision for alternate alignment',status:'Pending',dCap:Math.round(meta._capRev*0.04/1000)*1000,dSold:Math.round(meta._soldCost*0.04/1000)*1000,dCont:0,tasks:'',date:'2026-06-01',notes:'Under owner review'},
     ];
   }
   // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
