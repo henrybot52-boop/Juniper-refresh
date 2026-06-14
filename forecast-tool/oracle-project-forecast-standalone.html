@@ -477,9 +477,9 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
     <div class="row">
       <label>Project: <select id="coProject" style="max-width:430px"></select></label>
       <button id="btnCoAdd" class="primary small">+ Add change order</button>
-      <button id="btnCoCsv" class="small">Export CSV</button>
-      <button id="btnCoImp" class="small" title="Import change orders from a CSV with columns: CO #, Description, Status, Delta contract value, Delta cost budget, Delta contingency, Date, Notes">Import CSV</button>
-      <input type="file" id="coFile" accept=".csv,.tsv,.txt" class="hidden">
+      <button id="btnCoCsv" class="small">Export Excel</button>
+      <button id="btnCoImp" class="small" title="Import change orders from an Excel (.xlsx) or CSV file with columns: CO #, Client CO #, Description, Status, Delta contract value, Delta cost budget, Delta contingency, Date, Notes">Import</button>
+      <input type="file" id="coFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
     </div>
     <p class="hint">Set each change order's status. <b>Pending</b> and <b>Approved</b> are tracked but change no numbers.
       <b>Executed</b> adds its deltas to the contract value (NTE cap), cost budget and contingency used across the
@@ -2924,83 +2924,122 @@ function setupCoTab(){
     if(!ppCtx)return;
     ppCtx.meta._cos=ppCtx.meta._cos||[];
     ppCtx.meta._cos.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),
-      num:'CO-'+String(ppCtx.meta._cos.length+1).padStart(2,'0'),desc:'',status:'Pending',
+      num:'CO-'+String(ppCtx.meta._cos.length+1).padStart(2,'0'),clientNum:'',desc:'',status:'Pending',
       dCap:0,dSold:0,dCont:0,date:fmtDate(new Date()),notes:''});
     saveState(); renderCoTab();
   });
-  $('#btnCoCsv').addEventListener('click',()=>{
-    if(!ppCtx){alert('Open a project first.');return;}
-    const cos=ppCtx.meta._cos||[];
-    downloadCSV('change-orders-'+ppCtx.proj+'.csv',[
-      ['CO #','Description','Status','Delta contract value','Delta cost budget','Delta contingency','Date','Notes'],
-      ...cos.map(c=>[c.num,c.desc,c.status,c.dCap||0,c.dSold||0,c.dCont||0,c.date||'',c.notes||''])]);
-  });
+  $('#btnCoCsv').addEventListener('click',exportCoXlsx);
   $('#btnCoImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#coFile').click(); });
-  $('#coFile').addEventListener('change',e=>{ if(e.target.files[0])importCoCsv(e.target.files[0]); e.target.value=''; });
+  $('#coFile').addEventListener('change',e=>{ if(e.target.files[0])importCoFile(e.target.files[0]); e.target.value=''; });
 }
-function importCoCsv(file){
-  const r=new FileReader();
-  r.onload=ev=>{
-    try{
-      if(!ppCtx)return;
-      const text=ev.target.result;
-      const delim = /\.tsv$/i.test(file.name)? '\t' : detectDelim(text);
-      const grid=parseDSV(text,delim).filter(row=>row.some(c=>String(c).trim()!==''));
-      if(!grid.length)throw new Error('file is empty');
-      // locate header row (must contain a Status-ish and a CO-ish column); else assume row 0
-      const norm2=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
-      let hi=grid.findIndex(row=>row.some(c=>norm2(c)==='status'));
-      if(hi<0)hi=0;
-      const H=grid[hi].map(norm2);
-      const find=(...names)=>{ for(const n of names){ const i=H.indexOf(n); if(i>=0)return i; } return -1; };
-      const ci={
-        num:find('co','con','cono','number','changeorder','changeordernumber'),
-        desc:find('description','desc','scope'),
-        status:find('status'),
-        dCap:find('deltacontractvalue','contractvalue','deltacap','cap','deltacontractvaluedollar','contractvalue'),
-        dSold:find('deltacostbudget','costbudget','deltacost','cost','assoldcost'),
-        dCont:find('deltacontingency','contingency','deltacont'),
-        date:find('date','executeddate','dateexecuted'),
-        notes:find('notes','note','comments','comment'),
-      };
-      const cap=v=>{ const s=norm2(v); if(s.startsWith('exec'))return 'Executed'; if(s.startsWith('app'))return 'Approved'; if(s.startsWith('rej'))return 'Rejected'; if(s.startsWith('pend')||!s)return 'Pending'; return 'Pending'; };
-      const got=[];
-      for(let ri=hi+1;ri<grid.length;ri++){
-        const row=grid[ri];
-        const cell=i=>i>=0&&i<row.length? row[i] : '';
-        const num=String(cell(ci.num)).trim();
-        const desc=String(cell(ci.desc)).trim();
-        if(!num&&!desc&&!String(cell(ci.dCap)).trim())continue; // skip blank lines
-        got.push({
-          id:Date.now()+'-'+Math.random().toString(36).slice(2,7),
-          num:num||('CO-'+String(got.length+1).padStart(2,'0')),
-          desc, status:cap(cell(ci.status)),
-          dCap:parseNumber(cell(ci.dCap))||0,
-          dSold:parseNumber(cell(ci.dSold))||0,
-          dCont:parseNumber(cell(ci.dCont))||0,
-          date:String(cell(ci.date)).trim(), notes:String(cell(ci.notes)).trim(),
-        });
-      }
-      if(!got.length)throw new Error('no change-order rows found. Expected columns include CO #, Description, Status, Delta contract value, Delta cost budget, Delta contingency, Date, Notes.');
-      ppCtx.meta._cos=ppCtx.meta._cos||[];
-      const existing=ppCtx.meta._cos.length;
-      const mode = existing? (confirm(got.length+' change order(s) found.\n\nOK = MERGE with the '+existing+' already here (matching CO # are updated).\nCancel = REPLACE all '+existing+' existing change orders.') ? 'merge':'replace') : 'merge';
-      if(mode==='replace'){ ppCtx.meta._cos=got; }
-      else {
-        const byNum=new Map(ppCtx.meta._cos.map(c=>[String(c.num).trim().toLowerCase(),c]));
-        for(const g of got){
-          const k=String(g.num).trim().toLowerCase();
-          const ex=k&&byNum.get(k);
-          if(ex){ ex.desc=g.desc; ex.status=g.status; ex.dCap=g.dCap; ex.dSold=g.dSold; ex.dCont=g.dCont; ex.date=g.date; ex.notes=g.notes; }
-          else { ppCtx.meta._cos.push(g); byNum.set(k,g); }
-        }
-      }
-      saveState(); renderCoTab();
-      const execN=got.filter(g=>g.status==='Executed').length;
-      alert('Imported '+got.length+' change order(s) ('+mode+'). '+execN+' executed — now in the forecast.');
-    }catch(err){ alert('Could not import change orders: '+err.message); }
+function exportCoXlsx(){
+  if(!ppCtx){alert('Open a project first.');return;}
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const cos=ppCtx.meta._cos||[];
+  const BRAND='1F4E79', MONEY0='"$"#,##0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const head=['CO #','Client CO #','Description','Status','Δ Contract value','Δ Cost budget','Δ Contingency','Date','Notes'];
+  const aoa=[['Change Order Log — '+ppCtx.proj],['Generated',fmtDate(new Date())],[],head];
+  for(const c of cos) aoa.push([c.num,c.clientNum||'',c.desc,c.status,+c.dCap||0,+c.dSold||0,+c.dCont||0,c.date||'',c.notes||'']);
+  const ex=cos.filter(c=>c.status==='Executed').reduce((a,c)=>({cap:a.cap+(+c.dCap||0),sold:a.sold+(+c.dSold||0),cont:a.cont+(+c.dCont||0)}),{cap:0,sold:0,cont:0});
+  aoa.push([],['EXECUTED TOTAL (in forecast)','','','',ex.cap,ex.sold,ex.cont,'','']);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  const rng=XLSX.utils.decode_range(ws['!ref']);
+  for(let C=0;C<=rng.e.c;C++){ const cell=ws[XLSX.utils.encode_cell({r:3,c:C})]; if(cell)cell.s=HDR; }
+  for(let R=4;R<=rng.e.r;R++) for(const C of [4,5,6]){ const cell=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(cell&&typeof cell.v==='number')cell.z=MONEY0; }
+  ws['!cols']=[{wch:10},{wch:14},{wch:38},{wch:11},{wch:17},{wch:16},{wch:16},{wch:12},{wch:32}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:3,c:0},e:{r:Math.max(4,3+cos.length),c:8}})};
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Change Orders');
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'change-orders-'+ppCtx.proj+'.xlsx'});
+  document.body.append(a); a.click(); a.remove();
+}
+function importCoFile(file){
+  const name=(file.name||'').toLowerCase();
+  if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{
+        if(typeof XLSX==='undefined')throw new Error('Excel library not loaded');
+        const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+        const sh = wb.SheetNames.includes('Change Orders')? 'Change Orders' : wb.SheetNames[0];
+        const grid=XLSX.utils.sheet_to_json(wb.Sheets[sh],{header:1,defval:''});
+        applyCoGrid(grid,file.name);
+      }catch(err){ alert('Could not import change orders: '+err.message); }
+    };
+    r.readAsArrayBuffer(file);
+  } else {
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{
+        const text=ev.target.result;
+        const delim = /\.tsv$/i.test(file.name)? '\t' : detectDelim(text);
+        applyCoGrid(parseDSV(text,delim),file.name);
+      }catch(err){ alert('Could not import change orders: '+err.message); }
+    };
+    r.readAsText(file);
+  }
+}
+function applyCoGrid(grid0,fname){
+  if(!ppCtx)return;
+  const grid=grid0.filter(row=>row.some(c=>String(c).trim()!==''));
+  if(!grid.length)throw new Error('file is empty');
+  const norm2=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+  let hi=grid.findIndex(row=>row.some(c=>norm2(c)==='status'));
+  if(hi<0)hi=0;
+  const H=grid[hi].map(norm2);
+  const find=(...names)=>{ for(const n of names){ const i=H.indexOf(n); if(i>=0)return i; } return -1; };
+  const ci={
+    num:find('co','cono','conumber','number','changeorder','changeordernumber'),
+    clientNum:find('clientco','clientcono','clientconumber','clientchangeorder','ownerco','ownercono','clientnumber','clientref'),
+    desc:find('description','desc','scope'),
+    status:find('status'),
+    dCap:find('deltacontractvalue','contractvalue','deltacap','cap'),
+    dSold:find('deltacostbudget','costbudget','deltacost','cost','assoldcost'),
+    dCont:find('deltacontingency','contingency','deltacont'),
+    date:find('date','executeddate','dateexecuted'),
+    notes:find('notes','note','comments','comment'),
   };
-  r.readAsText(file);
+  const cap=v=>{ const s=norm2(v); if(s.startsWith('exec'))return 'Executed'; if(s.startsWith('app'))return 'Approved'; if(s.startsWith('rej'))return 'Rejected'; return 'Pending'; };
+  const got=[];
+  for(let ri=hi+1;ri<grid.length;ri++){
+    const row=grid[ri];
+    const cell=i=>i>=0&&i<row.length? row[i] : '';
+    const num=String(cell(ci.num)).trim();
+    const desc=String(cell(ci.desc)).trim();
+    if(/^executed total/i.test(num))continue;            // skip an exported totals row
+    if(!num&&!desc&&!String(cell(ci.dCap)).trim())continue;
+    got.push({
+      id:Date.now()+'-'+Math.random().toString(36).slice(2,7),
+      num:num||('CO-'+String(got.length+1).padStart(2,'0')),
+      clientNum:String(cell(ci.clientNum)).trim(),
+      desc, status:cap(cell(ci.status)),
+      dCap:parseNumber(cell(ci.dCap))||0,
+      dSold:parseNumber(cell(ci.dSold))||0,
+      dCont:parseNumber(cell(ci.dCont))||0,
+      date:String(cell(ci.date)).trim(), notes:String(cell(ci.notes)).trim(),
+    });
+  }
+  if(!got.length)throw new Error('no change-order rows found. Expected columns include CO #, Client CO #, Description, Status, Delta contract value, Delta cost budget, Delta contingency, Date, Notes.');
+  ppCtx.meta._cos=ppCtx.meta._cos||[];
+  const existing=ppCtx.meta._cos.length;
+  const mode = existing? (confirm(got.length+' change order(s) found.\n\nOK = MERGE with the '+existing+' already here (matching CO # are updated).\nCancel = REPLACE all '+existing+' existing change orders.') ? 'merge':'replace') : 'merge';
+  if(mode==='replace'){ ppCtx.meta._cos=got; }
+  else {
+    const byNum=new Map(ppCtx.meta._cos.map(c=>[String(c.num).trim().toLowerCase(),c]));
+    for(const g of got){
+      const k=String(g.num).trim().toLowerCase();
+      const ex=k&&byNum.get(k);
+      if(ex){ ex.clientNum=g.clientNum; ex.desc=g.desc; ex.status=g.status; ex.dCap=g.dCap; ex.dSold=g.dSold; ex.dCont=g.dCont; ex.date=g.date; ex.notes=g.notes; }
+      else { ppCtx.meta._cos.push(g); byNum.set(k,g); }
+    }
+  }
+  saveState(); renderCoTab();
+  const execN=got.filter(g=>g.status==='Executed').length;
+  alert('Imported '+got.length+' change order(s) ('+mode+'). '+execN+' executed — now in the forecast.');
 }
 function renderCoTab(){
   if(!data.length)return;
@@ -3017,10 +3056,10 @@ function renderCoTab(){
   kpi('Pending',fmtMoney(pend.cap),pend.n+' CO'+(pend.n===1?'':'s')+' · in review',pend.cap?'var(--warn)':'');
   const t=$('#coTable'); t.innerHTML='';
   t.append(el('thead',null,el('tr',null,...[
-    ['CO #',''],['Description',''],['Status','Only Executed change orders adjust the forecast'],
+    ['CO #',''],['Client CO #',"The client's / owner's change order number"],['Description',''],['Status','Only Executed change orders adjust the forecast'],
     ['Δ Contract value','Added to the NTE cap when Executed'],['Δ Cost budget','Added to as-sold cost when Executed'],
     ['Δ Contingency','Added to the contingency reserve when Executed'],['Date',''],['Notes',''],['','']
-  ].map((h,i)=>el('th',{class:(i>=3&&i<=5)?'num':'',title:h[1]},h[0])))));
+  ].map(h=>el('th',{class:h[0].charAt(0)==='Δ'?'num':'',title:h[1]},h[0])))));
   const tb=el('tbody');
   const txt=(co,key,wd,left)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+(left!==false?';text-align:left':''),value:co[key]||''});i.addEventListener('change',()=>{co[key]=i.value;saveState();});return i;};
   const money=(co,key)=>{const i=el('input',{class:'rate-in',type:'text',inputmode:'decimal',value:co[key]||''});i.addEventListener('change',()=>{co[key]=parseNumber(i.value)||0;saveState();renderCoTab();});return i;};
@@ -3033,7 +3072,8 @@ function renderCoTab(){
       onclick:()=>{ if(confirm('Delete '+(co.num||'this change order')+'?')){ meta._cos=meta._cos.filter(x=>x!==co); saveState(); renderCoTab(); } }},'✕');
     tb.append(el('tr',null,
       el('td',null,txt(co,'num','78px')),
-      el('td',null,txt(co,'desc','300px')),
+      el('td',null,txt(co,'clientNum','110px')),
+      el('td',null,txt(co,'desc','280px')),
       el('td',null,sel),
       el('td',{class:'num'},money(co,'dCap')),
       el('td',{class:'num'},money(co,'dSold')),
@@ -3043,7 +3083,7 @@ function renderCoTab(){
       el('td',null,del)));
   }
   tb.append(el('tr',{class:'total'},
-    el('td',{colspan:3},'EXECUTED TOTAL (in forecast)'),
+    el('td',{colspan:4},'EXECUTED TOTAL (in forecast)'),
     el('td',{class:'num'},fmtMoney(exec.cap)),
     el('td',{class:'num'},fmtMoney(exec.sold)),
     el('td',{class:'num'},fmtMoney(exec.cont)),
@@ -3179,11 +3219,11 @@ function buildXlsx(obj){
   style(wsB,{widths:[52,14],band:true,fmts:{1:MONEY0}});
   XLSX.utils.book_append_sheet(wb,wsB,'Budgets');
   // ---- change orders ----
-  const co=[['Project','CO #','Description','Status','Δ Contract value $','Δ Cost budget $','Δ Contingency $','Date','Notes']];
+  const co=[['Project','CO #','Client CO #','Description','Status','Δ Contract value $','Δ Cost budget $','Δ Contingency $','Date','Notes']];
   for(const [proj,p] of Object.entries(state.plans))
-    for(const c of (p._cos||[])) co.push([proj,c.num,c.desc,c.status,+c.dCap||0,+c.dSold||0,+c.dCont||0,c.date||'',c.notes||'']);
+    for(const c of (p._cos||[])) co.push([proj,c.num,c.clientNum||'',c.desc,c.status,+c.dCap||0,+c.dSold||0,+c.dCont||0,c.date||'',c.notes||'']);
   const wsCO=XLSX.utils.aoa_to_sheet(co);
-  style(wsCO,{widths:[12,10,36,12,17,16,16,12,30],filter:true,band:true,fmts:{4:MONEY0,5:MONEY0,6:MONEY0}});
+  style(wsCO,{widths:[12,10,14,36,12,17,16,16,12,30],filter:true,band:true,fmts:{5:MONEY0,6:MONEY0,7:MONEY0}});
   XLSX.utils.book_append_sheet(wb,wsCO,'Change Orders');
   // ---- meta (hidden) ----
   const json=JSON.stringify(obj);
@@ -3463,9 +3503,9 @@ function seedDemoPlan(){
     meta._capRev=Math.max(1000,Math.round(bh*avgRate*1.4*1.05/1000)*1000);  // ~5% above baseline revenue
     meta._soldCost=Math.max(1000,Math.round(bh*avgRate*1.03/1000)*1000);
     meta._cos=[
-      {id:'d1',num:'CO-01',desc:'Owner-added geotechnical investigation',status:'Executed',dCap:Math.round(meta._capRev*0.09/1000)*1000,dSold:Math.round(meta._soldCost*0.09/1000)*1000,dCont:0,date:'2026-03-15',notes:'Executed — added to forecast'},
-      {id:'d2',num:'CO-02',desc:'Extended survey limits to north parcel',status:'Approved',dCap:Math.round(meta._capRev*0.05/1000)*1000,dSold:Math.round(meta._soldCost*0.05/1000)*1000,dCont:0,date:'2026-05-02',notes:'Approved — awaiting NTP to execute'},
-      {id:'d3',num:'CO-03',desc:'Design revision for alternate alignment',status:'Pending',dCap:Math.round(meta._capRev*0.04/1000)*1000,dSold:Math.round(meta._soldCost*0.04/1000)*1000,dCont:0,date:'2026-06-01',notes:'Under owner review'},
+      {id:'d1',num:'CO-01',clientNum:'OWN-2024-118',desc:'Owner-added geotechnical investigation',status:'Executed',dCap:Math.round(meta._capRev*0.09/1000)*1000,dSold:Math.round(meta._soldCost*0.09/1000)*1000,dCont:0,date:'2026-03-15',notes:'Executed — added to forecast'},
+      {id:'d2',num:'CO-02',clientNum:'OWN-2024-131',desc:'Extended survey limits to north parcel',status:'Approved',dCap:Math.round(meta._capRev*0.05/1000)*1000,dSold:Math.round(meta._soldCost*0.05/1000)*1000,dCont:0,date:'2026-05-02',notes:'Approved — awaiting NTP to execute'},
+      {id:'d3',num:'CO-03',clientNum:'',desc:'Design revision for alternate alignment',status:'Pending',dCap:Math.round(meta._capRev*0.04/1000)*1000,dSold:Math.round(meta._soldCost*0.04/1000)*1000,dCont:0,date:'2026-06-01',notes:'Under owner review'},
     ];
   }
   // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
