@@ -148,7 +148,8 @@
   <button data-tab="rates">8 · Rate Table</button>
   <button data-tab="ev">9 · Earned Value</button>
   <button data-tab="co">10 · Change Orders</button>
-  <button data-tab="settings">11 · Settings</button>
+  <button data-tab="subco">11 · Subcontractors</button>
+  <button data-tab="settings">12 · Settings</button>
 </nav>
 
 <main>
@@ -287,7 +288,7 @@
       <span class="hint" style="font-weight:600">Add plan row:</span>
       <input id="fpNewTask" list="ppTaskList" placeholder="Task" style="width:220px">
       <input id="fpNewEmp" list="ppEmpList" placeholder="Employee/Vendor" style="width:190px">
-      <select id="fpNewUnit"><option value="hours">hours</option><option value="cost">cost ($)</option></select>
+      <select id="fpNewUnit"><option value="hours">hours</option><option value="cost">cost / sub ($)</option></select>
       <button id="btnFpAddRow" class="small">Add row</button>
       <datalist id="ppTaskList"></datalist><datalist id="ppEmpList"></datalist>
       <span class="spacer"></span>
@@ -476,6 +477,28 @@
     <datalist id="coTaskList"></datalist>
     <div class="tablewrap" style="max-height:520px"><table id="coTable"></table></div>
     <div class="hint" id="coInfo" style="margin-top:8px"></div>
+  </div>
+</section>
+
+<!-- ============ SUBCONTRACTORS TAB ============ -->
+<section id="tab-subco" class="hidden">
+  <div class="card">
+    <h2>Subcontractor register <span class="hint">— commitments vs actual cost, by task code</span></h2>
+    <div class="row">
+      <label>Project: <select id="skProject" style="max-width:430px"></select></label>
+      <button id="btnSkAdd" class="primary small">+ Add subcontractor</button>
+      <button id="btnSkXlsx" class="small">Export Excel</button>
+      <button id="btnSkImp" class="small" title="Import from Excel (.xlsx) or CSV: Vendor, Subcontract/PO #, Description, Status, Commitment, Task code(s), Notes">Import</button>
+      <input type="file" id="skFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
+    </div>
+    <p class="hint">Track each subcontractor / subconsultant commitment (PO or subcontract value) and the actual cost charged against its task code(s) from the extract.
+      Status is for your tracking (Pending / Committed / Closed) and does not change the forecast — plan subcontractor budget on the <b>Project Forecast</b> tab by adding a row with unit <b>cost / sub ($)</b>. Saved per project.</p>
+  </div>
+  <div class="kpis" id="skKpis"></div>
+  <div class="card">
+    <datalist id="skTaskList"></datalist>
+    <div class="tablewrap" style="max-height:520px"><table id="skTable"></table></div>
+    <div class="hint" id="skInfo" style="margin-top:8px"></div>
   </div>
 </section>
 
@@ -1476,8 +1499,8 @@ function updateAllSummaries(){
 }
 function setupProjectPages(){
   const s=state.settings;
-  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); else if(t==='co')renderCoTab(); };
-  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['evProject','ppProject'],['coProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
+  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); else if(t==='co')renderCoTab(); else if(t==='subco')renderSubTab(); };
+  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['evProject','ppProject'],['coProject','ppProject'],['skProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
     $('#'+id).addEventListener('change',e=>{ s[key]=isNum?+e.target.value:e.target.value; saveState(); reRender(); });
   }
   $('#fpWeekEnd').value=String(s.ppWeekEnd); $('#apWeekEnd').value=String(s.ppWeekEnd);
@@ -1604,7 +1627,7 @@ function setupProjectPages(){
 function ppBuild(mode){
   if(!data.length)return null;
   const s=state.settings;
-  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':mode==='e'?'#evProject':mode==='c'?'#coProject':'#apProject');
+  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':mode==='e'?'#evProject':mode==='c'?'#coProject':mode==='s'?'#skProject':'#apProject');
   const projMap=new Map();
   for(const r of data){ const k=r.projectNumber||r.projectName; if(k && !projMap.has(k)) projMap.set(k,(r.projectNumber? r.projectNumber+' — ':'')+(r.projectName||'')); }
   const prev=s.ppProject; pick.innerHTML='';
@@ -3247,6 +3270,179 @@ function renderCoTab(){
     +'effective contract value '+fmtMoney(effCap(meta))+' (orig '+fmtMoney(meta._capRev||0)+' + '+fmtMoney(exec.cap)+' executed)';
 }
 
+/* ===================== Subcontractors register ===================== */
+const SK_STATUSES=['Pending','Committed','Closed'];
+function skStatusColor(s){ return s==='Committed'?'var(--good)':s==='Closed'?'var(--muted)':'var(--warn)'; }
+function skActualFor(proj,sk){
+  const codes=coCodes(sk); if(!codes.length)return {cost:0,n:0,codes};
+  let cost=0,n=0;
+  for(const r of data){ if((r.projectNumber||r.projectName)!==proj)continue; if(coMatch(r.taskNumber,codes)){ cost+=r.totalCost||0; n++; } }
+  return {cost,n,codes};
+}
+function skActual(sk){
+  const codes=coCodes(sk); if(!codes.length||!ppCtx)return {cost:0,n:0,codes};
+  let cost=0,n=0;
+  for(const r of ppCtx.projRows){ if(coMatch(r.taskNumber,codes)){ cost+=r.totalCost||0; n++; } }
+  return {cost,n,codes};
+}
+function setupSubTab(){
+  $('#btnSkAdd').addEventListener('click',()=>{
+    if(!ppCtx)return;
+    ppCtx.meta._subs=ppCtx.meta._subs||[];
+    ppCtx.meta._subs.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),
+      vendor:'',po:'',desc:'',status:'Pending',commit:0,tasks:'',notes:''});
+    saveState(); renderSubTab();
+  });
+  $('#btnSkXlsx').addEventListener('click',exportSkXlsx);
+  $('#btnSkImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#skFile').click(); });
+  $('#skFile').addEventListener('change',e=>{ if(e.target.files[0])importSkFile(e.target.files[0]); e.target.value=''; });
+}
+function renderSubTab(){
+  if(!data.length)return;
+  if(!ppBuild('s'))return;
+  const meta=ppCtx.meta; meta._subs=meta._subs||[];
+  const subs=meta._subs;
+  let committed=0, actAll=0, actCommitted=0, pending=0, nC=0;
+  for(const s of subs){ const a=skActual(s).cost; actAll+=a;
+    if(s.status==='Committed'){ committed+=+s.commit||0; actCommitted+=a; nC++; }
+    else if(s.status==='Pending') pending+=+s.commit||0; }
+  const k=$('#skKpis'); k.innerHTML='';
+  const kpi=(l,v,sub,col)=>{const e2=el('div',{class:'kpi'},el('div',{class:'lbl'},l),el('div',{class:'val'},v),sub?el('div',{class:'sub'},sub):null);if(col)e2.querySelector('.val').style.color=col;k.append(e2);};
+  kpi('Committed value',fmtMoney(committed),nC+' committed sub'+(nC===1?'':'s'),'var(--good)');
+  kpi('Actual charged to subs',fmtMoney(actAll),committed?(100*actCommitted/committed).toFixed(0)+'% of committed':'tie task codes to track',actCommitted>committed+0.5?'var(--bad)':'');
+  kpi('Remaining on commitments',fmtMoney(committed-actCommitted));
+  kpi('Pending (not committed)',fmtMoney(pending),pending?'awaiting commitment':'',pending?'var(--warn)':'');
+  // task-code datalist
+  const dl=$('#skTaskList'); dl.innerHTML='';
+  [...new Set(ppCtx.projRows.map(r=>String(r.taskNumber||'').trim()).filter(Boolean))].sort(taskCompare).forEach(tn=>dl.append(el('option',{value:tn})));
+  const t=$('#skTable'); t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,...[
+    ['Vendor / Subconsultant',''],['Subcontract / PO #',''],['Description',''],['Status','For tracking only — does not change the forecast'],
+    ['Commitment','PO / subcontract value'],['Task code(s)','Low-level task number(s) the sub charges to — comma separated; a code also captures its sub-tasks'],
+    ['Actual cost','Total Cost from the extract charged to the task code(s) — read-only'],['% used',''],['Notes',''],['','']
+  ].map(h=>el('th',{class:(h[0]==='Commitment'||h[0]==='Actual cost'||h[0]==='% used')?'num':'',title:h[1]},h[0])))));
+  const tb=el('tbody');
+  const txt=(s,key,wd)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+';text-align:left',value:s[key]||''});i.addEventListener('change',()=>{s[key]=i.value;saveState();});return i;};
+  const money=(s,key)=>{const i=el('input',{class:'rate-in',type:'text',inputmode:'decimal',value:s[key]||''});i.addEventListener('change',()=>{s[key]=parseNumber(i.value)||0;saveState();renderSubTab();});return i;};
+  for(const s of subs){
+    const sel=el('select',null,...SK_STATUSES.map(o=>el('option',{value:o},o)));
+    sel.value=s.status||'Pending'; sel.style.color=skStatusColor(sel.value); sel.style.fontWeight='600';
+    sel.addEventListener('change',()=>{s.status=sel.value;saveState();renderSubTab();});
+    const taskIn=el('input',{class:'rate-in',list:'skTaskList',style:'width:120px;text-align:left',value:s.tasks||''});
+    taskIn.addEventListener('change',()=>{s.tasks=taskIn.value;saveState();renderSubTab();});
+    const a=skActual(s);
+    const over=(+s.commit||0)>0 && a.cost>(+s.commit||0)+0.5;
+    const acCell=el('span',{title:a.codes.length?(a.n+' transactions'+((+s.commit||0)>0?' · '+(100*a.cost/(+s.commit)).toFixed(0)+'% of commitment':'')):'Enter task code(s) to track actuals'}, a.codes.length?fmtMoney(a.cost):'—');
+    if(over)acCell.style.color='var(--bad)';
+    const pct=(+s.commit||0)>0&&a.codes.length? (100*a.cost/(+s.commit)).toFixed(0)+'%':'';
+    const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',
+      onclick:()=>{ if(confirm('Delete '+(s.vendor||'this subcontractor')+'?')){ meta._subs=meta._subs.filter(x=>x!==s); saveState(); renderSubTab(); } }},'✕');
+    tb.append(el('tr',null,
+      el('td',null,txt(s,'vendor','190px')),
+      el('td',null,txt(s,'po','120px')),
+      el('td',null,txt(s,'desc','240px')),
+      el('td',null,sel),
+      el('td',{class:'num'},money(s,'commit')),
+      el('td',null,taskIn),
+      el('td',{class:'num'},acCell),
+      el('td',{class:'num'+(over?' neg':'')},pct),
+      el('td',null,txt(s,'notes','200px')),
+      el('td',null,del)));
+  }
+  tb.append(el('tr',{class:'total'},
+    el('td',{colspan:4},'COMMITTED TOTAL'),
+    el('td',{class:'num'},fmtMoney(committed)),
+    el('td'),
+    el('td',{class:'num'},fmtMoney(actCommitted)),
+    el('td',{class:'num'},committed?(100*actCommitted/committed).toFixed(0)+'%':''),
+    el('td'),el('td')));
+  t.append(tb);
+  $('#skInfo').textContent=subs.length+' subcontractor'+(subs.length===1?'':'s')+' · committed '+fmtMoney(committed)+' · actual to date '+fmtMoney(actAll);
+}
+function exportSkXlsx(){
+  if(!ppCtx){alert('Open a project first.');return;}
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const subs=ppCtx.meta._subs||[];
+  const BRAND='1F4E79', MONEY0='"$"#,##0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const head=['Vendor / Subconsultant','Subcontract / PO #','Description','Status','Commitment','Task code(s)','Actual cost','% used','Notes'];
+  const aoa=[['Subcontractor Register — '+ppCtx.proj],['Generated',fmtDate(new Date())],[],head];
+  for(const s of subs){ const a=skActual(s).cost; const pct=(+s.commit||0)>0? a/(+s.commit):0;
+    aoa.push([s.vendor||'',s.po||'',s.desc||'',s.status||'',+s.commit||0,s.tasks||'',a,pct,s.notes||'']); }
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  const rng=XLSX.utils.decode_range(ws['!ref']);
+  for(let C=0;C<=rng.e.c;C++){ const cell=ws[XLSX.utils.encode_cell({r:3,c:C})]; if(cell)cell.s=HDR; }
+  for(let R=4;R<=rng.e.r;R++){ for(const C of [4,6]){ const cl=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(cl&&typeof cl.v==='number')cl.z=MONEY0; }
+    const pc=ws[XLSX.utils.encode_cell({r:R,c:7})]; if(pc&&typeof pc.v==='number')pc.z='0%'; }
+  ws['!cols']=[{wch:24},{wch:16},{wch:30},{wch:11},{wch:14},{wch:16},{wch:14},{wch:8},{wch:28}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:3,c:0},e:{r:Math.max(4,3+subs.length),c:8}})};
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Subcontractors');
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'subcontractors-'+ppCtx.proj+'.xlsx'});
+  document.body.append(a); a.click(); a.remove();
+}
+function importSkFile(file){
+  const name=(file.name||'').toLowerCase();
+  const done=grid=>{ try{ applySkGrid(grid); }catch(err){ alert('Could not import subcontractors: '+err.message); } };
+  if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+    const r=new FileReader();
+    r.onload=ev=>{ try{ if(typeof XLSX==='undefined')throw new Error('Excel library not loaded');
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      const sh=wb.SheetNames.includes('Subcontractors')?'Subcontractors':wb.SheetNames[0];
+      done(XLSX.utils.sheet_to_json(wb.Sheets[sh],{header:1,defval:''})); }catch(err){ alert('Could not import subcontractors: '+err.message); } };
+    r.readAsArrayBuffer(file);
+  } else {
+    const r=new FileReader();
+    r.onload=ev=>{ try{ const text=ev.target.result; const delim=/.tsv$/i.test(file.name)?'	':detectDelim(text); done(parseDSV(text,delim)); }catch(err){ alert('Could not import subcontractors: '+err.message); } };
+    r.readAsText(file);
+  }
+}
+function applySkGrid(grid0){
+  if(!ppCtx)return;
+  const grid=grid0.filter(row=>row.some(c=>String(c).trim()!==''));
+  if(!grid.length)throw new Error('file is empty');
+  const norm2=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+  let hi=grid.findIndex(row=>row.some(c=>norm2(c)==='vendor'||norm2(c)==='vendorsubconsultant'||norm2(c)==='status'));
+  if(hi<0)hi=0;
+  const H=grid[hi].map(norm2);
+  const find=(...names)=>{ for(const n of names){ const i=H.indexOf(n); if(i>=0)return i; } return -1; };
+  const ci={ vendor:find('vendorsubconsultant','vendor','subconsultant','subcontractor','sub','name'),
+    po:find('subcontractapo','subcontractpo','po','ponumber','subcontractnumber','subcontract'),
+    desc:find('description','desc','scope'), status:find('status'),
+    commit:find('commitment','commitmentvalue','povalue','subcontractvalue','value','amount'),
+    tasks:find('taskcodes','taskcode','tasks','task','tasknumber','wbs'),
+    notes:find('notes','note','comments','comment') };
+  const cap=v=>{ const s=norm2(v); if(s.startsWith('commit'))return 'Committed'; if(s.startsWith('clos'))return 'Closed'; return 'Pending'; };
+  const got=[];
+  for(let ri=hi+1;ri<grid.length;ri++){
+    const row=grid[ri]; const cell=i=>i>=0&&i<row.length?row[i]:'';
+    const vendor=String(cell(ci.vendor)).trim();
+    if(/^committed total/i.test(vendor))continue;
+    if(!vendor&&!String(cell(ci.desc)).trim()&&!String(cell(ci.commit)).trim())continue;
+    got.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,7),
+      vendor:vendor||'(unnamed sub)', po:String(cell(ci.po)).trim(), desc:String(cell(ci.desc)).trim(),
+      status:cap(cell(ci.status)), commit:parseNumber(cell(ci.commit))||0,
+      tasks:String(cell(ci.tasks)).trim(), notes:String(cell(ci.notes)).trim() });
+  }
+  if(!got.length)throw new Error('no subcontractor rows found. Expected columns include Vendor, Subcontract/PO #, Description, Status, Commitment, Task code(s), Notes.');
+  ppCtx.meta._subs=ppCtx.meta._subs||[];
+  const existing=ppCtx.meta._subs.length;
+  const mode=existing? (confirm(got.length+' subcontractor(s) found.\n\nOK = MERGE with the '+existing+' already here (matching PO # / vendor are updated).\nCancel = REPLACE all existing.') ? 'merge':'replace') : 'merge';
+  if(mode==='replace'){ ppCtx.meta._subs=got; }
+  else {
+    const key=s=>String(s.po||s.vendor||'').trim().toLowerCase();
+    const byKey=new Map(ppCtx.meta._subs.map(s=>[key(s),s]));
+    for(const g of got){ const k=key(g); const ex=k&&byKey.get(k);
+      if(ex){ ex.vendor=g.vendor; ex.po=g.po; ex.desc=g.desc; ex.status=g.status; ex.commit=g.commit; ex.tasks=g.tasks; ex.notes=g.notes; }
+      else { ppCtx.meta._subs.push(g); byKey.set(k,g); } }
+  }
+  saveState(); renderSubTab();
+  alert('Imported '+got.length+' subcontractor(s) ('+mode+').');
+}
+
 /* ===================== Settings ===================== */
 function setupSettings(){
   const s=state.settings;
@@ -3378,6 +3574,13 @@ function buildXlsx(obj){
   const wsCO=XLSX.utils.aoa_to_sheet(co);
   style(wsCO,{widths:[12,10,14,36,12,17,16,16,16,14,12,30],filter:true,band:true,fmts:{5:MONEY0,6:MONEY0,7:MONEY0,9:MONEY0}});
   XLSX.utils.book_append_sheet(wb,wsCO,'Change Orders');
+  // ---- subcontractors ----
+  const sk=[['Project','Vendor / Subconsultant','Subcontract / PO #','Description','Status','Commitment $','Task code(s)','Actual cost $','Notes']];
+  for(const [proj,p] of Object.entries(state.plans))
+    for(const s of (p._subs||[])) sk.push([proj,s.vendor||'',s.po||'',s.desc||'',s.status||'',+s.commit||0,s.tasks||'',skActualFor(proj,s).cost,s.notes||'']);
+  const wsSK=XLSX.utils.aoa_to_sheet(sk);
+  style(wsSK,{widths:[12,24,16,30,11,14,16,14,28],filter:true,band:true,fmts:{5:MONEY0,7:MONEY0}});
+  XLSX.utils.book_append_sheet(wb,wsSK,'Subcontractors');
   // ---- meta (hidden) ----
   const json=JSON.stringify(obj);
   const meta=[['Exact tool state — do not edit']];
@@ -3502,7 +3705,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','co','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','co','subco','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -3518,6 +3721,7 @@ function refreshActiveTab(){
   else if(t==='rates') renderRatesTab();
   else if(t==='ev') renderEvTab();
   else if(t==='co') renderCoTab();
+  else if(t==='subco') renderSubTab();
 }
 
 /* ===================== Sample data ===================== */
@@ -3661,6 +3865,11 @@ function seedDemoPlan(){
       {id:'d2',num:'CO-02',clientNum:'OWN-2024-131',desc:'Extended survey limits to north parcel',status:'Approved',dCap:Math.round(meta._capRev*0.05/1000)*1000,dSold:Math.round(meta._soldCost*0.05/1000)*1000,dCont:0,tasks:tnums[1]||'',date:'2026-05-02',notes:'Approved — awaiting NTP to execute'},
       {id:'d3',num:'CO-03',clientNum:'',desc:'Design revision for alternate alignment',status:'Pending',dCap:Math.round(meta._capRev*0.04/1000)*1000,dSold:Math.round(meta._soldCost*0.04/1000)*1000,dCont:0,tasks:'',date:'2026-06-01',notes:'Under owner review'},
     ];
+    meta._subs=[
+      {id:'s1',vendor:'GeoTest Drilling LLC',po:'SUB-1001',desc:'Geotechnical borings & lab',status:'Committed',commit:Math.round(meta._soldCost*0.06/1000)*1000,tasks:tnums[0]||'',notes:'NTP issued'},
+      {id:'s2',vendor:'Apex Survey Inc',po:'SUB-1002',desc:'Topographic & boundary survey',status:'Committed',commit:Math.round(meta._soldCost*0.04/1000)*1000,tasks:tnums[1]||'',notes:''},
+      {id:'s3',vendor:'Lone Star Traffic',po:'',desc:'Traffic counts (proposed)',status:'Pending',commit:Math.round(meta._soldCost*0.02/1000)*1000,tasks:'',notes:'Quote received, not committed'},
+    ];
   }
   // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
   state.budgets={};
@@ -3699,7 +3908,7 @@ function init(){
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
   $('#btnSample').addEventListener('click',loadSample);
-  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupCoTab(); setupSettings();
+  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupCoTab(); setupSubTab(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
