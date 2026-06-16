@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Austin LRT OMF — LEED × Envision Credit Overlap (O&M)</title>
+<style>
+  :root{
+    --leed:#4a8b2c; --leed-lt:#e7f3df;
+    --env:#0b7285; --env-lt:#dff0f3;
+    --shared:#b8860b; --shared-lt:#fbf3dd;
+    --ink:#1f2933; --muted:#5b6b7b; --line:#dde3ea; --bg:#f5f7fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.45}
+  .sheet{max-width:1080px;margin:0 auto;background:#fff;box-shadow:0 2px 24px rgba(0,0,0,.08)}
+  header{padding:30px 40px 22px;background:linear-gradient(120deg,var(--leed) 0%,#3a7a4f 42%,var(--env) 100%);color:#fff}
+  header .kicker{font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.9;margin-bottom:6px}
+  header h1{margin:0;font-size:30px;font-weight:700;line-height:1.15}
+  header p{margin:8px 0 0;font-size:15px;opacity:.95;max-width:760px}
+  main{padding:26px 40px 36px}
+  /* venn */
+  .venn-wrap{display:flex;align-items:center;gap:26px;flex-wrap:wrap;justify-content:center;margin:6px 0 26px}
+  .venn{flex:0 0 auto}
+  .legend{display:flex;flex-direction:column;gap:10px;font-size:14px}
+  .legend .row{display:flex;align-items:center;gap:10px}
+  .sw{width:16px;height:16px;border-radius:4px;flex:0 0 auto}
+  .stat{font-size:13px;color:var(--muted)}
+  .stat b{color:var(--ink);font-size:15px}
+  /* bridge */
+  h2.sec{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:26px 0 12px;border-bottom:2px solid var(--line);padding-bottom:6px}
+  .bridgehead{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:14px;margin-bottom:8px}
+  .bridgehead div{font-weight:700;font-size:14px;text-align:center;padding:8px;border-radius:8px;color:#fff}
+  .bridgehead .h-leed{background:var(--leed)}
+  .bridgehead .h-shared{background:var(--shared)}
+  .bridgehead .h-env{background:var(--env)}
+  .row3{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:14px;margin-bottom:12px;align-items:stretch}
+  .cell{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;background:#fff;position:relative}
+  .cell.leed{background:var(--leed-lt);border-color:#cfe6c2}
+  .cell.env{background:var(--env-lt);border-color:#bfe0e6}
+  .cell.shared{background:var(--shared-lt);border-color:#ecdcae;text-align:center;display:flex;flex-direction:column;justify-content:center}
+  .cell .theme{font-weight:700;font-size:13px;margin-bottom:3px}
+  .cell .cid{font-weight:600}
+  .cell.leed .cid{color:var(--leed)}
+  .cell.env .cid{color:var(--env)}
+  .cell .desc{color:var(--muted);font-size:12px;margin-top:2px}
+  .arrowflow{font-size:12.5px;color:#7a6010;font-weight:600}
+  /* do-once */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:6px}
+  .panel{border:1px solid var(--line);border-radius:12px;padding:16px 18px;background:#fff}
+  .panel h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .panel.doonce h3{color:var(--shared)}
+  .panel.austin h3{color:var(--env)}
+  .panel ul{margin:0;padding-left:18px}
+  .panel li{margin-bottom:7px;font-size:13px}
+  .panel li b{color:var(--ink)}
+  .pill{display:inline-block;background:var(--shared-lt);color:#7a6010;border:1px solid #ecdcae;border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;margin-left:6px}
+  .nuance{background:#f0f4f8;border-left:4px solid var(--env);border-radius:6px;padding:12px 16px;font-size:13px;margin:8px 0 4px}
+  .nuance b{color:var(--ink)}
+  footer{padding:16px 40px 26px;color:var(--muted);font-size:11.5px;border-top:1px solid var(--line)}
+  footer .cav{margin-bottom:5px}
+  @media print{
+    body{background:#fff}
+    .sheet{box-shadow:none;max-width:100%}
+    header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .cell,.bridgehead div,.panel,.nuance,header{ -webkit-print-color-adjust:exact;print-color-adjust:exact}
+    @page{margin:12mm}
+  }
+  @media(max-width:740px){
+    .row3,.bridgehead{grid-template-columns:1fr}
+    .grid2{grid-template-columns:1fr}
+    main,header,footer{padding-left:20px;padding-right:20px}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+<header>
+  <div class="kicker">Austin Light Rail · Operations &amp; Maintenance Facility</div>
+  <h1>Where LEED and Envision Overlap</h1>
+  <p>Operations &amp; maintenance sustainability credits where a single analysis or data stream earns recognition in both systems — LEED v4.1 O+M (the OMF building) and Envision v3 (the transit infrastructure). Do the work once; report it twice.</p>
+</header>
+<main>
+
+  <!-- VENN -->
+  <div class="venn-wrap">
+    <svg class="venn" width="340" height="190" viewBox="0 0 340 190" role="img" aria-label="Venn diagram of LEED and Envision overlap">
+      <circle cx="125" cy="95" r="78" fill="#4a8b2c" fill-opacity="0.30" stroke="#4a8b2c" stroke-width="2"/>
+      <circle cx="215" cy="95" r="78" fill="#0b7285" fill-opacity="0.30" stroke="#0b7285" stroke-width="2"/>
+      <text x="78" y="60" fill="#2f6e1c" font-size="16" font-weight="700" text-anchor="middle">LEED</text>
+      <text x="78" y="78" fill="#3a7a4f" font-size="10" text-anchor="middle">the building</text>
+      <text x="262" y="60" fill="#0b6072" font-size="16" font-weight="700" text-anchor="middle">Envision</text>
+      <text x="262" y="78" fill="#0b6072" font-size="10" text-anchor="middle">the system</text>
+      <text x="170" y="92" fill="#7a6010" font-size="26" font-weight="800" text-anchor="middle">11</text>
+      <text x="170" y="110" fill="#7a6010" font-size="10" font-weight="700" text-anchor="middle">SHARED</text>
+      <text x="170" y="123" fill="#7a6010" font-size="10" font-weight="700" text-anchor="middle">THEMES</text>
+    </svg>
+    <div class="legend">
+      <div class="row"><span class="sw" style="background:var(--leed)"></span> <b>LEED v4.1 O+M</b> — measured building performance</div>
+      <div class="row"><span class="sw" style="background:var(--shared)"></span> <b>Shared evidence</b> — one analysis feeds both</div>
+      <div class="row"><span class="sw" style="background:var(--env)"></span> <b>Envision v3</b> — infrastructure plan &amp; commitment</div>
+      <div class="stat" style="margin-top:6px">Scoring differs: <b>Envision</b> credits the <b>plan/commitment</b> for long-term monitoring; <b>LEED O+M</b> credits the <b>measured result</b>. The same meters &amp; systems supply both.</div>
+    </div>
+  </div>
+
+  <!-- BRIDGE -->
+  <h2 class="sec">Credit Overlap Map</h2>
+  <div class="bridgehead">
+    <div class="h-leed">LEED v4.1 O+M</div>
+    <div class="h-shared">Shared analysis / data</div>
+    <div class="h-env">Envision v3</div>
+  </div>
+  <div id="rows"></div>
+
+  <!-- PANELS -->
+  <div class="grid2">
+    <div class="panel doonce">
+      <h3>⤳ Highest-value "do-once" items</h3>
+      <ul>
+        <li><b>One Sustainability Management Plan</b> — Envision LD2.1 + anchors LEED integrative/innovation docs.</li>
+        <li><b>One metering / BAS backbone</b> — energy + water submetering feeds LEED EA/WE performance and Envision RA2.4 / RA3.4 monitoring.</li>
+        <li><b>One commute survey + multimodal inventory</b> — and an OMF <i>is</i> a transit facility, so the transportation story is strong on both sides.</li>
+        <li><b>One waste-diversion tracking system</b> — LEED MR + Envision RA1.3 / RA1.4.</li>
+        <li><b>One climate-risk &amp; resilience assessment</b> — Envision CR2.x + LEED resilience credits.</li>
+      </ul>
+    </div>
+    <div class="panel austin">
+      <h3>◎ Austin-specific leverage</h3>
+      <ul>
+        <li><b>Austin Energy GreenChoice</b> renewable procurement &amp; rebates feed RA2.3 / EA Renewable Energy.</li>
+        <li><b>Strong solar resource</b> makes on-site PV credible for both energy categories.</li>
+        <li><b>Heat &amp; water</b> pay off twice: heat-island + cooling-water efficiency + extreme-heat resilience; drought + water reduction.</li>
+        <li><b>Grid &amp; flood resilience</b> — post-Winter-Storm-Uri grid hardening and flash-flood stormwater design support Envision CR2.x.</li>
+        <li>If <b>Austin Energy Green Building (AEGB)</b> is also pursued, the same documents extend to a third system.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="nuance">
+    <b>Reuse the analysis, not the forms.</b> Each system has its own baselines, thresholds and submittal templates — so budget effort for reformatting evidence to each, not for re-doing the engineering. Confirm registered versions; credit IDs are version-specific (LEED v4 ≠ v4.1; Envision v2 ≠ v3).
+  </div>
+
+</main>
+<footer>
+  <div class="cav">LEED® is a trademark of USGBC; Envision® is a trademark of the Institute for Sustainable Infrastructure (ISI). This crosswalk is a planning aid, not a certification determination — confirm current credit language with your accredited LEED AP / ENV SP and the registered rating versions.</div>
+  <div>Prepared for Austin LRT OMF · LEED v4.1 O+M × Envision v3 · operations &amp; maintenance focus</div>
+</footer>
+</div>
+
+<script>
+// Credit overlap data — rendered as bridge rows
+const ROWS=[
+  {theme:'Energy performance', leed:'EA — Energy Performance; Energy Metering &amp; Reporting',
+   shared:'Utility tracking + submetering, baseline/EUI benchmarking, M&amp;V plan', env:'RA2.1 Reduce Operational Energy; RA2.4 Commission &amp; Monitor'},
+  {theme:'Ongoing commissioning', leed:'EA — Ongoing Commissioning',
+   shared:'OCx plan, BAS trend logs, recommissioning schedule', env:'RA2.4; LD3.1 Long-Term Monitoring &amp; Maintenance'},
+  {theme:'Renewable energy', leed:'EA — Renewable Energy',
+   shared:'On-site PV production data or GreenChoice procurement records', env:'RA2.3 Use Renewable Energy; CR1.2 Reduce GHG'},
+  {theme:'Water performance', leed:'WE — Water Performance &amp; Metering',
+   shared:'Water balance, submetering, irrigation / cooling-tower calcs', env:'RA3.2 Reduce Operational Water; RA3.4 Monitor Water'},
+  {theme:'Stormwater &amp; site', leed:'SS — Rainwater Mgmt; Site Management',
+   shared:'LID / drainage design, IPM &amp; landscape-management plan', env:'NW2.2 Manage Stormwater; NW2.3 Reduce Pesticide/Fertilizer'},
+  {theme:'Heat island', leed:'SS — Heat Island Reduction',
+   shared:'Roof + paving SRI calcs, shade / canopy plan', env:'QL / NW — community heat &amp; site cover'},
+  {theme:'Materials &amp; waste (ops)', leed:'MR — Purchasing; Solid Waste Management',
+   shared:'Sustainable purchasing policy, ongoing diversion tracking', env:'RA1.1 Sustainable Procurement; RA1.3 Reduce Operational Waste'},
+  {theme:'Transportation', leed:'LT — Transportation Performance',
+   shared:'Staff commute survey, transit / bike / EV-charging inventory', env:'QL2.1 Community Mobility; QL2.2 Sustainable Transportation'},
+  {theme:'GHG / carbon', leed:'EA — carbon &amp; refrigerant management',
+   shared:'GHG inventory, refrigerant-leak tracking, LCA', env:'CR1.1 Embodied Carbon; CR1.2 Reduce GHG'},
+  {theme:'Resilience', leed:'Resilience pilot credits',
+   shared:'Climate-risk assessment, resilience strategy', env:'CR2.2–2.5 Vulnerability / Risk / Resilience'},
+  {theme:'Management &amp; leadership', leed:'IN — Innovation; certified professionals',
+   shared:'Sustainability Management Plan + integrated-design records', env:'LD1.x Leadership; LD2.1 Mgmt Plan; LD3.1 Monitoring'},
+];
+const wrap=document.getElementById('rows');
+for(const r of ROWS){
+  const row=document.createElement('div'); row.className='row3';
+  row.innerHTML=
+    '<div class="cell leed"><div class="theme">'+r.theme+'</div><div class="cid">'+r.leed+'</div></div>'+
+    '<div class="cell shared"><div class="arrowflow">◀ '+r.shared+' ▶</div></div>'+
+    '<div class="cell env"><div class="cid">'+r.env+'</div></div>';
+  wrap.appendChild(row);
+}
+</script>
+</body>
+</html>
