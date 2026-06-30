@@ -149,7 +149,9 @@
   <button data-tab="ev">9 · Earned Value</button>
   <button data-tab="co">10 · Change Orders</button>
   <button data-tab="subco">11 · Subcontractors</button>
-  <button data-tab="settings">12 · Settings</button>
+  <button data-tab="risk">12 · Risk Register</button>
+  <button data-tab="billing">13 · Billing</button>
+  <button data-tab="settings">14 · Settings</button>
 </nav>
 
 <main>
@@ -479,6 +481,10 @@
       <button id="btnCoImp" class="small" title="Import change orders from an Excel (.xlsx) or CSV file with columns: CO #, Client CO #, Description, Status, Delta contract value, Delta cost budget, Delta contingency, Date, Notes">Import</button>
       <input type="file" id="coFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
     </div>
+    <div class="row" style="margin-top:8px">
+      <label class="hint">SharePoint — change orders folder: <input id="coSpLink" style="width:340px" placeholder="paste SharePoint URL"></label>
+      <button id="coSpOpen" class="small">Open ↗</button>
+    </div>
     <p class="hint">Set each change order's status. <b>Pending</b> and <b>Approved</b> are tracked but change no numbers.
       <b>Executed</b> adds its deltas to the contract value (NTE cap), cost budget and contingency used across the
       Project Forecast and Actuals vs Forecast tabs. <b>Rejected</b> is archived. Δ values are positive to add scope/fee. Saved per project.</p>
@@ -511,6 +517,48 @@
     <div class="tablewrap" style="max-height:520px"><table id="skTable"></table></div>
     <div class="hint" id="skInfo" style="margin-top:8px"></div>
   </div>
+</section>
+
+<!-- ============ RISK REGISTER TAB ============ -->
+<section id="tab-risk" class="hidden">
+  <div class="card">
+    <h2>Risk register <span class="hint">— exposure = probability × cost impact</span></h2>
+    <div class="row">
+      <label>Project: <select id="rkProject" style="max-width:430px"></select></label>
+      <button id="btnRkAdd" class="primary small">+ Add risk</button>
+      <button id="btnRkXlsx" class="small">Export Excel</button>
+      <button id="btnRkImp" class="small">Import</button>
+      <input type="file" id="rkFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label class="hint">SharePoint — risk folder: <input id="rkSpLink" style="width:340px" placeholder="paste SharePoint URL"></label>
+      <button id="rkSpOpen" class="small">Open ↗</button>
+      <span class="hint">Exposure (expected cost) = probability % × cost impact. Status drives the open-exposure totals. Saved per project.</span>
+    </div>
+  </div>
+  <div class="kpis" id="rkKpis"></div>
+  <div class="card"><div class="tablewrap" style="max-height:520px"><table id="rkTable"></table></div><div class="hint" id="rkInfo" style="margin-top:8px"></div></div>
+</section>
+
+<!-- ============ BILLING TAB ============ -->
+<section id="tab-billing" class="hidden">
+  <div class="card">
+    <h2>Billing record <span class="hint">— invoices logged per month</span></h2>
+    <div class="row">
+      <label>Project: <select id="blProject" style="max-width:430px"></select></label>
+      <button id="btnBlAdd" class="primary small">+ Add invoice</button>
+      <button id="btnBlXlsx" class="small">Export Excel</button>
+      <button id="btnBlImp" class="small">Import</button>
+      <input type="file" id="blFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label class="hint">SharePoint — billing folder: <input id="blSpLink" style="width:340px" placeholder="paste SharePoint URL"></label>
+      <button id="blSpOpen" class="small">Open ↗</button>
+      <span class="hint">Record each invoice (period, number, amount, status). The Dashboard billing reconciliation derives billed-from-extract; this is your invoice log. Saved per project.</span>
+    </div>
+  </div>
+  <div class="kpis" id="blKpis"></div>
+  <div class="card"><div class="tablewrap" style="max-height:520px"><table id="blTable"></table></div><div class="hint" id="blInfo" style="margin-top:8px"></div></div>
 </section>
 
 <!-- ============ SETTINGS TAB ============ -->
@@ -1508,7 +1556,20 @@ function projMeta(proj){
   if(p._riskBudget==null)p._riskBudget=0;
   if(p._capRev==null)p._capRev=0;
   if(p._soldCost==null)p._soldCost=0;
+  p._spLinks=p._spLinks||{};
   return p;
+}
+function openLink(u){ if(u)window.open(u,'_blank','noopener'); }
+function spLinkSetup(inputId,btnId,key){
+  $('#'+btnId).addEventListener('click',()=>{ if(ppCtx)openLink(ppCtx.meta._spLinks[key]); });
+  $('#'+inputId).addEventListener('change',e=>{ if(ppCtx){ ppCtx.meta._spLinks[key]=e.target.value.trim(); saveState(); } });
+}
+function spLinkLoad(inputId,key){ if(ppCtx&&$('#'+inputId))$('#'+inputId).value=(ppCtx.meta._spLinks&&ppCtx.meta._spLinks[key])||''; }
+function recLink(obj,key){
+  const inp=el('input',{class:'rate-in',style:'width:120px;text-align:left',placeholder:'URL',value:obj[key]||''});
+  inp.addEventListener('change',()=>{obj[key]=inp.value.trim();saveState();});
+  const open=el('span',{style:'cursor:pointer;color:var(--accent);margin-left:5px',title:'Open link',onclick:()=>openLink(obj[key])},'↗');
+  return el('span',null,inp,open);
 }
 function coSums(meta){
   // sum the deltas of EXECUTED change orders only
@@ -1593,8 +1654,8 @@ function updateAllSummaries(){
 }
 function setupProjectPages(){
   const s=state.settings;
-  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); else if(t==='co')renderCoTab(); else if(t==='subco')renderSubTab(); };
-  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['evProject','ppProject'],['coProject','ppProject'],['skProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
+  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); else if(t==='co')renderCoTab(); else if(t==='subco')renderSubTab(); else if(t==='risk')renderRiskTab(); else if(t==='billing')renderBillingTab(); };
+  for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['evProject','ppProject'],['coProject','ppProject'],['skProject','ppProject'],['rkProject','ppProject'],['blProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
     $('#'+id).addEventListener('change',e=>{ s[key]=isNum?+e.target.value:e.target.value; saveState(); reRender(); });
   }
   $('#fpWeekEnd').value=String(s.ppWeekEnd); $('#apWeekEnd').value=String(s.ppWeekEnd);
@@ -1721,7 +1782,7 @@ function setupProjectPages(){
 function ppBuild(mode){
   if(!data.length)return null;
   const s=state.settings;
-  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':mode==='e'?'#evProject':mode==='c'?'#coProject':mode==='s'?'#skProject':'#apProject');
+  const pick=$(mode==='f'?'#fpProject':mode==='r'?'#rtProject':mode==='e'?'#evProject':mode==='c'?'#coProject':mode==='s'?'#skProject':mode==='k'?'#rkProject':mode==='b'?'#blProject':'#apProject');
   const projMap=new Map();
   for(const r of data){ const k=r.projectNumber||r.projectName; if(k && !projMap.has(k)) projMap.set(k,(r.projectNumber? r.projectNumber+' — ':'')+(r.projectName||'')); }
   const prev=s.ppProject; pick.innerHTML='';
@@ -3336,6 +3397,7 @@ function setupCoTab(){
   $('#coPriceXlsx').addEventListener('click',exportCoPriceXlsx);
   $('#coPriceImp').addEventListener('click',()=>{ if(coPricing)$('#coPriceFile').click(); });
   $('#coPriceFile').addEventListener('change',e=>{ if(e.target.files[0])importCoPriceFile(e.target.files[0]); e.target.value=''; });
+  spLinkSetup('coSpLink','coSpOpen','co');
 }
 function exportCoXlsx(){
   if(!ppCtx){alert('Open a project first.');return;}
@@ -3519,6 +3581,7 @@ function renderCoTab(){
     el('td',{class:'num'},fmtMoney(execActualTot)),
     el('td'),el('td'),el('td')));
   t.append(tb);
+  spLinkLoad('coSpLink','co');
   $('#coInfo').textContent=cos.length+' change order'+(cos.length===1?'':'s')+' · '
     +exec.n+' executed (in forecast), '+appr.n+' approved, '+pend.n+' pending · '
     +'effective contract value '+fmtMoney(effCap(meta))+' (orig '+fmtMoney(meta._capRev||0)+' + '+fmtMoney(exec.cap)+' executed)';
@@ -3697,6 +3760,191 @@ function applySkGrid(grid0){
   alert('Imported '+got.length+' subcontractor(s) ('+mode+').');
 }
 
+/* ===================== Risk register ===================== */
+const RK_STATUS=['Open','Mitigating','Closed','Realized'];
+const RK_RESPONSE=['Mitigate','Avoid','Transfer','Accept'];
+function rkColor(s){ return s==='Realized'?'var(--bad)':s==='Closed'?'var(--muted)':s==='Mitigating'?'var(--accent)':'var(--warn)'; }
+function rkExposure(r){ return (+r.prob||0)/100*(+r.impact||0); }
+function setupRiskTab(){
+  $('#btnRkAdd').addEventListener('click',()=>{ if(!ppCtx)return; ppCtx.meta._risks=ppCtx.meta._risks||[];
+    ppCtx.meta._risks.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),num:'R-'+String(ppCtx.meta._risks.length+1).padStart(2,'0'),desc:'',category:'',prob:0,impact:0,response:'Mitigate',owner:'',status:'Open',link:'',notes:''});
+    saveState(); renderRiskTab(); });
+  $('#btnRkXlsx').addEventListener('click',exportRkXlsx);
+  $('#btnRkImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#rkFile').click(); });
+  $('#rkFile').addEventListener('change',e=>{ if(e.target.files[0])importRkFile(e.target.files[0]); e.target.value=''; });
+  spLinkSetup('rkSpLink','rkSpOpen','risk');
+}
+function renderRiskTab(){
+  if(!data.length)return; if(!ppBuild('k'))return;
+  const meta=ppCtx.meta; meta._risks=meta._risks||[]; const risks=meta._risks;
+  spLinkLoad('rkSpLink','risk');
+  let openExp=0,nOpen=0,realized=0,maxExp=0;
+  for(const r of risks){ const e=rkExposure(r);
+    if(r.status==='Open'||r.status==='Mitigating'){ openExp+=e; nOpen++; if(e>maxExp)maxExp=e; }
+    if(r.status==='Realized') realized+=+r.impact||0; }
+  const k=$('#rkKpis'); k.innerHTML='';
+  const kpi=(l,v,s,c)=>{const e2=el('div',{class:'kpi'},el('div',{class:'lbl'},l),el('div',{class:'val'},v),s?el('div',{class:'sub'},s):null);if(c)e2.querySelector('.val').style.color=c;k.append(e2);};
+  kpi('Open exposure',fmtMoney(openExp),nOpen+' open risk'+(nOpen===1?'':'s'),openExp>0.5?'var(--warn)':'');
+  kpi('Largest single risk',fmtMoney(maxExp));
+  kpi('Realized cost',fmtMoney(realized),realized>0.5?'risks that occurred':'',realized>0.5?'var(--bad)':'');
+  kpi('Total risks',String(risks.length));
+  const t=$('#rkTable'); t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,...[['Risk #',''],['Description',''],['Category',''],['Prob %','Probability the risk occurs'],['Cost impact','Cost if it occurs'],['Exposure','Probability × cost impact (expected cost)'],['Response',''],['Owner',''],['Status',''],['Link','SharePoint / document link'],['Notes',''],['','']].map(h=>el('th',{class:(h[0]==='Prob %'||h[0]==='Cost impact'||h[0]==='Exposure')?'num':'',title:h[1]},h[0])))));
+  const tb=el('tbody');
+  const txt=(o,key,wd)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+';text-align:left',value:o[key]||''});i.addEventListener('change',()=>{o[key]=i.value;saveState();});return i;};
+  const money=(o,key)=>{const i=el('input',{class:'rate-in',type:'text',inputmode:'decimal',value:o[key]||''});i.addEventListener('change',()=>{o[key]=parseNumber(i.value)||0;saveState();renderRiskTab();});return i;};
+  for(const r of risks){
+    const sel=el('select',null,...RK_STATUS.map(o=>el('option',{value:o},o))); sel.value=r.status||'Open'; sel.style.color=rkColor(sel.value); sel.style.fontWeight='600';
+    sel.addEventListener('change',()=>{r.status=sel.value;saveState();renderRiskTab();});
+    const resp=el('select',null,...RK_RESPONSE.map(o=>el('option',{value:o},o))); resp.value=r.response||'Mitigate';
+    resp.addEventListener('change',()=>{r.response=resp.value;saveState();});
+    const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',onclick:()=>{ if(confirm('Delete '+(r.num||'this risk')+'?')){ meta._risks=meta._risks.filter(x=>x!==r); saveState(); renderRiskTab(); } }},'✕');
+    tb.append(el('tr',null,
+      el('td',null,txt(r,'num','64px')), el('td',null,txt(r,'desc','240px')), el('td',null,txt(r,'category','120px')),
+      el('td',{class:'num'},money(r,'prob')), el('td',{class:'num'},money(r,'impact')),
+      el('td',{class:'num'},fmtMoney(rkExposure(r))),
+      el('td',null,resp), el('td',null,txt(r,'owner','110px')), el('td',null,sel),
+      el('td',null,recLink(r,'link')), el('td',null,txt(r,'notes','160px')), el('td',null,del)));
+  }
+  tb.append(el('tr',{class:'total'},el('td',{colspan:5},'OPEN EXPOSURE'),el('td',{class:'num'},fmtMoney(openExp)),el('td'),el('td'),el('td'),el('td'),el('td'),el('td')));
+  t.append(tb);
+  $('#rkInfo').textContent=risks.length+' risk'+(risks.length===1?'':'s')+' · open exposure '+fmtMoney(openExp)+(realized?' · realized '+fmtMoney(realized):'');
+}
+function exportRkXlsx(){
+  if(!ppCtx){alert('Open a project first.');return;} if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const risks=ppCtx.meta._risks||[]; const BRAND='1F4E79',M='"$"#,##0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const head=['Risk #','Description','Category','Probability %','Cost impact','Exposure','Response','Owner','Status','Link','Notes'];
+  const aoa=[['Risk Register — '+ppCtx.proj],['Generated',fmtDate(new Date())],[],head];
+  for(const r of risks)aoa.push([r.num||'',r.desc||'',r.category||'',+r.prob||0,+r.impact||0,rkExposure(r),r.response||'',r.owner||'',r.status||'',r.link||'',r.notes||'']);
+  const ws=XLSX.utils.aoa_to_sheet(aoa); if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  const rng=XLSX.utils.decode_range(ws['!ref']); for(let C=0;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:3,c:C})];if(c)c.s=HDR;}
+  for(let R=4;R<=rng.e.r;R++){ const p=ws[XLSX.utils.encode_cell({r:R,c:3})]; if(p&&typeof p.v==='number')p.z='0"%"'; for(const C of [4,5]){const c=ws[XLSX.utils.encode_cell({r:R,c:C})];if(c&&typeof c.v==='number')c.z=M;} }
+  ws['!cols']=[{wch:8},{wch:34},{wch:14},{wch:12},{wch:13},{wch:13},{wch:11},{wch:14},{wch:11},{wch:24},{wch:24}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:3,c:0},e:{r:Math.max(4,3+risks.length),c:10}})};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Risk Register');
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'}); const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'risk-register-'+ppCtx.proj+'.xlsx'}); document.body.append(a); a.click(); a.remove();
+}
+function importRkFile(file){ readTabular(file,grid=>applyRkGrid(grid),'risk register','Risk'); }
+function applyRkGrid(grid0){
+  if(!ppCtx)return; const grid=grid0.filter(row=>row.some(c=>String(c).trim()!==''));
+  if(!grid.length)throw new Error('file is empty');
+  const norm2=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+  let hi=grid.findIndex(row=>row.some(c=>{const n=norm2(c);return n==='risk'||n==='riskno'||n==='description'||n==='status';})); if(hi<0)hi=0;
+  const H=grid[hi].map(norm2); const f=(...n)=>{for(const x of n){const i=H.indexOf(x);if(i>=0)return i;}return -1;};
+  const ci={num:f('risk','riskno','risknumber','id','no'),desc:f('description','desc','risk'),category:f('category','cat','type'),prob:f('probability','prob','probabilitypercent','likelihood'),impact:f('costimpact','impact','cost','value'),response:f('response','strategy'),owner:f('owner','responsible'),status:f('status'),link:f('link','url','sharepoint','document'),notes:f('notes','note','comments')};
+  const capS=v=>{const s=norm2(v);if(s.startsWith('real'))return 'Realized';if(s.startsWith('clos'))return 'Closed';if(s.startsWith('mitig'))return 'Mitigating';return 'Open';};
+  const got=[];
+  for(let r=hi+1;r<grid.length;r++){ const row=grid[r],cell=i=>i>=0&&i<row.length?row[i]:'';
+    const num=String(cell(ci.num)).trim(), desc=String(cell(ci.desc)).trim();
+    if(/^open exposure/i.test(num))continue; if(!num&&!desc&&!String(cell(ci.impact)).trim())continue;
+    got.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,7),num:num||('R-'+String(got.length+1).padStart(2,'0')),desc,category:String(cell(ci.category)).trim(),prob:parseNumber(cell(ci.prob))||0,impact:parseNumber(cell(ci.impact))||0,response:String(cell(ci.response)).trim()||'Mitigate',owner:String(cell(ci.owner)).trim(),status:capS(cell(ci.status)),link:String(cell(ci.link)).trim(),notes:String(cell(ci.notes)).trim()}); }
+  if(!got.length)throw new Error('no risk rows found');
+  mergeOrReplace(ppCtx.meta,'_risks',got,r=>String(r.num||'').trim().toLowerCase(),(ex,g)=>{Object.assign(ex,g,{id:ex.id});});
+  saveState(); renderRiskTab(); alert('Imported '+got.length+' risk(s).');
+}
+/* ===================== Billing record ===================== */
+const BL_STATUS=['Draft','Submitted','Paid'];
+function blColor(s){ return s==='Paid'?'var(--good)':s==='Submitted'?'var(--accent)':'var(--warn)'; }
+function setupBillingTab(){
+  $('#btnBlAdd').addEventListener('click',()=>{ if(!ppCtx)return; ppCtx.meta._bills=ppCtx.meta._bills||[];
+    ppCtx.meta._bills.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),period:'',invoice:'',amount:0,date:fmtDate(new Date()),status:'Draft',link:'',notes:''});
+    saveState(); renderBillingTab(); });
+  $('#btnBlXlsx').addEventListener('click',exportBlXlsx);
+  $('#btnBlImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#blFile').click(); });
+  $('#blFile').addEventListener('change',e=>{ if(e.target.files[0])importBlFile(e.target.files[0]); e.target.value=''; });
+  spLinkSetup('blSpLink','blSpOpen','billing');
+}
+function renderBillingTab(){
+  if(!data.length)return; if(!ppBuild('b'))return;
+  const meta=ppCtx.meta; meta._bills=meta._bills||[]; const bills=meta._bills;
+  spLinkLoad('blSpLink','billing');
+  let invoiced=0,paid=0,outstanding=0,draft=0;
+  for(const b of bills){ const a=+b.amount||0;
+    if(b.status==='Paid'){ invoiced+=a; paid+=a; } else if(b.status==='Submitted'){ invoiced+=a; outstanding+=a; } else draft+=a; }
+  const k=$('#blKpis'); k.innerHTML='';
+  const kpi=(l,v,s,c)=>{const e2=el('div',{class:'kpi'},el('div',{class:'lbl'},l),el('div',{class:'val'},v),s?el('div',{class:'sub'},s):null);if(c)e2.querySelector('.val').style.color=c;k.append(e2);};
+  kpi('Invoiced',fmtMoney(invoiced),'submitted + paid');
+  kpi('Paid',fmtMoney(paid),invoiced?(100*paid/invoiced).toFixed(0)+'% of invoiced':'','var(--good)');
+  kpi('Outstanding',fmtMoney(outstanding),'submitted, unpaid',outstanding>0.5?'var(--warn)':'');
+  kpi('Draft',fmtMoney(draft),'not yet submitted');
+  const t=$('#blTable'); t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,...[['Period',''],['Invoice #',''],['Amount',''],['Invoice date',''],['Status',''],['Link','SharePoint / invoice link'],['Notes',''],['','']].map(h=>el('th',{class:h[0]==='Amount'?'num':'',title:h[1]},h[0])))));
+  const tb=el('tbody');
+  const txt=(o,key,wd)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+';text-align:left',value:o[key]||''});i.addEventListener('change',()=>{o[key]=i.value;saveState();});return i;};
+  for(const b of bills){
+    const sel=el('select',null,...BL_STATUS.map(o=>el('option',{value:o},o))); sel.value=b.status||'Draft'; sel.style.color=blColor(sel.value); sel.style.fontWeight='600';
+    sel.addEventListener('change',()=>{b.status=sel.value;saveState();renderBillingTab();});
+    const amt=el('input',{class:'rate-in',type:'text',inputmode:'decimal',value:b.amount||''}); amt.addEventListener('change',()=>{b.amount=parseNumber(amt.value)||0;saveState();renderBillingTab();});
+    const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',onclick:()=>{ if(confirm('Delete this invoice?')){ meta._bills=meta._bills.filter(x=>x!==b); saveState(); renderBillingTab(); } }},'✕');
+    tb.append(el('tr',null,
+      el('td',null,txt(b,'period','100px')), el('td',null,txt(b,'invoice','120px')), el('td',{class:'num'},amt),
+      el('td',null,txt(b,'date','108px')), el('td',null,sel), el('td',null,recLink(b,'link')), el('td',null,txt(b,'notes','180px')), el('td',null,del)));
+  }
+  tb.append(el('tr',{class:'total'},el('td',{colspan:2},'TOTAL INVOICED'),el('td',{class:'num'},fmtMoney(invoiced)),el('td'),el('td'),el('td'),el('td'),el('td')));
+  t.append(tb);
+  $('#blInfo').textContent=bills.length+' invoice'+(bills.length===1?'':'s')+' · invoiced '+fmtMoney(invoiced)+' · outstanding '+fmtMoney(outstanding);
+}
+function exportBlXlsx(){
+  if(!ppCtx){alert('Open a project first.');return;} if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const bills=ppCtx.meta._bills||[]; const BRAND='1F4E79',M='"$"#,##0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const head=['Period','Invoice #','Amount','Invoice date','Status','Link','Notes'];
+  const aoa=[['Billing Record — '+ppCtx.proj],['Generated',fmtDate(new Date())],[],head];
+  for(const b of bills)aoa.push([b.period||'',b.invoice||'',+b.amount||0,b.date||'',b.status||'',b.link||'',b.notes||'']);
+  const ws=XLSX.utils.aoa_to_sheet(aoa); if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  const rng=XLSX.utils.decode_range(ws['!ref']); for(let C=0;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:3,c:C})];if(c)c.s=HDR;}
+  for(let R=4;R<=rng.e.r;R++){const c=ws[XLSX.utils.encode_cell({r:R,c:2})];if(c&&typeof c.v==='number')c.z=M;}
+  ws['!cols']=[{wch:12},{wch:16},{wch:14},{wch:13},{wch:11},{wch:26},{wch:26}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:3,c:0},e:{r:Math.max(4,3+bills.length),c:6}})};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Billing');
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'}); const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'billing-'+ppCtx.proj+'.xlsx'}); document.body.append(a); a.click(); a.remove();
+}
+function importBlFile(file){ readTabular(file,grid=>applyBlGrid(grid),'billing','Billing'); }
+function applyBlGrid(grid0){
+  if(!ppCtx)return; const grid=grid0.filter(row=>row.some(c=>String(c).trim()!==''));
+  if(!grid.length)throw new Error('file is empty');
+  const norm2=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+  let hi=grid.findIndex(row=>row.some(c=>{const n=norm2(c);return n==='invoice'||n==='invoiceno'||n==='period'||n==='amount';})); if(hi<0)hi=0;
+  const H=grid[hi].map(norm2); const f=(...n)=>{for(const x of n){const i=H.indexOf(x);if(i>=0)return i;}return -1;};
+  const ci={period:f('period','month','billingperiod'),invoice:f('invoice','invoiceno','invoicenumber','number'),amount:f('amount','value','billed','total'),date:f('invoicedate','date'),status:f('status'),link:f('link','url','sharepoint'),notes:f('notes','note','comments')};
+  const capS=v=>{const s=norm2(v);if(s.startsWith('paid'))return 'Paid';if(s.startsWith('subm'))return 'Submitted';return 'Draft';};
+  const got=[];
+  for(let r=hi+1;r<grid.length;r++){ const row=grid[r],cell=i=>i>=0&&i<row.length?row[i]:'';
+    const inv=String(cell(ci.invoice)).trim(), per=String(cell(ci.period)).trim();
+    if(/^total invoiced/i.test(per))continue; if(!inv&&!per&&!String(cell(ci.amount)).trim())continue;
+    got.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,7),period:per,invoice:inv,amount:parseNumber(cell(ci.amount))||0,date:String(cell(ci.date)).trim(),status:capS(cell(ci.status)),link:String(cell(ci.link)).trim(),notes:String(cell(ci.notes)).trim()}); }
+  if(!got.length)throw new Error('no invoice rows found');
+  mergeOrReplace(ppCtx.meta,'_bills',got,b=>String(b.invoice||b.period||'').trim().toLowerCase(),(ex,g)=>{Object.assign(ex,g,{id:ex.id});});
+  saveState(); renderBillingTab(); alert('Imported '+got.length+' invoice(s).');
+}
+/* shared import helpers */
+function readTabular(file,cb,label,sheetHint){
+  const name=(file.name||'').toLowerCase();
+  if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+    const r=new FileReader();
+    r.onload=ev=>{ try{ if(typeof XLSX==='undefined')throw new Error('Excel library not loaded');
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      const sh=wb.SheetNames.find(n=>new RegExp(sheetHint,'i').test(n))||wb.SheetNames[0];
+      cb(XLSX.utils.sheet_to_json(wb.Sheets[sh],{header:1,defval:''})); }catch(err){ alert('Could not import '+label+': '+err.message); } };
+    r.readAsArrayBuffer(file);
+  } else {
+    const r=new FileReader();
+    r.onload=ev=>{ try{ const text=ev.target.result; const delim=/.tsv$/i.test(file.name)?'	':detectDelim(text); cb(parseDSV(text,delim)); }catch(err){ alert('Could not import '+label+': '+err.message); } };
+    r.readAsText(file);
+  }
+}
+function mergeOrReplace(meta,key,got,keyFn,updateFn){
+  meta[key]=meta[key]||[];
+  const existing=meta[key].length;
+  const mode=existing? (confirm(got.length+' row(s) found.\n\nOK = MERGE with the '+existing+' already here.\nCancel = REPLACE all existing.') ? 'merge':'replace') : 'merge';
+  if(mode==='replace'){ meta[key]=got; return; }
+  const byKey=new Map(meta[key].map(x=>[keyFn(x),x]));
+  for(const g of got){ const kk=keyFn(g); const ex=kk&&byKey.get(kk); if(ex)updateFn(ex,g); else { meta[key].push(g); byKey.set(kk,g); } }
+}
+
 /* ===================== Settings ===================== */
 function setupSettings(){
   const s=state.settings;
@@ -3835,6 +4083,16 @@ function buildXlsx(obj){
   const wsSK=XLSX.utils.aoa_to_sheet(sk);
   style(wsSK,{widths:[12,24,16,30,11,14,16,14,28],filter:true,band:true,fmts:{5:MONEY0,7:MONEY0}});
   XLSX.utils.book_append_sheet(wb,wsSK,'Subcontractors');
+  // ---- risks ----
+  const rk=[['Project','Risk #','Description','Category','Probability %','Cost impact $','Exposure $','Response','Owner','Status','Link','Notes']];
+  for(const [proj,p] of Object.entries(state.plans)) for(const r of (p._risks||[])) rk.push([proj,r.num||'',r.desc||'',r.category||'',+r.prob||0,+r.impact||0,(+r.prob||0)/100*(+r.impact||0),r.response||'',r.owner||'',r.status||'',r.link||'',r.notes||'']);
+  const wsRK=XLSX.utils.aoa_to_sheet(rk); style(wsRK,{widths:[12,8,32,13,12,13,13,11,14,11,24,24],filter:true,band:true,fmts:{5:MONEY0,6:MONEY0}});
+  XLSX.utils.book_append_sheet(wb,wsRK,'Risk Register');
+  // ---- billing ----
+  const bl=[['Project','Period','Invoice #','Amount $','Invoice date','Status','Link','Notes']];
+  for(const [proj,p] of Object.entries(state.plans)) for(const b of (p._bills||[])) bl.push([proj,b.period||'',b.invoice||'',+b.amount||0,b.date||'',b.status||'',b.link||'',b.notes||'']);
+  const wsBL=XLSX.utils.aoa_to_sheet(bl); style(wsBL,{widths:[12,12,16,14,13,11,26,24],filter:true,band:true,fmts:{3:MONEY0}});
+  XLSX.utils.book_append_sheet(wb,wsBL,'Billing');
   // ---- meta (hidden) ----
   const json=JSON.stringify(obj);
   const meta=[['Exact tool state — do not edit']];
@@ -3959,7 +4217,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','co','subco','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','co','subco','risk','billing','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -3976,6 +4234,8 @@ function refreshActiveTab(){
   else if(t==='ev') renderEvTab();
   else if(t==='co') renderCoTab();
   else if(t==='subco') renderSubTab();
+  else if(t==='risk') renderRiskTab();
+  else if(t==='billing') renderBillingTab();
 }
 
 /* ===================== Sample data ===================== */
@@ -4124,6 +4384,17 @@ function seedDemoPlan(){
       {id:'s2',vendor:'Apex Survey Inc',po:'SUB-1002',desc:'Topographic & boundary survey',status:'Committed',commit:Math.round(meta._soldCost*0.04/1000)*1000,tasks:tnums[1]||'',notes:''},
       {id:'s3',vendor:'Lone Star Traffic',po:'',desc:'Traffic counts (proposed)',status:'Pending',commit:Math.round(meta._soldCost*0.02/1000)*1000,tasks:'',notes:'Quote received, not committed'},
     ];
+    meta._risks=[
+      {id:'r1',num:'R-01',desc:'Permitting delay pushes schedule',category:'Schedule',prob:40,impact:Math.round(meta._soldCost*0.06/1000)*1000,response:'Mitigate',owner:'PM',status:'Open',link:'',notes:'Engage agency early'},
+      {id:'r2',num:'R-02',desc:'Differing site conditions (geotech)',category:'Technical',prob:25,impact:Math.round(meta._soldCost*0.05/1000)*1000,response:'Transfer',owner:'Geotech lead',status:'Mitigating',link:'',notes:'Contingency allowance in sub'},
+      {id:'r3',num:'R-03',desc:'Scope creep on stakeholder review',category:'Commercial',prob:50,impact:Math.round(meta._soldCost*0.03/1000)*1000,response:'Mitigate',owner:'PM',status:'Open',link:'',notes:'Change-order discipline'},
+    ];
+    meta._bills=[
+      {id:'b1',period:'2026-03',invoice:'INV-1001',amount:Math.round(meta._soldCost*0.18/1000)*1000,date:'2026-04-05',status:'Paid',link:'',notes:''},
+      {id:'b2',period:'2026-04',invoice:'INV-1002',amount:Math.round(meta._soldCost*0.16/1000)*1000,date:'2026-05-05',status:'Submitted',link:'',notes:''},
+      {id:'b3',period:'2026-05',invoice:'INV-1003',amount:Math.round(meta._soldCost*0.15/1000)*1000,date:'2026-06-05',status:'Draft',link:'',notes:'Pending PM review'},
+    ];
+    meta._spLinks={co:'https://sharepoint.example.com/project/change-orders',billing:'https://sharepoint.example.com/project/billing',risk:''};
   }
   // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
   state.budgets={};
@@ -4164,7 +4435,7 @@ function init(){
   $('#btnSample').addEventListener('click',loadSample);
   $('#billCutoff').addEventListener('change',e=>{ state.settings.billCutoff=e.target.value; saveState(); renderBilling(); });
   $('#billBasis').addEventListener('change',e=>{ state.settings.billBasis=e.target.value; saveState(); renderBilling(); });
-  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupCoTab(); setupSubTab(); setupSettings();
+  setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupCoTab(); setupSubTab(); setupRiskTab(); setupBillingTab(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
