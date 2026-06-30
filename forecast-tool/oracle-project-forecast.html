@@ -199,6 +199,17 @@
     <h2>Top projects by total cost</h2>
     <div class="tablewrap" style="max-height:420px"><table id="topProjects"></table></div>
   </div>
+  <div class="card">
+    <h2>Billing reconciliation — incurred vs billed <span class="hint">as of a monthly cut-off</span></h2>
+    <div class="row" style="margin-bottom:10px">
+      <label>Billing cut-off date: <input type="date" id="billCutoff"></label>
+      <label>Date basis: <select id="billBasis"><option value="gl">GL Date</option><option value="trx">Transaction Date</option></select></label>
+      <span class="hint">As of the cut-off: hours &amp; cost <b>incurred</b> vs amount <b>billed</b> (Billed Status). The gap is unbilled work-in-progress (WIP).</span>
+    </div>
+    <div class="kpis" id="billKpis"></div>
+    <div class="tablewrap" style="max-height:380px"><table id="billTable"></table></div>
+    <div class="hint" id="billInfo" style="margin-top:8px"></div>
+  </div>
 </section>
 
 <!-- ============ EXPLORER TAB ============ -->
@@ -658,6 +669,7 @@ let state = {
   settings:{
     periodSource:'periodName', currency:'$', decimals:0,
     billedValues:'billed,invoiced,fully billed,y,yes',
+    billCutoff:'', billBasis:'gl',
     expDims:['projectNumber','projectName'], expMetric:'totalCost',
     fcLevel:'projectNumber,projectName', fcMetric:'totalCost', fcMethod:'avgN',
     fcLookback:3, fcHorizon:6, fcGrowth:0, fcExcludeLatest:true,
@@ -1048,9 +1060,16 @@ function renderDashboard(){
   const lastK=cols.length?cols[cols.length-1]:null;
   const lastTot = lastK==null?0: rows.filter(r=>r._pk===lastK).reduce((a,r)=>a+(r.totalCost||0),0);
   const burn3 = avgOverLast(rows, cols, 3);
+  // revenue (price) from per-project bill rates; net margin
+  let revenue=0, hoursWithBill=0;
+  for(const r of rows){ revenue+=rowRevenue(r); if(r.hours>0 && projBill(r.projectNumber||r.projectName,r.employee)>0) hoursWithBill+=r.hours; }
+  const margin=revenue-tot.totalCost;
+  const cov = tot.hours? Math.round(100*hoursWithBill/tot.hours) : 0;
   const k=$('#kpis'); k.innerHTML='';
   const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
   kpi('Total cost (filtered)', fmtMoney(tot.totalCost), rows.length.toLocaleString()+' transactions');
+  kpi('Revenue (price)', fmtMoney(revenue), cov<100? cov+'% of hours have bill rates' : 'hours × bill rate (Rate Table)');
+  kpi('Net margin', fmtMoney(margin), revenue? (100*margin/revenue).toFixed(1)+'% of price':'');
   kpi('Hours', fmtNum(tot.hours,1), 'Labor: '+fmtMoney(tot.salaries+tot.fringe));
   kpi('Subs / Expenses', fmtMoney(tot.subsCost+tot.expensesCost), 'Oncost: '+fmtMoney(tot.oncost));
   if(state.mapping.billedStatus) kpi('Unbilled cost', fmtMoney(unbilled), tot.totalCost? (100*unbilled/tot.totalCost).toFixed(1)+'% of total':'');
@@ -1098,6 +1117,72 @@ function renderDashboard(){
     ));
   }
   t.append(tb);
+  renderBilling();
+}
+function projBill(proj,emp){ const p=state.plans[proj]; return (p&&p._rateTable&&p._rateTable[emp]&&+p._rateTable[emp].bill)||0; }
+function projMarkup(proj){ const p=state.plans[proj]; return (p&&+p._nlMarkup)||0; }
+function rowRevenue(r){
+  const proj=r.projectNumber||r.projectName;
+  if(r.hours>0) return r.hours*projBill(proj,r.employee);          // labor priced at bill rate
+  return (r.totalCost||0)*(1+projMarkup(proj)/100);               // subs/expenses at cost + markup
+}
+function renderBilling(){
+  if(!data.length)return;
+  const s=state.settings;
+  // default cut-off = last calendar day of the latest GL month in the data
+  if(!s.billCutoff){
+    let mx=null; for(const r of data){ const d=r.glDate||r.transactionDate; if(d&&(!mx||d>mx))mx=d; }
+    if(mx) s.billCutoff=fmtDate(new Date(mx.getFullYear(),mx.getMonth()+1,0));
+  }
+  if($('#billCutoff'))$('#billCutoff').value=s.billCutoff||'';
+  if($('#billBasis'))$('#billBasis').value=s.billBasis||'gl';
+  const cut = s.billCutoff? parseDateVal(s.billCutoff) : null;
+  const dOf = r => s.billBasis==='trx' ? (r.transactionDate||r.glDate) : (r.glDate||r.transactionDate);
+  const rows=filteredRows();
+  const map=new Map();
+  let tH=0,tC=0,tB=0,undated=0;
+  for(const r of rows){
+    const d=dOf(r); if(!d){ undated++; continue; }
+    if(cut && d>cut) continue;
+    const key=r.projectNumber||r.projectName||'(none)';
+    let g=map.get(key); if(!g){ g={proj:r.projectNumber||'',name:r.projectName||key,h:0,c:0,b:0}; map.set(key,g); }
+    g.h+=r.hours||0; g.c+=r.totalCost||0;
+    const billed = state.mapping.billedStatus && isBilled(r.billedStatus);
+    if(billed) g.b+=r.totalCost||0;
+    tH+=r.hours||0; tC+=r.totalCost||0; if(billed)tB+=r.totalCost||0;
+  }
+  const wip=tC-tB;
+  const k=$('#billKpis'); k.innerHTML='';
+  const kpi=(l,v,sub,col)=>{const e2=el('div',{class:'kpi'},el('div',{class:'lbl'},l),el('div',{class:'val'},v),sub?el('div',{class:'sub'},sub):null);if(col)e2.querySelector('.val').style.color=col;k.append(e2);};
+  kpi('Hours incurred', fmtNum(tH,1), 'through '+(s.billCutoff||'—'));
+  kpi('Cost incurred', fmtMoney(tC));
+  kpi('Billed', fmtMoney(tB), tC?(100*tB/tC).toFixed(1)+'% of incurred':'');
+  kpi('Unbilled WIP', fmtMoney(wip), 'incurred − billed', wip>0.5?'var(--warn)':'');
+  const groups=[...map.values()].sort((a,b)=>(b.c-b.b)-(a.c-a.b));
+  const t=$('#billTable'); t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,...['Project','Name','Hours incurred','Cost incurred','Billed','Unbilled WIP','% billed'].map((h,i)=>el('th',{class:i>1?'num':''},h)))));
+  const tb=el('tbody');
+  for(const g of groups.slice(0,200)){
+    const w=g.c-g.b;
+    tb.append(el('tr',null,
+      el('td',null,g.proj||g.name), el('td',null,g.proj?g.name:''),
+      el('td',{class:'num'},fmtNum(g.h,1)),
+      el('td',{class:'num'},fmtMoney(g.c)),
+      el('td',{class:'num'},state.mapping.billedStatus?fmtMoney(g.b):'—'),
+      el('td',{class:'num'+(w>0.5?' neg':'')},state.mapping.billedStatus?fmtMoney(w):'—'),
+      el('td',{class:'num'},state.mapping.billedStatus&&g.c?(100*g.b/g.c).toFixed(0)+'%':'')));
+  }
+  tb.append(el('tr',{class:'total'},
+    el('td',{colspan:2},'TOTAL'),
+    el('td',{class:'num'},fmtNum(tH,1)),
+    el('td',{class:'num'},fmtMoney(tC)),
+    el('td',{class:'num'},state.mapping.billedStatus?fmtMoney(tB):'—'),
+    el('td',{class:'num'},state.mapping.billedStatus?fmtMoney(wip):'—'),
+    el('td',{class:'num'},state.mapping.billedStatus&&tC?(100*tB/tC).toFixed(0)+'%':'')));
+  t.append(tb);
+  $('#billInfo').textContent = (state.mapping.billedStatus?'':'⚠ No Billed Status column mapped — billed amounts show as 0. ')
+    +'Basis: '+(s.billBasis==='trx'?'Transaction Date':'GL Date')+' ≤ '+(s.billCutoff||'—')
+    +' · '+groups.length+' projects'+(undated?' · '+undated+' undated rows excluded':'');
 }
 function avgOverLast(rows, cols, n){
   const use=cols.slice(-n); if(!use.length)return 0;
@@ -4077,6 +4162,8 @@ function init(){
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });
   $('#btnSample').addEventListener('click',loadSample);
+  $('#billCutoff').addEventListener('change',e=>{ state.settings.billCutoff=e.target.value; saveState(); renderBilling(); });
+  $('#billBasis').addEventListener('change',e=>{ state.settings.billBasis=e.target.value; saveState(); renderBilling(); });
   setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupCoTab(); setupSubTab(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);

@@ -19,7 +19,7 @@ Click **Load sample data** in the header to try the tool without a real extract.
 
 | Tab | Purpose |
 |-----|---------|
-| **Dashboard** | KPIs (total cost, hours, labor, subs/expenses, unbilled, latest-period spend, 3-month average burn), cost-by-period chart with cumulative line, cost-mix breakdown, top-25 projects table. |
+| **Dashboard** | KPIs incl. total cost, **revenue (price = hours × bill rate)** and **net margin ($ and %)**, hours, labor, subs/expenses, unbilled, latest-period spend, 3-month burn; cost-by-period and cost-mix charts; top-25 projects; and a **billing reconciliation** with a monthly cut-off date comparing hours & cost incurred vs amount billed (Billed Status) as of that date — the gap is unbilled WIP, by project. |
 | **Pivot Explorer** | Group by any combination of the 30+ dimensions (project, task, PM, cost center, expenditure type, employee…), spread any metric across periods, or show all cost columns. Export to CSV. |
 | **Forecast** | Pick a level (Project, Project + Top Task, PM, Cost Center, BU/Division, Expenditure Type), a method, look-back window, horizon and a monthly adjustment %. Enter a **Budget / EAC** per row to get remaining budget, % used, runway in months and a projected depletion period. Actuals-vs-forecast chart per group. Export to CSV. |
 | **Project Forecast** | The **baseline job plan** as a task tree keyed on Task Number + Task Name, ordered numerically by WBS (1.9 < 1.10 < 2.1): each task row expands to the people beneath it, hours are entered per person per week, and the task row shows the live sum of its people (plus rolled-up cost/revenue/margin). Add people per task, collapse/expand tasks, set the plan window (start date + number of weeks). Stays fixed as the original forecast. |
