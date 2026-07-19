@@ -1,4 +1,4 @@
-# Oracle Project Forecasting Tool
+# Datum — Project Forecasting & Controls
 
 A single-file web app for turning the weekly Oracle project cost extract into
 forecasting information. No installation, no server, no IT request — everything
@@ -32,6 +32,12 @@ Click **Load sample data** in the header to try the tool without a real extract.
 | **Risk Register** | Per-project risk register: Risk #, description, category, probability %, cost impact, computed exposure (probability × impact), response (Mitigate/Avoid/Transfer/Accept), owner, status (Open/Mitigating/Closed/Realized), SharePoint link, notes. Open-exposure / realized KPIs, styled Excel export, import from Excel or CSV, workbook sheet. |
 | **Billing** | Per-project invoice log: period, invoice #, amount, date, status (Draft/Submitted/Paid), SharePoint link, notes. Invoiced / paid / outstanding / draft KPIs, Excel export & import, workbook sheet. Complements the Dashboard billing reconciliation (which derives billed-from-extract). |
 | **SharePoint links** | Set a project SharePoint folder URL for change orders, billing and risks (Open ↗ button), plus a per-record link on every billing and risk row. Saved per project. |
+| **Health check** | Header button — scans loaded data, mapping and rates for problems (unmapped columns, unparsed periods, non-numeric rates/markup, duplicate transaction IDs, people missing bill rates). |
+| **Compare extract** | Header button — diff the loaded extract against a previous weeks file: new/removed transactions and cost movement by project. |
+| **Restore point / undo** | Auto-snapshots of your work (forecasts, rates, COs, budgets, settings) build up in the browser; restore any recent one from Settings. |
+| **Status report** | One-page printable/PDF project summary (forecast vs baseline, contract/reserves, change orders, top risks, billing) from the Actuals vs Forecast tab. |
+| **Baseline history / cash flow** | Re-baselining saves dated baseline snapshots you can restore; the Billing tab charts cumulative forecast revenue vs invoiced by month. |
+| **Mapping profiles** | Save/reuse column maps per ERP/export on the Upload tab. |
 | **Settings** | Period source (Period Name vs GL/Transaction Date month), currency, decimals, what counts as "billed". |
 
 ## Forecast methods (all adjustable)

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oracle Project Forecasting Tool</title>
+<title>Datum — Project Forecasting &amp; Controls</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" async></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" async></script>
 <style>
@@ -116,6 +116,26 @@
   .modal h3{margin:14px 0 6px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   .modal .close-x{float:right;cursor:pointer;color:var(--muted);font-size:22px;line-height:1}
   .modal .close-x:hover{color:#fff}
+  #datumVer{background:#16324e;color:#9bd0f5;border-color:#1d4f74}
+  .hlist{list-style:none;margin:0;padding:0}
+  .hlist li{padding:7px 10px;border-bottom:1px solid var(--border);font-size:13px;display:flex;gap:9px;align-items:flex-start}
+  .hlist li .tag{flex:0 0 auto;font-weight:700;border-radius:4px;padding:1px 7px;font-size:11px}
+  .tag.err{background:#4a2027;color:#ffb3bd} .tag.warn{background:#3a2e12;color:#fde68a} .tag.ok{background:#16311f;color:#86efac} .tag.info{background:#1a2c42;color:#9bd0f5}
+  @media print{
+    body>*:not(#dModal){display:none !important}
+    #dModal{position:static !important;background:#fff !important;display:block !important;padding:0 !important}
+    #dModal .modal{box-shadow:none !important;max-width:100% !important;width:100% !important;color:#111 !important;background:#fff !important}
+    #dModal .close-x,#dModal .noprint{display:none !important}
+    #dModal .rep h1,#dModal .rep h2,#dModal .rep h3,#dModal .rep td,#dModal .rep th,#dModal .rep p{color:#111 !important}
+    #dModal .rep th{background:#1F4E79 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    #dModal .rep .card{background:#fff !important;border:1px solid #ccc !important}
+  }
+  .rep h1{font-size:22px;margin:0 0 2px} .rep .sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+  .rep table{width:100%;border-collapse:collapse;margin:8px 0 16px}
+  .rep th,.rep td{border:1px solid var(--border);padding:6px 9px;font-size:12.5px;text-align:right}
+  .rep th:first-child,.rep td:first-child{text-align:left}
+  .rep th{background:#1F4E79;color:#fff}
+  .rep h3{margin:14px 0 4px;font-size:14px}
   .modal-wide{max-width:96vw;width:96vw}
   #coPriceLabor tr.cat-row td{background:#26364f;font-weight:700;border-top:1px solid #3d5070}
   #coPriceLabor tr.tsk-row td{background:#1e2c44;font-weight:600}
@@ -129,10 +149,14 @@
 <body>
 
 <header>
-  <h1>Oracle <span>Project Forecasting</span> Tool</h1>
+  <h1>Datum<span> · forecasting &amp; controls</span></h1>
+  <span id="datumVer" class="pill" title="Version — hover Save/Open to move between machines"></span>
   <span id="dataStatus" class="pill">No data loaded</span>
   <div class="spacer"></div>
   <button id="btnSample" class="small">Load sample data</button>
+  <button id="btnHealth" class="small" title="Scan the loaded data & settings for problems">Health check</button>
+  <button id="btnCompare" class="small" title="Compare the loaded extract to a previous week's file">Compare extract…</button>
+  <input type="file" id="cmpFile" accept=".xlsx,.xls,.csv,.tsv,.txt" class="hidden">
   <button id="btnSaveWb" class="small" title="Save the workbook — data, forecasts, rates, budgets, settings. In Edge/Chrome it writes back to the same file, like Excel.">Save</button>
   <button id="btnSaveAsWb" class="small" title="Choose where to save — Excel workbook (.xlsx, readable in Excel) or JSON">Save As…</button>
   <button id="btnOpenWb" class="small" title="Open a saved workbook (.xlsx or .json) and continue where you left off">Open</button>
@@ -183,6 +207,12 @@
     <div class="tablewrap" style="max-height:420px">
       <table class="maptable"><thead><tr><th>Field the tool needs</th><th>Column in your file</th><th></th></tr></thead>
       <tbody id="mapBody"></tbody></table>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>Mapping profile: <select id="mapProfile" style="min-width:160px"><option value="">— none —</option></select></label>
+      <button id="btnMapSave" class="small">Save current as…</button>
+      <button id="btnMapDel" class="small">Delete</button>
+      <span class="hint">Reuse a saved column map for another ERP/export (Oracle, Deltek, SAP…).</span>
     </div>
     <div class="row" style="margin-top:12px">
       <button id="btnApplyMap" class="primary">Apply mapping &amp; load data</button>
@@ -369,6 +399,8 @@
       <button id="btnApCopyActuals">Copy actual hours into past cells</button>
       <button id="btnApRebase">Set new baseline from updated forecast</button>
       <button id="btnApClear">Clear updated forecast</button>
+      <button id="btnApReport">Status report</button>
+      <button id="btnApHist">Baseline history</button>
       <button id="btnApCsv">Export CSV</button>
     </div>
     <p class="hint">Gray = actual charged that week; box = your <b>updated forecast</b> (hover shows the original forecast for that week).
@@ -566,6 +598,11 @@
   </div>
   <div class="kpis" id="blKpis"></div>
   <div class="card"><div class="tablewrap" style="max-height:520px"><table id="blTable"></table></div><div class="hint" id="blInfo" style="margin-top:8px"></div></div>
+  <div class="card">
+    <h2>Cash flow — forecast revenue vs invoiced <span class="hint">by month</span></h2>
+    <div class="tablewrap" style="max-height:320px"><table id="blCash"></table></div>
+    <div class="chartbox" style="height:280px;margin-top:10px"><canvas id="chCash"></canvas></div>
+  </div>
 </section>
 
 <!-- ============ SETTINGS TAB ============ -->
@@ -600,6 +637,7 @@
       <b>Open</b> restores either format — and keeps writing to that file when you Save. Keep workbooks on your desktop, OneDrive or SharePoint (synced SharePoint folders give you version history for free).
       Export/Import settings moves just the configuration, without data.</p>
     <div class="row">
+      <button id="btnSnapshots">Restore point / undo…</button>
       <button id="btnClearBudgets">Clear saved budgets</button>
       <button id="btnClearAll" style="border-color:var(--bad);color:var(--bad)">Reset everything</button>
     </div>
@@ -644,7 +682,13 @@
     </div>
   </div>
 </div>
-<div class="footer-note">All processing happens locally in your browser. No data leaves your machine.</div><div class="footer-note">All processing happens locally in your browser. No data leaves your machine.</div>
+<div class="modal-back" id="dModal">
+  <div class="modal modal-wide">
+    <span class="close-x" id="dModalClose">✕</span>
+    <div id="dModalBody"></div>
+  </div>
+</div>
+<div class="footer-note">All processing happens locally in your browser. No data leaves your machine.</div>
 
 <script>
 "use strict";
@@ -751,9 +795,111 @@ function loadState(){
       if(!state.settings._scWeek){ state.settings.scPeriod='week'; state.settings._scWeek=1; } }
   }catch(e){}
 }
+const DATUM_VERSION='1.0.0', DATUM_BUILD='2026-06';
 function saveState(){
   stateDirty=true;
   try{ localStorage.setItem(STORE_KEY, JSON.stringify({mapping:state.mapping, filters:state.filters, settings:state.settings, budgets:state.budgets, plans:state.plans})); }catch(e){}
+  try{ datumSnapshot(); }catch(e){}
+}
+/* ---- generic modal ---- */
+function openDModal(node){ const b=$('#dModalBody'); b.innerHTML=''; b.append(node); $('#dModal').classList.add('open'); }
+function closeDModal(){ $('#dModal').classList.remove('open'); }
+/* ---- auto-snapshots (state only; the extract is not snapshotted) ---- */
+const SNAP_KEY='datum.snapshots.v1';
+let lastSnapAt=0;
+function datumSnapshots(){ try{ return JSON.parse(localStorage.getItem(SNAP_KEY))||[]; }catch(e){ return []; } }
+function datumSnapshot(force){
+  const now=Date.now();
+  if(!force && now-lastSnapAt<90000) return;   // at most one snapshot per 90s
+  lastSnapAt=now;
+  const snap={ts:new Date().toISOString(), n:{proj:Object.keys(state.plans).length, budgets:Object.keys(state.budgets).length},
+    state:JSON.stringify({mapping:state.mapping,filters:state.filters,settings:state.settings,budgets:state.budgets,plans:state.plans})};
+  const arr=datumSnapshots();
+  if(arr.length && arr[arr.length-1].state===snap.state) return; // no change
+  arr.push(snap); while(arr.length>15)arr.shift();
+  try{ localStorage.setItem(SNAP_KEY,JSON.stringify(arr)); }catch(e){}
+}
+function restoreSnapshot(i){
+  const arr=datumSnapshots(); const s=arr[i]; if(!s)return;
+  if(!confirm('Restore the workbook state from '+String(s.ts).replace('T',' ').slice(0,16)+'?\n\nThis replaces current forecasts, rates, change orders, budgets and settings (the loaded extract data is kept). A snapshot of the current state is taken first so you can undo.'))return;
+  datumSnapshot(true); // snapshot current before overwriting
+  try{ const o=JSON.parse(s.state);
+    state.mapping=o.mapping||{}; state.filters=o.filters||{}; state.settings=Object.assign(state.settings,o.settings||{});
+    state.budgets=o.budgets||{}; state.plans=o.plans||{};
+    saveState(); if(data.length){ recomputePeriods(); buildAllFilterbars(); } refreshActiveTab();
+    alert('Restored.'); closeDModal();
+  }catch(e){ alert('Could not restore: '+e.message); }
+}
+function showSnapshots(){
+  const arr=datumSnapshots().slice().reverse();
+  const wrap=el('div',null,el('h1',null,'Restore point / undo'),
+    el('p',{class:'sub'},'Datum keeps recent snapshots of your work (forecasts, rates, change orders, budgets, settings) in this browser. The loaded extract itself is not snapshotted.'));
+  if(!arr.length) wrap.append(el('p',{class:'hint'},'No snapshots yet — they build up as you work.'));
+  const t=el('table',{class:'rep'}); t.append(el('thead',null,el('tr',null,el('th',null,'When'),el('th',null,'Projects'),el('th',null,'Budgets'),el('th',null,''))));
+  const tb=el('tbody');
+  arr.forEach((s,ri)=>{ const idx=arr.length-1-ri;
+    tb.append(el('tr',null,el('td',null,String(s.ts).replace('T',' ').slice(0,16)),el('td',null,String((s.n&&s.n.proj)||'')),el('td',null,String((s.n&&s.n.budgets)||'')),
+      el('td',null,el('button',{class:'small',onclick:()=>restoreSnapshot(idx)},'Restore'))));
+  });
+  t.append(tb); wrap.append(t);
+  openDModal(wrap);
+}
+/* ---- health check ---- */
+function runHealthCheck(){
+  const issues=[];
+  const add=(sev,msg)=>issues.push({sev,msg});
+  if(!data.length){ add('info','No extract loaded — click Upload extract (or Load sample data) first.'); }
+  else{
+    const m=state.mapping;
+    if(!m.periodName&&!m.glDate&&!m.transactionDate) add('err','No Period Name, GL Date or Transaction Date column mapped — periods can\'t be computed.');
+    if(!m.totalCost) add('warn','Total Cost column not mapped — cost totals will be 0.');
+    if(!m.billedStatus) add('info','Billed Status not mapped — unbilled/WIP/billing reconciliation are disabled.');
+    if(!m.employee) add('info','Employee/Vendor not mapped — per-person rates and forecasts won\'t group by staff.');
+    if(!m.taskNumber) add('info','Task Number not mapped — change-order/subcontractor actual-cost-by-code tracking is off.');
+    if(data._unparsed) add('warn',data._unparsed.toLocaleString()+' row(s) had no readable period and are excluded from period views.');
+    // duplicate transaction IDs
+    if(m.transactionId){ const seen=new Set(),dup=new Set(); for(const r of data){ const id=r.transactionId; if(!id)continue; if(seen.has(id))dup.add(id); else seen.add(id); } if(dup.size) add('warn',dup.size+' duplicate Transaction ID(s) — possible double-counted rows.'); }
+    // negative hours
+    let negH=0; for(const r of data)if((r.hours||0)<0)negH++; if(negH) add('info',negH+' row(s) have negative hours (cost transfers/corrections) — normal, but noted.');
+    // non-numeric rates/markup across projects
+    let badRate=0,badMk=0;
+    for(const p of Object.values(state.plans)){
+      if(p._nlMarkup!=null&&!isFinite(Number(p._nlMarkup)))badMk++;
+      for(const e of Object.values(p._rateTable||{})){ if(e.cost!=null&&!isFinite(Number(e.cost)))badRate++; if(e.bill!=null&&!isFinite(Number(e.bill)))badRate++; }
+    }
+    if(badMk) add('warn',badMk+' project(s) have a non-numeric non-labor markup — fix on Project Forecast (revenue would be understated).');
+    if(badRate) add('warn',badRate+' rate value(s) are non-numeric — fix on the Rate Table (they\'re treated as 0).');
+    // employees with hours but no bill rate
+    const proj0=Object.keys(state.plans);
+    let noBill=0;const seenE=new Set();
+    for(const r of data){ if(!(r.hours>0))continue; const pj=r.projectNumber||r.projectName, key=pj+'||'+r.employee; if(seenE.has(key))continue; seenE.add(key);
+      const rt=(state.plans[pj]&&state.plans[pj]._rateTable)||{}; if(!(rt[r.employee]&&+rt[r.employee].bill))noBill++; }
+    if(noBill) add('info',noBill+' project/person combination(s) have no bill rate — revenue for those is counted as 0 until set on the Rate Table.');
+    if(!issues.some(i=>i.sev==='err'||i.sev==='warn')) add('ok','No problems found — data and rates look clean.');
+  }
+  const wrap=el('div',null,el('h1',null,'Health check'),el('p',{class:'sub'},'A quick scan of the loaded data, mapping and rates.'));
+  const ul=el('ul',{class:'hlist'});
+  const order={err:0,warn:1,info:2,ok:3};
+  issues.sort((a,b)=>order[a.sev]-order[b.sev]);
+  for(const it of issues) ul.append(el('li',null,el('span',{class:'tag '+it.sev},it.sev.toUpperCase()),el('span',null,it.msg)));
+  wrap.append(ul);
+  openDModal(wrap);
+}
+/* ---- mapping profiles ---- */
+const MAPPROF_KEY='datum.mapprofiles.v1';
+function mapProfiles(){ try{ return JSON.parse(localStorage.getItem(MAPPROF_KEY))||{}; }catch(e){ return {}; } }
+function setMapProfiles(o){ try{ localStorage.setItem(MAPPROF_KEY,JSON.stringify(o)); }catch(e){} }
+function refreshMapProfiles(){
+  const sel=$('#mapProfile'); if(!sel)return; const cur=sel.value;
+  sel.innerHTML=''; sel.append(el('option',{value:''},'— none —'));
+  for(const name of Object.keys(mapProfiles()).sort()) sel.append(el('option',{value:name},name));
+  sel.value=cur;
+}
+function applyMapProfile(name){
+  const prof=mapProfiles()[name]; if(!prof)return;
+  const mapping={};
+  for(const k in prof){ if(raw.headers && raw.headers.includes(prof[k])) mapping[k]=prof[k]; }
+  state.mapping=mapping; saveState(); renderMapping();
 }
 
 /* ===================== Utils ===================== */
@@ -1730,11 +1876,17 @@ function setupProjectPages(){
   });
   $('#btnApRebase').addEventListener('click',()=>{
     if(!ppCtx)return;
-    if(!confirm('Replace the original forecast with the current updated forecast? The old baseline is lost.'))return;
-    ppCtx.node.baseline=Object.assign({},ppCtx.node.current);
-    ppCtx.node.baselineAt=new Date().toISOString();
+    if(!confirm('Replace the original forecast with the current updated forecast?\n\nThe previous baseline is saved to Baseline history (you can restore it).'))return;
+    const nd=ppCtx.node;
+    nd.baselineHistory=nd.baselineHistory||[];
+    if(Object.keys(nd.baseline||{}).length) nd.baselineHistory.push({ts:new Date().toISOString(),at:nd.baselineAt||'',baseline:Object.assign({},nd.baseline)});
+    while(nd.baselineHistory.length>20)nd.baselineHistory.shift();
+    nd.baseline=Object.assign({},nd.current);
+    nd.baselineAt=new Date().toISOString();
     saveState(); renderActualsPage();
   });
+  $('#btnApReport').addEventListener('click',()=>{ if(ppCtx)showStatusReport(ppCtx.proj); });
+  $('#btnApHist').addEventListener('click',showBaselineHistory);
   $('#btnApClear').addEventListener('click',()=>{
     if(!ppCtx)return;
     if(confirm('Clear all updated-forecast values for this project/level? (The original forecast is kept.)')){
@@ -3697,7 +3849,10 @@ function renderCoTab(){
     const sel=el('select',null,...CO_STATUSES.map(s=>el('option',{value:s},s)));
     sel.value=co.status||'Pending';
     sel.style.color=coStatusColor(sel.value); sel.style.fontWeight='600';
-    sel.addEventListener('change',()=>{co.status=sel.value;saveState();renderCoTab();});
+    sel.addEventListener('change',()=>{ const was=co.status; co.status=sel.value;
+      co.statusLog=co.statusLog||[]; co.statusLog.push({from:was||'',to:sel.value,at:new Date().toISOString()});
+      if(sel.value==='Executed'&&!co.executedAt)co.executedAt=fmtDate(new Date());
+      saveState(); renderCoTab(); });
     const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',
       onclick:()=>{ if(confirm('Delete '+(co.num||'this change order')+'?')){ meta._cos=meta._cos.filter(x=>x!==co); saveState(); renderCoTab(); } }},'✕');
     const priced=co.price&&((co.price.labor&&co.price.labor.length)||(co.price.nl&&co.price.nl.length));
@@ -4041,6 +4196,7 @@ function renderBillingTab(){
   tb.append(el('tr',{class:'total'},el('td',{colspan:2},'TOTAL INVOICED'),el('td',{class:'num'},fmtMoney(invoiced)),el('td'),el('td'),el('td'),el('td'),el('td')));
   t.append(tb);
   $('#blInfo').textContent=bills.length+' invoice'+(bills.length===1?'':'s')+' · invoiced '+fmtMoney(invoiced)+' · outstanding '+fmtMoney(outstanding);
+  renderCashFlow();
 }
 function exportBlXlsx(){
   if(!ppCtx){alert('Open a project first.');return;} if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
@@ -4101,6 +4257,163 @@ function mergeOrReplace(meta,key,got,keyFn,updateFn){
   for(const g of got){ const kk=keyFn(g); const ex=kk&&byKey.get(kk); if(ex)updateFn(ex,g); else { meta[key].push(g); byKey.set(kk,g); } }
 }
 
+/* ===================== Datum: compare extract / status report / cash flow / baseline history ===================== */
+function parseFileToRows(file,cb){
+  const name=(file.name||'').toLowerCase();
+  const build=grid=>{
+    if(!grid.length){cb(null,'file is empty');return;}
+    const labels=new Set(FIELDS.map(f=>norm(f.label)));
+    let hi=0,best=-1; for(let i=0;i<Math.min(grid.length,15);i++){ const sc=grid[i].reduce((a,c)=>a+(labels.has(norm(c))?1:0),0); if(sc>best){best=sc;hi=i;} }
+    const headers=grid[hi].map((c,i)=>String(c).trim()||('Column '+(i+1)));
+    const idx={}; headers.forEach((h,i)=>{ if(!(h in idx))idx[h]=i; });
+    const rows=grid.slice(hi+1).filter(r=>r.some(c=>c!==''&&c!=null)).map(r=>{ const o={};
+      for(const f of FIELDS){ const src=state.mapping[f.key]; if(src==null){o[f.key]=f.type==='num'?0:'';continue;} const v=r[idx[src]];
+        o[f.key]= f.type==='num'?parseNumber(v):(f.type==='date'?parseDateVal(v):(v==null?'':String(v).trim())); } return o; });
+    cb(rows,null);
+  };
+  const r=new FileReader();
+  if(name.endsWith('.csv')||name.endsWith('.tsv')||name.endsWith('.txt')){
+    r.onload=e=>{ try{ const text=e.target.result; const delim=name.endsWith('.tsv')?'\t':detectDelim(text); build(parseDSV(text,delim)); }catch(err){ cb(null,err.message); } };
+    r.readAsText(file);
+  } else {
+    r.onload=e=>{ try{ if(typeof XLSX==='undefined')throw new Error('Excel library not loaded'); const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'}); let best=wb.SheetNames[0],bn=0; for(const n of wb.SheetNames){ const ref=wb.Sheets[n]['!ref']; const rr=ref?XLSX.utils.decode_range(ref).e.r:0; if(rr>bn){bn=rr;best=n;} } build(XLSX.utils.sheet_to_json(wb.Sheets[best],{header:1,defval:'',raw:true})); }catch(err){ cb(null,err.message); } };
+    r.readAsArrayBuffer(file);
+  }
+}
+function compareExtract(file){
+  parseFileToRows(file,(prev,err)=>{
+    if(err){ alert('Could not read the file: '+err); return; }
+    if(!prev){ alert('No rows found.'); return; }
+    const key=r=> state.mapping.transactionId ? String(r.transactionId||'') : [r.projectNumber,r.employee,r.expenditureType,r._raw].join('|');
+    const useId=!!state.mapping.transactionId;
+    const oldMap=new Map(), newMap=new Map();
+    for(const r of prev) if(useId&&r.transactionId) oldMap.set(String(r.transactionId),r);
+    for(const r of data) if(useId&&r.transactionId) newMap.set(String(r.transactionId),r);
+    // project-level cost movement (always available)
+    const pc=new Map();
+    const bump=(m,pj,f,v)=>{ let g=m.get(pj); if(!g){g={old:0,cur:0};m.set(pj,g);} g[f]+=v||0; };
+    for(const r of prev) bump(pc,r.projectNumber||r.projectName||'(none)','old',r.totalCost);
+    for(const r of data) bump(pc,r.projectNumber||r.projectName||'(none)','cur',r.totalCost);
+    const wrap=el('div',null,el('h1',null,'Extract comparison'),
+      el('p',{class:'sub'},'Loaded extract ('+data.length.toLocaleString()+' rows) vs the file you picked ('+prev.length.toLocaleString()+' rows).'+(useId?'':' No Transaction ID mapped — showing project cost movement only.')));
+    if(useId){
+      let added=0,addedC=0,removed=0,removedC=0;
+      for(const [id,r] of newMap) if(!oldMap.has(id)){ added++; addedC+=r.totalCost||0; }
+      for(const [id,r] of oldMap) if(!newMap.has(id)){ removed++; removedC+=r.totalCost||0; }
+      const k=el('div',{class:'kpis'});
+      const kp=(l,v,s)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},l),el('div',{class:'val'},v),s?el('div',{class:'sub'},s):null));
+      kp('New transactions',added.toLocaleString(),fmtMoney(addedC));
+      kp('Removed transactions',removed.toLocaleString(),fmtMoney(removedC));
+      kp('Net cost change',fmtMoney(addedC-removedC));
+      wrap.append(k);
+    }
+    const rows=[...pc.entries()].map(([pj,g])=>({pj,old:g.old,cur:g.cur,d:g.cur-g.old})).filter(r=>Math.abs(r.d)>0.5).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+    const t=el('table',{class:'rep'}); t.append(el('thead',null,el('tr',null,el('th',null,'Project'),el('th',null,'Previous cost'),el('th',null,'Current cost'),el('th',null,'Change'))));
+    const tb=el('tbody');
+    for(const r of rows.slice(0,100)) tb.append(el('tr',null,el('td',null,r.pj),el('td',null,fmtMoney(r.old)),el('td',null,fmtMoney(r.cur)),el('td',{style:'color:'+(r.d>0?'var(--good)':'var(--bad)')},(r.d>0?'+':'')+fmtMoney(r.d))));
+    t.append(tb); wrap.append(el('h3',null,'Cost movement by project'),t);
+    openDModal(wrap);
+  });
+}
+/* ---- cash flow (Billing tab) ---- */
+function forecastRevenueByMonth(proj){
+  const node=(state.plans[proj]&&state.plans[proj].taskEmployee)||null;
+  const out=new Map();
+  if(!node||!node.current)return out;
+  const rt=(state.plans[proj]&&state.plans[proj]._rateTable)||{};
+  for(const kk in node.current){ const i=kk.lastIndexOf('|'); const label=kk.slice(0,i), wk=kk.slice(i+1);
+    const emp=label.indexOf(' · ')>=0?label.split(' · ').pop():''; const bill=(rt[emp]&&+rt[emp].bill)||0;
+    const hrs=+node.current[kk]||0; if(!hrs||!bill)continue;
+    const mo=wk.slice(0,7); out.set(mo,(out.get(mo)||0)+hrs*bill); }
+  return out;
+}
+function renderCashFlow(){
+  if(!ppCtx)return;
+  const bills=ppCtx.meta._bills||[];
+  const invM=new Map(); for(const b of bills){ const mo=(b.period||b.date||'').slice(0,7); if(!/^\d{4}-\d{2}/.test(mo))continue; if((b.status==='Submitted'||b.status==='Paid'))invM.set(mo,(invM.get(mo)||0)+(+b.amount||0)); }
+  const fcM=forecastRevenueByMonth(ppCtx.proj);
+  const months=[...new Set([...invM.keys(),...fcM.keys()])].sort();
+  const t=$('#blCash'); if(!t)return; t.innerHTML='';
+  t.append(el('thead',null,el('tr',null,...['Month','Forecast revenue','Invoiced','Cum. forecast','Cum. invoiced'].map((h,i)=>el('th',{class:i?'num':''},h)))));
+  const tb=el('tbody'); let cf=0,ci=0;
+  const fL=[],iL=[],labels=[];
+  for(const mo of months){ const f=fcM.get(mo)||0,iv=invM.get(mo)||0; cf+=f;ci+=iv; labels.push(mo);fL.push(Math.round(cf));iL.push(Math.round(ci));
+    tb.append(el('tr',null,el('td',null,mo),el('td',{class:'num'},f?fmtMoney(f):''),el('td',{class:'num'},iv?fmtMoney(iv):''),el('td',{class:'num'},fmtMoney(cf)),el('td',{class:'num'},fmtMoney(ci)))); }
+  t.append(tb);
+  if(!months.length){ t.innerHTML='<tbody><tr><td class="hint" style="padding:10px">Add invoices above, and build the project forecast, to see the cash-flow curve.</td></tr></tbody>'; }
+  drawChart('chCash',{type:'line',data:{labels,datasets:[
+    {label:'Cumulative forecast revenue',data:fL,borderColor:'#a78bfa',backgroundColor:'#a78bfa',tension:.2,pointRadius:0},
+    {label:'Cumulative invoiced',data:iL,borderColor:'#34d399',backgroundColor:'#34d399',tension:.2,pointRadius:0}
+  ]},options:chartOpts()});
+}
+/* ---- baseline history ---- */
+function showBaselineHistory(){
+  if(!ppCtx){alert('Open a project first.');return;}
+  const nd=planNode(ppCtx.proj,'taskEmployee'); const h=(nd.baselineHistory||[]).slice().reverse();
+  const wrap=el('div',null,el('h1',null,'Baseline history — '+ppCtx.proj),el('p',{class:'sub'},'Previous baselines saved each time you re-baselined. Restore one to make it the original forecast again.'));
+  if(!h.length){ wrap.append(el('p',{class:'hint'},'No prior baselines yet. Use "Set new baseline from updated forecast" to snapshot the current baseline before replacing it.')); openDModal(wrap); return; }
+  const t=el('table',{class:'rep'}); t.append(el('thead',null,el('tr',null,el('th',null,'Saved'),el('th',null,'Originally set'),el('th',null,'Baseline hours'),el('th',null,''))));
+  const tb=el('tbody');
+  h.forEach((s,ri)=>{ const idx=h.length-1-ri; let hrs=0; for(const k in s.baseline)hrs+=+s.baseline[k]||0;
+    tb.append(el('tr',null,el('td',null,String(s.ts).replace('T',' ').slice(0,16)),el('td',null,String(s.at||'').slice(0,10)),el('td',{class:'num'},fmtNum(hrs,1)),
+      el('td',null,el('button',{class:'small',onclick:()=>restoreBaseline(idx)},'Restore')))); });
+  t.append(tb); wrap.append(t); openDModal(wrap);
+}
+function restoreBaseline(i){
+  const nd=planNode(ppCtx.proj,'taskEmployee'); const s=(nd.baselineHistory||[])[i]; if(!s)return;
+  if(!confirm('Restore this baseline as the original forecast? The current baseline is snapshotted to history first.'))return;
+  nd.baselineHistory=nd.baselineHistory||[];
+  if(Object.keys(nd.baseline||{}).length) nd.baselineHistory.push({ts:new Date().toISOString(),at:nd.baselineAt||'',baseline:Object.assign({},nd.baseline)});
+  nd.baseline=Object.assign({},s.baseline); nd.baselineAt=s.at||new Date().toISOString();
+  saveState(); closeDModal(); if(activeTab()==='pactuals')renderActualsPage(); else if(activeTab()==='pforecast')renderForecastPage();
+  alert('Baseline restored.');
+}
+/* ---- one-page status report ---- */
+function showStatusReport(proj){
+  if(!proj){alert('Open a project first.');return;}
+  // build the comparison + reserves the same way the Actuals page does
+  renderActualsPage();
+  const meta=ppCtx.meta, node=ppCtx.node, cur=state.settings.currency;
+  let A={h:0,c:0,r:0},E={h:0,c:0,r:0},B={h:0,c:0,r:0}, hasBase=!!node.baselineAt;
+  for(const it of ppCtx.items){ const c=itemCalc(it);
+    if(it.isLabor){ A.h+=it.hours; E.h+=c.eac; B.h+=c.baseTot; }
+    A.c+=it.cost; A.r+=c.actRev||0; E.c+=c.eacCost; E.r+=c.eacRev||0; if(hasBase){ B.c+=c.baseCost||0; B.r+=c.baseRev||0; } }
+  const cap=effCap(meta), sold=effSold(meta), cont=effCont(meta)+(+meta._riskBudget||0);
+  const wrap=el('div',{class:'rep'});
+  wrap.append(el('h1',null,'Project status — '+proj),el('div',{class:'sub'},'Datum · '+fmtDate(new Date())+(node.baselineAt?' · baseline '+node.baselineAt.slice(0,10):'')));
+  const row=(l,b,e,a)=>el('tr',null,el('td',null,l),el('td',null,hasBase?b:'—'),el('td',null,e),el('td',null,a));
+  const t1=el('table'); t1.append(el('thead',null,el('tr',null,el('th',null,'Measure'),el('th',null,'Original'),el('th',null,'Forecast (EAC)'),el('th',null,'Actual to date'))));
+  t1.append(el('tbody',null,
+    row('Labor hours',fmtNum(B.h,0),fmtNum(E.h,0),fmtNum(A.h,0)),
+    row('Cost',fmtMoney(B.c),fmtMoney(E.c),fmtMoney(A.c)),
+    row('Revenue',fmtMoney(B.r),fmtMoney(E.r),fmtMoney(A.r)),
+    row('Margin',fmtMoney(B.r-B.c),fmtMoney(E.r-E.c),fmtMoney(A.r-A.c)),
+    row('Margin %',hasBase&&B.r?(100*(B.r-B.c)/B.r).toFixed(1)+'%':'—',E.r?(100*(E.r-E.c)/E.r).toFixed(1)+'%':'—',A.r?(100*(A.r-A.c)/A.r).toFixed(1)+'%':'—')));
+  wrap.append(el('h3',null,'Forecast'),t1);
+  // contract / reserves
+  const t2=el('table'); t2.append(el('thead',null,el('tr',null,el('th',null,'Contract & reserves'),el('th',null,'Value'))));
+  const r2=el('tbody');
+  if(cap>0){ r2.append(el('tr',null,el('td',null,'Contract value (T&M cap)'),el('td',null,fmtMoney(cap)))); r2.append(el('tr',null,el('td',null,'EAC revenue vs cap'),el('td',null,fmtMoney(cap-E.r)+' left'))); }
+  if(sold>0) r2.append(el('tr',null,el('td',null,'As-sold cost vs EAC cost'),el('td',null,fmtMoney(E.c-sold)+(E.c>sold?' over':' under'))));
+  if(cont>0) r2.append(el('tr',null,el('td',null,'Contingency + risk reserve'),el('td',null,fmtMoney(cont))));
+  t2.append(r2); if(r2.children.length)wrap.append(el('h3',null,'Contract & reserves'),t2);
+  // change orders
+  const cos=meta._cos||[]; if(cos.length){ const t3=el('table');
+    t3.append(el('thead',null,el('tr',null,el('th',null,'CO #'),el('th',null,'Description'),el('th',null,'Status'),el('th',null,'Δ Contract'),el('th',null,'Δ Cost'))));
+    const b3=el('tbody'); for(const c of cos)b3.append(el('tr',null,el('td',null,c.num||''),el('td',null,c.desc||''),el('td',null,c.status||''),el('td',null,fmtMoney(+c.dCap||0)),el('td',null,fmtMoney(+c.dSold||0)))); t3.append(b3);
+    wrap.append(el('h3',null,'Change orders'),t3); }
+  // top risks
+  const risks=(meta._risks||[]).filter(r=>r.status==='Open'||r.status==='Mitigating').map(r=>({r,e:(+r.prob||0)/100*(+r.impact||0)})).sort((a,b)=>b.e-a.e).slice(0,5);
+  if(risks.length){ const t4=el('table'); t4.append(el('thead',null,el('tr',null,el('th',null,'Risk'),el('th',null,'Prob %'),el('th',null,'Impact'),el('th',null,'Exposure'))));
+    const b4=el('tbody'); for(const x of risks)b4.append(el('tr',null,el('td',null,x.r.desc||x.r.num||''),el('td',null,fmtNum(+x.r.prob||0,0)),el('td',null,fmtMoney(+x.r.impact||0)),el('td',null,fmtMoney(x.e)))); t4.append(b4);
+    wrap.append(el('h3',null,'Top open risks'),t4); }
+  // billing
+  const bills=meta._bills||[]; if(bills.length){ let inv=0,paid=0; for(const b of bills){ if(b.status==='Paid'){inv+=+b.amount||0;paid+=+b.amount||0;} else if(b.status==='Submitted')inv+=+b.amount||0; }
+    wrap.append(el('h3',null,'Billing'),el('p',null,'Invoiced '+fmtMoney(inv)+' · paid '+fmtMoney(paid)+' · outstanding '+fmtMoney(inv-paid))); }
+  wrap.append(el('div',{class:'noprint',style:'margin-top:16px'},el('button',{class:'primary',onclick:()=>window.print()},'Print / Save PDF')));
+  openDModal(wrap);
+}
+
 /* ===================== Settings ===================== */
 function setupSettings(){
   const s=state.settings;
@@ -4112,6 +4425,7 @@ function setupSettings(){
   $('#setCurrency').addEventListener('change',e=>{ s.currency=e.target.value; saveState(); refreshActiveTab(); });
   $('#setDecimals').addEventListener('change',e=>{ s.decimals=+e.target.value; saveState(); refreshActiveTab(); });
   $('#setBilledValues').addEventListener('change',e=>{ s.billedValues=e.target.value; saveState(); refreshActiveTab(); });
+  $('#btnSnapshots').addEventListener('click',showSnapshots);
   $('#btnClearBudgets').addEventListener('click',()=>{ if(confirm('Delete all saved budgets?')){ state.budgets={}; saveState(); refreshActiveTab(); } });
   $('#btnClearAll').addEventListener('click',()=>{ if(confirm('Reset mapping, filters, settings and budgets?')){ localStorage.removeItem(STORE_KEY); location.reload(); } });
 }
@@ -4120,7 +4434,7 @@ function setupSettings(){
 let fsHandle=null, fsFormat='xlsx', stateDirty=false;
 function buildWorkbookObj(){
   const rows=data.map(r=>{ const o={}; for(const f of FIELDS){ const v=r[f.key]; o[f.key]= f.type==='date'? (v?fmtDate(v):null) : v; } return o; });
-  return {app:'project-forecast-tool', version:2, savedAt:new Date().toISOString(),
+  return {app:'project-forecast-tool', version:2, datumVersion:DATUM_VERSION, savedAt:new Date().toISOString(),
     settings:state.settings, mapping:state.mapping, filters:state.filters,
     budgets:state.budgets, plans:state.plans, rows};
 }
@@ -4591,6 +4905,18 @@ function init(){
   $('#btnSample').addEventListener('click',loadSample);
   $('#billCutoff').addEventListener('change',e=>{ state.settings.billCutoff=e.target.value; saveState(); renderBilling(); });
   $('#billBasis').addEventListener('change',e=>{ state.settings.billBasis=e.target.value; saveState(); renderBilling(); });
+  // Datum: version stamp + tools
+  $('#datumVer').textContent='v'+DATUM_VERSION;
+  $('#btnHealth').addEventListener('click',runHealthCheck);
+  $('#btnCompare').addEventListener('click',()=>{ if(!data.length){alert('Load an extract first.');return;} $('#cmpFile').click(); });
+  $('#cmpFile').addEventListener('change',e=>{ if(e.target.files[0])compareExtract(e.target.files[0]); e.target.value=''; });
+  $('#dModalClose').addEventListener('click',closeDModal);
+  $('#dModal').addEventListener('click',e=>{ if(e.target.id==='dModal')closeDModal(); });
+  // mapping profiles
+  refreshMapProfiles();
+  $('#mapProfile').addEventListener('change',e=>{ if(e.target.value)applyMapProfile(e.target.value); });
+  $('#btnMapSave').addEventListener('click',()=>{ const n=prompt('Save this column mapping as a profile named:'); if(!n)return; const p=mapProfiles(); p[n.trim()]=Object.assign({},state.mapping); setMapProfiles(p); refreshMapProfiles(); $('#mapProfile').value=n.trim(); });
+  $('#btnMapDel').addEventListener('click',()=>{ const n=$('#mapProfile').value; if(!n)return; if(confirm('Delete mapping profile \"'+n+'\"?')){ const p=mapProfiles(); delete p[n]; setMapProfiles(p); refreshMapProfiles(); } });
   setupExplorer(); setupForecast(); setupProjectPages(); setupCostActuals(); setupEvTab(); setupCoTab(); setupSubTab(); setupRiskTab(); setupBillingTab(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
