@@ -116,6 +116,13 @@
   .modal h3{margin:14px 0 6px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   .modal .close-x{float:right;cursor:pointer;color:var(--muted);font-size:22px;line-height:1}
   .modal .close-x:hover{color:#fff}
+  .modal-wide{max-width:96vw;width:96vw}
+  #coPriceLabor tr.cat-row td{background:#26364f;font-weight:700;border-top:1px solid #3d5070}
+  #coPriceLabor tr.tsk-row td{background:#1e2c44;font-weight:600}
+  #coPriceLabor td.indent{padding-left:24px}
+  #coPriceLabor td.indent2{padding-left:44px}
+  a.addlink{color:var(--accent);font-size:11.5px;margin-left:10px;cursor:pointer;text-decoration:none;opacity:.75;font-weight:400}
+  a.addlink:hover{opacity:1;text-decoration:underline}
   .footer-note{color:var(--muted);font-size:11.5px;text-align:center;padding:14px}
 </style>
 </head>
@@ -607,25 +614,26 @@
 
 </main>
 <div class="modal-back" id="coPriceBack">
-  <div class="modal">
+  <div class="modal modal-wide">
     <span class="close-x" id="coPriceClose">✕</span>
     <h2 id="coPriceTitle">Price change order</h2>
-    <p class="hint" id="coPriceSub">Price the change order by entering hours <b>per employee per week</b>. Cost and bill rates default from the Rate Table — edit any line. <b>Apply</b> writes the cost total to the CO's Δ Cost budget and the price-to-owner total to Δ Contract value.</p>
+    <p class="hint" id="coPriceSub">Structure the estimate as <b>Category → Task → people</b> (e.g. Architecture → Space planning), with hours per person per week. Rates default from the Rate Table. <b>Apply</b> writes the cost total to Δ Cost budget and the price-to-owner total to Δ Contract value.</p>
     <div class="row" style="margin:2px 0 8px;gap:12px">
       <label class="hint">Pricing period — week ending <input type="date" id="coPriceStart" style="width:150px"></label>
       <label class="hint">for <input type="number" id="coPriceWeeks" min="1" max="52" style="width:64px"> weeks</label>
+      <button id="coPriceViewBtn" class="small">Compressed view</button>
       <span class="spacer"></span>
+      <button id="coPriceAddCat" class="small">+ Add category</button>
       <button id="coPriceXlsx" class="small">Export Excel</button>
-      <button id="coPriceImp" class="small" title="Import a pricing workbook/CSV: Employee, Cost $/hr, Bill $/hr, and WE yyyy-mm-dd week columns">Import Excel/CSV</button>
+      <button id="coPriceImp" class="small" title="Import a pricing workbook/CSV: Category, Task, Employee, Cost $/hr, Bill $/hr, and WE yyyy-mm-dd week columns">Import Excel/CSV</button>
       <input type="file" id="coPriceFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
     </div>
-    <p class="hint" style="margin:0 0 8px">Paste a block of weekly hours straight from Excel into the week cells, or use Import to load a full staffing workbook.</p>
+    <p class="hint" style="margin:0 0 8px">Category and task names are editable in place. In weekly view, paste blocks of hours straight from Excel; the compressed view hides the weeks and lets you type total hours per person (the weekly spread scales to match).</p>
     <datalist id="coEmpList"></datalist>
     <h3>Labor</h3>
-    <div class="tablewrap" style="max-height:300px"><table id="coPriceLabor"></table></div>
-    <button id="coPriceAddLabor" class="small">+ Add staff line</button>
+    <div class="tablewrap" style="max-height:52vh"><table id="coPriceLabor"></table></div>
     <h3>Subs / Expenses</h3>
-    <div class="tablewrap" style="max-height:200px"><table id="coPriceNL"></table></div>
+    <div class="tablewrap" style="max-height:22vh"><table id="coPriceNL"></table></div>
     <button id="coPriceAddNL" class="small">+ Add expense / sub</button>
     <div class="kpis" id="coPriceTotals" style="margin-top:16px"></div>
     <div class="row" style="margin-top:14px">
@@ -635,7 +643,7 @@
     </div>
   </div>
 </div>
-<div class="footer-note">All processing happens locally in your browser. No data leaves your machine.</div>
+<div class="footer-note">All processing happens locally in your browser. No data leaves your machine.</div><div class="footer-note">All processing happens locally in your browser. No data leaves your machine.</div>
 
 <script>
 "use strict";
@@ -3137,6 +3145,24 @@ function coPriceTotals(co){
   for(const N of (p.nl||[])){ const a=+N.cost||0, m=+N.markup||0; nc+=a; nr+=a*(1+m/100); }
   return {hours:h,laborCost:lc,laborRev:lr,nlCost:nc,nlRev:nr,cost:lc+nc,rev:lr+nr};
 }
+function coEnsureStruct(co){
+  co.price.struct=co.price.struct||[];
+  for(const L of co.price.labor){
+    const cat=L.category||'', tsk=L.task||'';
+    let C=co.price.struct.find(s=>s.cat===cat);
+    if(!C){ C={cat,tasks:[]}; co.price.struct.push(C); }
+    if(!C.tasks.includes(tsk))C.tasks.push(tsk);
+  }
+  if(!co.price.struct.length)co.price.struct.push({cat:'General',tasks:['General']});
+  for(const C of co.price.struct)if(!C.tasks.length)C.tasks.push('');
+}
+function coSetLineTotal(L,newTot){
+  const co=coPricing;
+  if(!(newTot>0)){ L.weeks={}; return; }
+  const cur=coLineHours(L);
+  if(cur>0){ const f=newTot/cur; for(const k in L.weeks)L.weeks[k]=Math.round(L.weeks[k]*f*100)/100; }
+  else { L.weeks={}; L.weeks[co.price.start]=newTot; }
+}
 function openCoPricing(co){
   if(!ppCtx)return;
   co.price=co.price||{labor:[],nl:[]};
@@ -3144,8 +3170,10 @@ function openCoPricing(co){
   if(!co.price.start) co.price.start=(ppCtx.node&&ppCtx.node.baseStart)||wkKey(new Date());
   else { const [y,m,d]=co.price.start.split('-').map(Number); co.price.start=wkKey(new Date(y,m-1,d)); }
   if(!co.price.weeks) co.price.weeks=8;
+  co.price.view=co.price.view||'week';
   // migrate legacy single-hours lines into the weekly model (hours land on the first week)
   for(const L of co.price.labor){ if(L.weeks==null){ L.weeks={}; if(+L.hours)L.weeks[co.price.start]=+L.hours; delete L.hours; } }
+  coEnsureStruct(co);
   coPricing=co;
   const dl=$('#coEmpList'); dl.innerHTML='';
   const names=new Set(Object.keys(ppCtx.meta._rateTable||{}));
@@ -3158,58 +3186,109 @@ function openCoPricing(co){
 }
 function closeCoPricing(){ $('#coPriceBack').classList.remove('open'); coPricing=null; }
 let coPriceInputs=[];
+let coRollups=[];
 function renderCoPricing(){
   const co=coPricing; if(!co)return;
   const p=co.price;
-  const weeks=coPriceWeeks(co);
-  coPriceInputs=[];
-  // labor grid: employee x week
+  coEnsureStruct(co);
+  const comp=p.view==='comp';
+  const weeks=comp?[]:coPriceWeeks(co);
+  const vb=$('#coPriceViewBtn');
+  if(vb){ vb.textContent=comp?'Weekly view':'Compressed view';
+    vb.title=comp?'Show the week-by-week hours grid':'Hide the week columns — totals per person only'; }
+  coPriceInputs=[]; coRollups=[];
   const lt=$('#coPriceLabor'); lt.innerHTML='';
   lt.append(el('thead',null,el('tr',null,
-    el('th',null,'Employee/Vendor'),
+    el('th',null,'Category / Task / Person'),
     el('th',{class:'num'},'Cost $/hr'), el('th',{class:'num'},'Bill $/hr'),
     ...weeks.map(wk=>el('th',{class:'num',title:'Week ending '+wk},'WE '+wkLabel(wk))),
-    el('th',{class:'num'},'Total hrs'), el('th',{class:'num'},'Cost'), el('th',{class:'num'},'Revenue'), el('th'))));
+    el('th',{class:'num',title:comp?'Total hours — editable here; the weekly spread scales to match':'Sum of the week cells'},'Total hrs'),
+    el('th',{class:'num'},'Cost'), el('th',{class:'num'},'Revenue'), el('th'))));
   const ltb=el('tbody');
+  const labelSpan=3+weeks.length;
   const rateIn=(L,key)=>{const i=el('input',{class:'rate-in',type:'text',inputmode:'decimal',style:'width:72px',value:L[key]!=null&&L[key]!==''?L[key]:''});i.addEventListener('input',()=>{L[key]=parseNumber(i.value)||0;saveState();coUpdateAll();});return i;};
-  p.labor.forEach((L,idx)=>{
-    L.weeks=L.weeks||{};
-    const emp=el('input',{class:'rate-in',list:'coEmpList',style:'width:170px;text-align:left',value:L.emp||''});
-    emp.addEventListener('change',()=>{ L.emp=emp.value;
-      if((!L.cost||L.cost==='')&&(!L.bill||L.bill==='')){ const r=empRates(L.emp); L.cost=r.cost; L.bill=r.bill; }
-      saveState(); renderCoPricing(); });
-    const costIn=rateIn(L,'cost'), billIn=rateIn(L,'bill');
-    const wkInputs=[];
-    const wkCells=weeks.map(wk=>{
-      const wi=el('input',{class:'plan-in',type:'text',inputmode:'decimal',title:'Hours, week ending '+wk,value:L.weeks[wk]!=null?L.weeks[wk]:''});
-      wi.addEventListener('input',()=>{ const v=wi.value.trim(); if(v==='')delete L.weeks[wk]; else{const n=parseNumber(v);if(!isNaN(n))L.weeks[wk]=n;} saveState(); coUpdateAll(); });
-      wi.addEventListener('paste',e=>handleCoPaste(e,wi));
-      wkInputs.push(wi);
-      return el('td',{class:'wk'},wi);
-    });
-    coPriceInputs.push(wkInputs);
-    const totCell=el('td',{class:'num sumcol'}), costCell=el('td',{class:'num'}), revCell=el('td',{class:'num'});
-    const tr=el('tr',null,
-      el('td',null,emp), el('td',{class:'num'},costIn), el('td',{class:'num'},billIn),
-      ...wkCells, totCell, costCell, revCell,
-      el('td',null,el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove line',onclick:()=>{ p.labor.splice(idx,1); saveState(); renderCoPricing(); }},'✕')));
-    tr._L=L; tr._tot=totCell; tr._cost=costCell; tr._rev=revCell;
-    ltb.append(tr);
-  });
-  // weekly hours total row
-  const ftr=el('tr',{class:'total'});
-  ftr.append(el('td',{colspan:3},'Weekly hours'));
-  ftr._wk=weeks.map(()=>{ const td=el('td',{class:'num wk'}); ftr.append(td); return td; });
-  ftr._tot=el('td',{class:'num sumcol'}); ftr.append(ftr._tot);
-  ftr.append(el('td'),el('td'),el('td'));
-  ltb.append(ftr);
-  lt.append(ltb); lt._ftr=ftr; lt._weeks=weeks;
+  const mkRoll=tr=>{const t=el('td',{class:'num sumcol'}),c=el('td',{class:'num'}),r=el('td',{class:'num'});tr.append(t,c,r,el('td'));return {t,c,r};};
+  for(const C of p.struct){
+    const catLines=p.labor.filter(L=>(L.category||'')===C.cat);
+    const catTr=el('tr',{class:'cat-row'});
+    const catName=el('input',{class:'rate-in',style:'width:230px;text-align:left;font-weight:700',placeholder:'Category (e.g. Architecture)',value:C.cat});
+    catName.addEventListener('change',()=>{ const old=C.cat, nv=catName.value.trim();
+      for(const L of p.labor)if((L.category||'')===old)L.category=nv;
+      C.cat=nv; saveState(); renderCoPricing(); });
+    const addTask=el('a',{class:'addlink',onclick:()=>{ C.tasks.push('New task'); saveState(); renderCoPricing(); }},'+ task');
+    const catCell=el('td',{colspan:labelSpan},catName,addTask);
+    if(!catLines.length) catCell.append(el('span',{style:'cursor:pointer;color:var(--bad);margin-left:10px',title:'Remove empty category',
+      onclick:()=>{ p.struct=p.struct.filter(x=>x!==C); saveState(); renderCoPricing(); }},'✕'));
+    catTr.append(catCell);
+    coRollups.push({lines:catLines,cells:mkRoll(catTr)});
+    ltb.append(catTr);
+    for(const T of C.tasks){
+      const tLines=p.labor.filter(L=>(L.category||'')===C.cat&&(L.task||'')===T);
+      const tskTr=el('tr',{class:'tsk-row'});
+      const tskName=el('input',{class:'rate-in',style:'width:210px;text-align:left;font-weight:600',placeholder:'Task (e.g. Space planning)',value:T});
+      tskName.addEventListener('change',()=>{ const old=T, nv=tskName.value.trim();
+        for(const L of p.labor)if((L.category||'')===C.cat&&(L.task||'')===old)L.task=nv;
+        C.tasks[C.tasks.indexOf(old)]=nv; saveState(); renderCoPricing(); });
+      const addPerson=el('a',{class:'addlink',onclick:()=>{ p.labor.push({category:C.cat,task:T,emp:'',cost:'',bill:'',weeks:{}}); saveState(); renderCoPricing(); }},'+ person');
+      const tskCell=el('td',{colspan:labelSpan,class:'indent'},tskName,addPerson);
+      if(!tLines.length) tskCell.append(el('span',{style:'cursor:pointer;color:var(--bad);margin-left:10px',title:'Remove empty task',
+        onclick:()=>{ C.tasks=C.tasks.filter(x=>x!==T); saveState(); renderCoPricing(); }},'✕'));
+      tskTr.append(tskCell);
+      coRollups.push({lines:tLines,cells:mkRoll(tskTr)});
+      ltb.append(tskTr);
+      for(const L of tLines){
+        L.weeks=L.weeks||{};
+        const emp=el('input',{class:'rate-in',list:'coEmpList',style:'width:170px;text-align:left',value:L.emp||''});
+        emp.addEventListener('change',()=>{ L.emp=emp.value;
+          if((!L.cost||L.cost==='')&&(!L.bill||L.bill==='')){ const r=empRates(L.emp); L.cost=r.cost; L.bill=r.bill; }
+          saveState(); renderCoPricing(); });
+        const costIn=rateIn(L,'cost'), billIn=rateIn(L,'bill');
+        const tr=el('tr');
+        tr.append(el('td',{class:'indent2'},emp), el('td',{class:'num'},costIn), el('td',{class:'num'},billIn));
+        if(!comp){
+          const wkInputs=[];
+          for(const wk of weeks){
+            const wi=el('input',{class:'plan-in',type:'text',inputmode:'decimal',title:'Hours, week ending '+wk,value:L.weeks[wk]!=null?L.weeks[wk]:''});
+            wi.addEventListener('input',()=>{ const v=wi.value.trim(); if(v==='')delete L.weeks[wk]; else{const n=parseNumber(v);if(!isNaN(n))L.weeks[wk]=n;} saveState(); coUpdateAll(); });
+            wi.addEventListener('paste',e=>handleCoPaste(e,wi));
+            wkInputs.push(wi);
+            tr.append(el('td',{class:'wk'},wi));
+          }
+          coPriceInputs.push(wkInputs);
+          tr._tot=el('td',{class:'num sumcol'}); tr.append(tr._tot);
+        } else {
+          const ti=el('input',{class:'rate-in',type:'text',inputmode:'decimal',style:'width:76px',
+            title:'Total hours. Editing scales the existing weekly spread proportionally (or puts the hours on the first week if empty).',
+            value:coLineHours(L)||''});
+          ti.addEventListener('change',()=>{ coSetLineTotal(L,parseNumber(ti.value)||0); saveState(); coUpdateAll(); });
+          tr._totIn=ti;
+          tr.append(el('td',{class:'num sumcol'},ti));
+        }
+        tr._cost=el('td',{class:'num'}); tr._rev=el('td',{class:'num'});
+        tr.append(tr._cost,tr._rev,
+          el('td',null,el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove line',
+            onclick:()=>{ p.labor.splice(p.labor.indexOf(L),1); saveState(); renderCoPricing(); }},'✕')));
+        tr._L=L;
+        ltb.append(tr);
+      }
+    }
+  }
+  if(!comp){
+    const ftr=el('tr',{class:'total'});
+    ftr.append(el('td',{colspan:3},'Weekly hours'));
+    ftr._wk=weeks.map(()=>{ const td=el('td',{class:'num wk'}); ftr.append(td); return td; });
+    ftr._tot=el('td',{class:'num sumcol'}); ftr.append(ftr._tot);
+    ftr.append(el('td'),el('td'),el('td'));
+    ltb.append(ftr);
+    lt._ftr=ftr;
+  } else lt._ftr=null;
+  lt.append(ltb); lt._weeks=weeks;
   // nl table
   const nt=$('#coPriceNL'); nt.innerHTML='';
   nt.append(el('thead',null,el('tr',null,...['Description','Cost $','Markup %','Line revenue',''].map((h,i)=>el('th',{class:i>=1&&i<=3?'num':''},h)))));
   const ntb=el('tbody');
   p.nl.forEach((N,idx)=>{
-    if(N.markup==null)N.markup=ppCtx.meta._nlMarkup||0;
+    if(N.markup==null)N.markup=Number(ppCtx.meta._nlMarkup)||0;
     const desc=el('input',{class:'rate-in',style:'width:240px;text-align:left',value:N.desc||''});
     desc.addEventListener('change',()=>{N.desc=desc.value;saveState();});
     const lrCell=el('td',{class:'num'});
@@ -3243,12 +3322,20 @@ function coUpdateAll(){
   const lt=$('#coPriceLabor'); const weeks=lt._weeks||[];
   const wkTot=weeks.map(()=>0);
   for(const tr of lt.querySelectorAll('tbody tr')){
-    if(tr.classList.contains('total'))continue;
+    if(!tr._L)continue;
     const L=tr._L; const hrs=coLineHours(L);
     weeks.forEach((wk,i)=>{ wkTot[i]+=+L.weeks[wk]||0; });
-    tr._tot.textContent=hrs?fmtNum(hrs,1):'';
+    if(tr._tot)tr._tot.textContent=hrs?fmtNum(hrs,1):'';
+    if(tr._totIn && document.activeElement!==tr._totIn)tr._totIn.value=hrs||'';
     tr._cost.textContent=fmtMoney(hrs*(+L.cost||0));
     tr._rev.textContent=fmtMoney(hrs*(+L.bill||0));
+  }
+  for(const R of coRollups){
+    let h=0,c=0,r=0;
+    for(const L of R.lines){ const hh=coLineHours(L); h+=hh; c+=hh*(+L.cost||0); r+=hh*(+L.bill||0); }
+    R.cells.t.textContent=h?fmtNum(h,1):'';
+    R.cells.c.textContent=c?fmtMoney(c):'';
+    R.cells.r.textContent=r?fmtMoney(r):'';
   }
   if(lt._ftr){ lt._ftr._wk.forEach((td,i)=>td.textContent=wkTot[i]?fmtNum(wkTot[i],1):''); lt._ftr._tot.textContent=fmtNum(wkTot.reduce((a,b)=>a+b,0),1)+' h'; }
   for(const tr of $('#coPriceNL').querySelectorAll('tbody tr')){ const N=tr._N; tr._lr.textContent=fmtMoney((+N.cost||0)*(1+(+N.markup||0)/100)); }
@@ -3271,25 +3358,25 @@ function exportCoPriceXlsx(){
   const weeks=coPriceWeeks(co);
   const BRAND='1F4E79', MONEY0='"$"#,##0', HRS='#,##0.0';
   const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
-  const head=['Employee/Vendor','Cost $/hr','Bill $/hr',...weeks.map(w=>'WE '+w),'Total hrs','Cost','Revenue'];
+  const head=['Category','Task','Employee/Vendor','Cost $/hr','Bill $/hr',...weeks.map(w=>'WE '+w),'Total hrs','Cost','Revenue'];
   const aoa=[['Change Order Pricing — '+(co.num||'')+(co.desc?' — '+co.desc:'')],['Generated',fmtDate(new Date())],[],head];
   for(const L of (co.price.labor||[])){ const hrs=coLineHours(L);
-    aoa.push([L.emp||'',+L.cost||0,+L.bill||0,...weeks.map(w=>(L.weeks&&L.weeks[w]!=null)?L.weeks[w]:''),hrs,hrs*(+L.cost||0),hrs*(+L.bill||0)]); }
+    aoa.push([L.category||'',L.task||'',L.emp||'',+L.cost||0,+L.bill||0,...weeks.map(w=>(L.weeks&&L.weeks[w]!=null)?L.weeks[w]:''),hrs,hrs*(+L.cost||0),hrs*(+L.bill||0)]); }
   const wkTot=weeks.map(w=>(co.price.labor||[]).reduce((a,L)=>a+((L.weeks&&+L.weeks[w])||0),0));
   const T=coPriceTotals(co);
-  aoa.push([],['Weekly hours','','',...wkTot,T.hours,T.laborCost,T.laborRev]);
+  aoa.push([],['Weekly hours','','','','',...wkTot,T.hours,T.laborCost,T.laborRev]);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
   const rng=XLSX.utils.decode_range(ws['!ref']);
   for(let C=0;C<=rng.e.c;C++){ const c=ws[XLSX.utils.encode_cell({r:3,c:C})]; if(c)c.s=HDR; }
-  const wkStart=3, wkEnd=2+weeks.length;            // 0-based cols: emp=0,cost=1,bill=2,weeks 3..2+N
+  const wkStart=5, wkEnd=4+weeks.length;            // 0-based cols: cat=0,task=1,emp=2,cost=3,bill=4,weeks 5..4+N
   for(let R=4;R<=rng.e.r;R++){
-    for(const C of [1,2]){ const c=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(c&&typeof c.v==='number')c.z=MONEY0; }
+    for(const C of [3,4]){ const c=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(c&&typeof c.v==='number')c.z=MONEY0; }
     for(let C=wkStart;C<=wkEnd;C++){ const c=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(c&&typeof c.v==='number')c.z=HRS; }
     const tc=ws[XLSX.utils.encode_cell({r:R,c:wkEnd+1})]; if(tc&&typeof tc.v==='number')tc.z=HRS;
     for(const C of [wkEnd+2,wkEnd+3]){ const c=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(c&&typeof c.v==='number')c.z=MONEY0; }
   }
-  ws['!cols']=[{wch:20},{wch:10},{wch:10},...weeks.map(()=>({wch:9})),{wch:10},{wch:12},{wch:12}];
+  ws['!cols']=[{wch:16},{wch:18},{wch:20},{wch:10},{wch:10},...weeks.map(()=>({wch:9})),{wch:10},{wch:12},{wch:12}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Labor');
   if(co.price.nl&&co.price.nl.length){
@@ -3335,7 +3422,7 @@ function applyCoPriceGrids(lg,ng){
   if(hi<0)throw new Error('no header row found (need an Employee column and WE yyyy-mm-dd week columns)');
   const H=lg[hi], Hn=H.map(norm2);
   const find=(...names)=>{ for(const n of names){ const i=Hn.indexOf(n); if(i>=0)return i; } return -1; };
-  const ci={ emp:find('employeevendor','employee','vendor','name'), cost:find('costhr','cost','costrate'), bill:find('billhr','bill','billrate') };
+  const ci={ category:find('category','cat','discipline'), task:find('task','taskname','subtask'), emp:find('employeevendor','employee','vendor','name'), cost:find('costhr','cost','costrate'), bill:find('billhr','bill','billrate') };
   const weekCols=[];
   H.forEach((h,c)=>{ const m=String(h).trim().match(/^WE\s+(\d{4}-\d{2}-\d{2})$/i); if(m){ const [y,mo,d]=m[1].split('-').map(Number); weekCols.push([c,wkKey(new Date(y,mo-1,d))]); } });
   if(!weekCols.length)throw new Error('no week columns found (need "WE yyyy-mm-dd" headers)');
@@ -3343,16 +3430,18 @@ function applyCoPriceGrids(lg,ng){
   for(let r=hi+1;r<lg.length;r++){
     const row=lg[r], cell=i=>i>=0&&i<row.length?row[i]:'';
     const emp=String(cell(ci.emp)).trim();
-    if(/^weekly hours/i.test(emp))continue;
+    const catV=String(cell(ci.category)).trim(), taskV=String(cell(ci.task)).trim();
+    if(/^weekly hours/i.test(emp)||/^weekly hours/i.test(catV))continue;
     const weeks={}; let any=false;
     for(const [c,wk] of weekCols){ const v=cell(c); if(v!==''&&v!=null){ const n=parseNumber(v); if(!isNaN(n)&&n!==0){ weeks[wk]=n; any=true; } } }
     if(!emp&&!any)continue;
     const cv=cell(ci.cost), bv=cell(ci.bill);
-    labor.push({emp, cost:String(cv).trim()===''?'':(parseNumber(cv)||0), bill:String(bv).trim()===''?'':(parseNumber(bv)||0), weeks});
+    labor.push({category:catV, task:taskV, emp, cost:String(cv).trim()===''?'':(parseNumber(cv)||0), bill:String(bv).trim()===''?'':(parseNumber(bv)||0), weeks});
   }
   if(!labor.length)throw new Error('no staff rows found');
   co.price=co.price||{};
   co.price.labor=labor;
+  co.price.struct=null;   // rebuild the category/task structure from the imported lines
   co.price.start=weekCols[0][1];
   co.price.weeks=Math.max(weekCols.length, wkDiff(weekCols[0][1],weekCols[weekCols.length-1][1])+1);
   if(ng){
@@ -3391,7 +3480,8 @@ function setupCoTab(){
   $('#coPriceCancel').addEventListener('click',()=>{ saveState(); closeCoPricing(); renderCoTab(); });
   $('#coPriceBack').addEventListener('click',e=>{ if(e.target.id==='coPriceBack'){ saveState(); closeCoPricing(); renderCoTab(); } });
   $('#coPriceApply').addEventListener('click',applyCoPricing);
-  $('#coPriceAddLabor').addEventListener('click',()=>{ if(coPricing){ coPricing.price.labor.push({emp:'',cost:'',bill:'',weeks:{}}); saveState(); renderCoPricing(); } });
+  $('#coPriceAddCat').addEventListener('click',()=>{ if(coPricing){ coEnsureStruct(coPricing); coPricing.price.struct.push({cat:'New category',tasks:['New task']}); saveState(); renderCoPricing(); } });
+  $('#coPriceViewBtn').addEventListener('click',()=>{ if(coPricing){ coPricing.price.view=coPricing.price.view==='comp'?'week':'comp'; saveState(); renderCoPricing(); } });
   $('#coPriceAddNL').addEventListener('click',()=>{ if(coPricing){ coPricing.price.nl.push({desc:'',cost:'',markup:ppCtx?ppCtx.meta._nlMarkup||0:0}); saveState(); renderCoPricing(); } });
   $('#coPriceStart').addEventListener('change',e=>{ if(!coPricing)return; const v=e.target.value; if(!v)return; const [y,m,d]=v.split('-').map(Number); coPricing.price.start=wkKey(new Date(y,m-1,d)); saveState(); renderCoPricing(); });
   $('#coPriceWeeks').addEventListener('change',e=>{ if(!coPricing)return; coPricing.price.weeks=Math.max(1,Math.min(52,+e.target.value||8)); saveState(); renderCoPricing(); });
