@@ -3622,6 +3622,41 @@ function applyCoGrid(grid0,fname){
   const execN=got.filter(g=>g.status==='Executed').length;
   alert('Imported '+got.length+' change order(s) ('+mode+'). '+execN+' executed — now in the forecast.');
 }
+function addCoToForecast(co){
+  if(!ppCtx)return;
+  const lines=((co.price&&co.price.labor)||[]).filter(L=>coLineHours(L)>0 && String(L.emp||'').trim());
+  if(!lines.length){ alert('This change order has no priced staff hours to add.'); return; }
+  const node=planNode(ppCtx.proj,'taskEmployee');
+  const rt=ppCtx.meta._rateTable;
+  node.manual=node.manual||[];
+  const tag='co:'+co.id;
+  // idempotent: clear any rows previously pushed from this CO
+  const prev=node.manual.filter(m=>m.src===tag).map(m=>m.label);
+  node.manual=node.manual.filter(m=>m.src!==tag);
+  for(const lab of prev){ const pre=lab+'|'; for(const k of Object.keys(node.current)) if(k.startsWith(pre)) delete node.current[k]; }
+  // schedule the CO work as REMAINING effort: start the week after the latest actuals,
+  // preserving the priced week-by-week shape (so it lands in the forecast's to-go period)
+  const lastAct=(ppCtx.actualWeeks&&ppCtx.actualWeeks[ppCtx.actualWeeks.length-1])||wkKey(new Date());
+  const target=wkAdd(lastAct,1);
+  let first=null; for(const L of lines){ for(const wk in L.weeks){ if(first===null||wk<first)first=wk; } }
+  let n=0;
+  for(const L of lines){
+    const taskPart=(co.num||'CO')+' — '+[L.category,L.task].filter(s=>String(s||'').trim()).join(' / ');
+    const label=(taskPart||co.num||'CO')+' · '+L.emp;
+    if(!node.manual.some(m=>m.label===label)) node.manual.push({label,emp:L.emp,isLabor:true,src:tag});
+    for(const wk in L.weeks){ const h=+L.weeks[wk]||0; if(!h)continue;
+      const off=first?wkDiff(first,wk):0; const nw=wkAdd(target,off>=0?off:0);
+      node.current[label+'|'+nw]=(node.current[label+'|'+nw]||0)+h; }
+    // seed rates so the forecast can cost/price these people
+    if(!rt[L.emp])rt[L.emp]={};
+    if(rt[L.emp].cost==null && +L.cost) rt[L.emp].cost=+L.cost;
+    if(rt[L.emp].bill==null && +L.bill) rt[L.emp].bill=+L.bill;
+    n++;
+  }
+  co._inForecast=true;
+  saveState(); renderCoTab();
+  alert('Added '+n+' staff line(s) from '+(co.num||'this CO')+' into the updated forecast as remaining work (scheduled from '+target+', keeping the priced weekly shape).\\n\\nOpen the Actuals vs Forecast tab to see them (grouped under \"'+(co.num||'CO')+' — …\"). The original baseline is unchanged.');
+}
 function renderCoTab(){
   if(!data.length)return;
   if(!ppBuild('c'))return;
@@ -3662,6 +3697,10 @@ function renderCoTab(){
       onclick:()=>{ if(confirm('Delete '+(co.num||'this change order')+'?')){ meta._cos=meta._cos.filter(x=>x!==co); saveState(); renderCoTab(); } }},'✕');
     const priced=co.price&&((co.price.labor&&co.price.labor.length)||(co.price.nl&&co.price.nl.length));
     const priceLink=el('span',{class:'item-link',style:'color:var(--accent)',title:'Price this change order with staff & hours',onclick:()=>openCoPricing(co)}, priced?'price ✎':'price');
+    const canFcst = co.status==='Executed' && co.price && (co.price.labor||[]).some(L=>coLineHours(L)>0 && String(L.emp||'').trim());
+    const fcstLink = canFcst ? el('span',{class:'item-link',style:'color:var(--good);margin-left:8px',
+      title:'Add the priced staffing from this executed change order (per person, per week) into the updated forecast on the Actuals vs Forecast tab',
+      onclick:()=>addCoToForecast(co)}, co._inForecast?'in forecast ✓':'→ forecast') : null;
     const taskIn=el('input',{class:'rate-in',list:'coTaskList',style:'width:120px;text-align:left',
       title:'e.g. 5.2 or 5.2, 5.3 — matches the extract Task Number',value:co.tasks||''});
     taskIn.addEventListener('change',()=>{ co.tasks=taskIn.value; saveState(); renderCoTab(); });
@@ -3682,7 +3721,7 @@ function renderCoTab(){
       el('td',{class:'num'},acCell),
       el('td',null,txt(co,'date','108px')),
       el('td',null,txt(co,'notes','220px')),
-      el('td',null,priceLink,' ',del)));
+      el('td',null,priceLink,fcstLink||'',' ',del)));
   }
   tb.append(el('tr',{class:'total'},
     el('td',{colspan:4},'EXECUTED TOTAL (in forecast)'),
