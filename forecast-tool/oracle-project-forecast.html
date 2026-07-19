@@ -1610,21 +1610,22 @@ function ohMultFor(name){
   }
   return +s.ohMult>0? +s.ohMult : 2.3474;
 }
+function numOr(v,fallback){ const n=Number(v); return isFinite(n)?n:(fallback||0); }
 function costRateOf(it){
   const rt=ppCtx.meta._rateTable;
   if(it.emp){
-    if(rt[it.emp]&&rt[it.emp].cost!=null)return rt[it.emp].cost;
+    if(rt[it.emp]&&rt[it.emp].cost!=null)return numOr(rt[it.emp].cost);
     const es=ppCtx.empStats[it.emp];
-    if(es&&es.rate)return es.rate;
+    if(es&&es.rate)return numOr(es.rate);
   }
-  if(ppCtx.node.rates[it.label]!=null)return ppCtx.node.rates[it.label];
+  if(ppCtx.node.rates[it.label]!=null)return numOr(ppCtx.node.rates[it.label]);
   if(it.hours&&it.sal)return (it.sal/it.hours)*ohMultFor(it.emp||it.label);
-  return ppCtx.avgCostRate||0;
+  return numOr(ppCtx.avgCostRate);
 }
 function billRateOf(it){
   const rt=ppCtx.meta._rateTable;
-  if(it.emp&&rt[it.emp]&&rt[it.emp].bill!=null)return rt[it.emp].bill;
-  if(!it.emp)return ppCtx.avgBillRate||0;
+  if(it.emp&&rt[it.emp]&&rt[it.emp].bill!=null)return numOr(rt[it.emp].bill);
+  if(!it.emp)return numOr(ppCtx.avgBillRate);
   return 0;
 }
 function projWeekWindow(node,actualWeeks){
@@ -2063,7 +2064,7 @@ function fpCalc(it){
   const node=ppCtx.node;
   let tot=0; const pre=it.label+'|';
   for(const k in node.baseline) if(k.startsWith(pre)) tot+=node.baseline[k];
-  const mkup=1+(ppCtx.meta._nlMarkup||0)/100;
+  const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
   const rate=it.isLabor?costRateOf(it):1;
   const bill=it.isLabor?billRateOf(it):null;
   const nb=!!node.nb[it.label];
@@ -2458,10 +2459,10 @@ function itemCalc(it){
   const eacCost=it.cost+toGo*rate;
   const baseCost=node.baselineAt? (it.isLabor? baseTot*rate : baseTot) : null;
   const over=node.baselineAt&&baseTot? eac-baseTot : null;
-  const mkup=1+(ppCtx.meta._nlMarkup||0)/100;
+  const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
   const nb=!!node.nb[it.label];
   const bill=it.isLabor? billRateOf(it) : null;
-  const nl=(it.nlCost||0)*mkup; // expense/subs charges within a labor row, billed at cost + markup
+  const nl=it.nlCost? it.nlCost*mkup : 0; // expense/subs charges within a labor row, billed at cost + markup
   const nbf=nb?0:1;             // non-billable rows earn $0 revenue; cost is unaffected
   const actRev=nbf*(it.isLabor? it.hours*bill+nl : it.cost*mkup);
   const eacRev=nbf*(it.isLabor? eac*bill+nl : eacCost*mkup);
