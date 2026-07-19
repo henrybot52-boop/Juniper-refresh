@@ -645,6 +645,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
       <button id="coPriceViewBtn" class="small">Compressed view</button>
       <span class="spacer"></span>
       <button id="coPriceAddCat" class="small">+ Add category</button>
+      <button id="coPriceRates" class="small" title="Copy each person's cost/bill rate from this pricing up to the project Rate Table">→ Rate Table</button>
       <button id="coPriceXlsx" class="small">Export Excel</button>
       <button id="coPriceImp" class="small" title="Import a pricing workbook/CSV: Category, Task, Employee, Cost $/hr, Bill $/hr, and WE yyyy-mm-dd week columns">Import Excel/CSV</button>
       <input type="file" id="coPriceFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
@@ -3485,6 +3486,30 @@ function applyCoPricing(){
   co.dCap=Math.round(T.rev*100)/100;
   saveState(); closeCoPricing(); renderCoTab();
 }
+function exportCoRatesToRateTable(){
+  const co=coPricing; if(!co||!ppCtx)return;
+  const rt=ppCtx.meta._rateTable;
+  const map=new Map();
+  for(const L of (co.price.labor||[])){ const e=String(L.emp||'').trim(); if(!e)continue;
+    const m=map.get(e)||{};
+    if(L.cost!==''&&L.cost!=null&&+L.cost)m.cost=+L.cost;
+    if(L.bill!==''&&L.bill!=null&&+L.bill)m.bill=+L.bill;
+    map.set(e,m); }
+  if(!map.size){ alert('No named staff with rates in this pricing to export.'); return; }
+  let conflicts=0;
+  for(const [e,m] of map){ const ex=rt[e]||{};
+    if(m.cost!=null&&ex.cost!=null&&Math.abs(+ex.cost-m.cost)>0.005)conflicts++;
+    if(m.bill!=null&&ex.bill!=null&&Math.abs(+ex.bill-m.bill)>0.005)conflicts++; }
+  let overwrite=true;
+  if(conflicts) overwrite=confirm(conflicts+' rate(s) already exist in the Rate Table with different values.\\n\\nOK = overwrite them with these change-order rates.\\nCancel = keep existing rates, only fill blanks.');
+  let added=0,updated=0;
+  for(const [e,m] of map){ if(!rt[e])rt[e]={}; const ex=rt[e];
+    if(m.cost!=null){ if(ex.cost==null){ex.cost=m.cost;added++;} else if(overwrite&&Math.abs(+ex.cost-m.cost)>0.005){ex.cost=m.cost;updated++;} }
+    if(m.bill!=null){ if(ex.bill==null){ex.bill=m.bill;added++;} else if(overwrite&&Math.abs(+ex.bill-m.bill)>0.005){ex.bill=m.bill;updated++;} }
+  }
+  saveState();
+  alert('Rates for '+map.size+' person(s) sent to the Rate Table — '+added+' new, '+updated+' updated. Open the Rate Table tab to review.');
+}
 function setupCoTab(){
   $('#btnCoAdd').addEventListener('click',()=>{
     if(!ppCtx)return;
@@ -3501,6 +3526,7 @@ function setupCoTab(){
   $('#coPriceCancel').addEventListener('click',()=>{ saveState(); closeCoPricing(); renderCoTab(); });
   $('#coPriceBack').addEventListener('click',e=>{ if(e.target.id==='coPriceBack'){ saveState(); closeCoPricing(); renderCoTab(); } });
   $('#coPriceApply').addEventListener('click',applyCoPricing);
+  $('#coPriceRates').addEventListener('click',exportCoRatesToRateTable);
   $('#coPriceAddCat').addEventListener('click',()=>{ if(coPricing){ coEnsureStruct(coPricing); coPricing.price.struct.push({cat:'New category',tasks:['New task']}); saveState(); renderCoPricing(); } });
   $('#coPriceViewBtn').addEventListener('click',()=>{ if(coPricing){ coPricing.price.view=coPricing.price.view==='comp'?'week':'comp'; saveState(); renderCoPricing(); } });
   $('#coPriceAddNL').addEventListener('click',()=>{ if(coPricing){ coPricing.price.nl.push({desc:'',cost:'',markup:ppCtx?ppCtx.meta._nlMarkup||0:0}); saveState(); renderCoPricing(); } });
