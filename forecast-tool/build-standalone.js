@@ -25,9 +25,9 @@ const xlsxJs = lib('xlsx-js-style/dist/xlsx.bundle.js');
 const chartJs = lib('chart.js/dist/chart.umd.js');
 
 let out = src
-  .replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/xlsx[^"]*"><\/script>/,
+  .replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/xlsx[^"]*"[^>]*><\/script>/,
     () => '<script>/* SheetJS 0.18.5 via xlsx-js-style (Apache-2.0) — embedded for offline use, with styled .xlsx output */\n' + xlsxJs + '\n</script>')
-  .replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/chart\.js[^"]*"><\/script>/,
+  .replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/chart\.js[^"]*"[^>]*><\/script>/,
     () => '<script>/* Chart.js 4.4.1 (MIT) — embedded for offline use */\n' + chartJs + '\n</script>');
 
 if (out.includes('cdn.jsdelivr.net')) throw new Error('CDN reference still present — replacement failed');
