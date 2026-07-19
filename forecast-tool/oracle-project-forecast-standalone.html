@@ -172,12 +172,18 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 <header>
   <h1>Datum<span> · forecasting &amp; controls</span></h1>
   <span id="datumVer" class="pill" title="Version — hover Save/Open to move between machines"></span>
+  <span id="curFile" class="pill" title="Current workbook — what you're working on">📄 unsaved workbook</span>
+  <span id="saveState" class="pill"></span>
   <span id="dataStatus" class="pill">No data loaded</span>
   <div class="spacer"></div>
   <button id="btnSample" class="small">Load sample data</button>
   <button id="btnHealth" class="small" title="Scan the loaded data & settings for problems">Health check</button>
   <button id="btnCompare" class="small" title="Compare the loaded extract to a previous week's file">Compare extract…</button>
   <input type="file" id="cmpFile" accept=".xlsx,.xls,.csv,.tsv,.txt" class="hidden">
+  <button id="btnWorkspace" class="small" title="Choose a folder Datum saves to and loads from (Edge/Chrome)">Workspace…</button>
+  <select id="wsFiles" class="small" title="Open a saved workbook from your workspace folder" style="max-width:170px"><option value="">📁 open from folder…</option></select>
+  <button id="btnWsNew" class="small" title="Create a new workbook file in the workspace folder">New in folder</button>
+  <button id="btnWsReconnect" class="small hidden" style="border-color:var(--warn);color:var(--warn)" title="Re-grant access to your saved workspace folder">Reconnect folder</button>
   <button id="btnSaveWb" class="small" title="Save the workbook — data, forecasts, rates, budgets, settings. In Edge/Chrome it writes back to the same file, like Excel.">Save</button>
   <button id="btnSaveAsWb" class="small" title="Choose where to save — Excel workbook (.xlsx, readable in Excel) or JSON">Save As…</button>
   <button id="btnOpenWb" class="small" title="Open a saved workbook (.xlsx or .json) and continue where you left off">Open</button>
@@ -821,6 +827,7 @@ function saveState(){
   stateDirty=true;
   try{ localStorage.setItem(STORE_KEY, JSON.stringify({mapping:state.mapping, filters:state.filters, settings:state.settings, budgets:state.budgets, plans:state.plans})); }catch(e){}
   try{ datumSnapshot(); }catch(e){}
+  try{ updateSaveIndicator(); }catch(e){}
 }
 /* ---- generic modal ---- */
 function openDModal(node){ const b=$('#dModalBody'); b.innerHTML=''; b.append(node); $('#dModal').classList.add('open'); }
@@ -4453,6 +4460,64 @@ function setupSettings(){
 
 /* ===================== Workbook save/open (data + all work in one file) ===================== */
 let fsHandle=null, fsFormat='xlsx', stateDirty=false;
+let curFileName='', lastSavedAt='', wsDir=null;
+function setCurrentFile(name){ curFileName=name||''; updateSaveIndicator(); }
+function markSaved(){ stateDirty=false; lastSavedAt=new Date().toTimeString().slice(0,5); updateSaveIndicator(); }
+function updateSaveIndicator(){
+  const cf=$('#curFile'); if(cf) cf.textContent = curFileName? '📄 '+curFileName : '📄 unsaved workbook';
+  const ss=$('#saveState'); if(ss){
+    if(!data.length){ ss.textContent=''; }
+    else if(stateDirty){ ss.textContent='● unsaved'; ss.style.color='var(--warn)'; }
+    else { ss.textContent=lastSavedAt?('✓ saved '+lastSavedAt):''; ss.style.color='var(--good)'; }
+  }
+}
+/* IndexedDB tiny KV — persists the workspace directory handle across sessions */
+function idbKV(mode,fn){ return new Promise(res=>{ if(!window.indexedDB){res(null);return;}
+  let r; try{ r=indexedDB.open('datumKV',1); }catch(e){ res(null); return; }
+  r.onupgradeneeded=()=>{ try{ r.result.createObjectStore('kv'); }catch(e){} };
+  r.onsuccess=()=>{ try{ const db=r.result; const t=db.transaction('kv',mode); fn(t.objectStore('kv'),res); }catch(e){ res(null); } };
+  r.onerror=()=>res(null); }); }
+function idbGet(k){ return idbKV('readonly',(os,res)=>{ const g=os.get(k); g.onsuccess=()=>res(g.result); g.onerror=()=>res(null); }); }
+function idbSet(k,v){ return idbKV('readwrite',(os,res)=>{ try{ os.put(v,k); }catch(e){} res(true); }); }
+async function pickWorkspace(){
+  if(!window.showDirectoryPicker){ alert('Choosing a workspace folder needs Edge or Chrome. In other browsers you can still Save/Open individual files.'); return; }
+  try{ const h=await window.showDirectoryPicker({mode:'readwrite'}); wsDir=h; await idbSet('workspace',h); $('#btnWsReconnect').classList.add('hidden'); await refreshWorkspace(); }
+  catch(e){ if(e&&e.name!=='AbortError')alert('Could not open folder: '+e.message); }
+}
+async function restoreWorkspace(){
+  if(!window.showDirectoryPicker)return;
+  try{ const h=await idbGet('workspace'); if(!h)return; wsDir=h;
+    const perm=await h.queryPermission({mode:'readwrite'});
+    if(perm==='granted'){ await refreshWorkspace(); }
+    else { const sel=$('#wsFiles'); if(sel){ sel.innerHTML=''; sel.append(el('option',{value:''},'📁 '+h.name)); } $('#btnWsReconnect').classList.remove('hidden'); }
+  }catch(e){}
+}
+async function reconnectWorkspace(){ if(!wsDir)return; try{ const perm=await wsDir.requestPermission({mode:'readwrite'}); if(perm==='granted'){ $('#btnWsReconnect').classList.add('hidden'); await refreshWorkspace(); } }catch(e){} }
+async function refreshWorkspace(){
+  const sel=$('#wsFiles'); if(!sel)return;
+  sel.innerHTML=''; sel.append(el('option',{value:''}, wsDir? '📁 '+wsDir.name+' — open…' : '📁 open from folder…'));
+  if(!wsDir)return;
+  const files=[];
+  try{ for await(const [name,handle] of wsDir.entries()){ if(handle.kind==='file'&&/\.(xlsx|json)$/i.test(name)&&!/^~\$/.test(name))files.push(name); } }catch(e){}
+  files.sort(); for(const f of files)sel.append(el('option',{value:f},f));
+}
+async function openFromWorkspace(name){
+  if(!wsDir||!name)return;
+  try{ const h=await wsDir.getFileHandle(name); const file=await h.getFile();
+    if(await openWorkbookFile(file)){ fsHandle=h; fsFormat=/\.json$/i.test(name)?'json':'xlsx'; setCurrentFile(name); markSaved(); } }
+  catch(e){ alert('Could not open '+name+': '+e.message); }
+  const sel=$('#wsFiles'); if(sel)sel.value='';
+}
+async function newInWorkspace(){
+  if(!wsDir){ alert('Pick a workspace folder first — click Workspace…'); return; }
+  if(!data.length){ alert('Load an extract (or sample data) first, then create a workbook.'); return; }
+  let name=prompt('New workbook file name in "'+wsDir.name+'":','forecast-'+fmtDate(new Date())+'.xlsx'); if(!name)return;
+  name=name.trim(); if(!/\.(xlsx|json)$/i.test(name))name+='.xlsx';
+  try{ const h=await wsDir.getFileHandle(name,{create:true}); fsHandle=h; fsFormat=/\.json$/i.test(name)?'json':'xlsx';
+    const ws=await h.createWritable(); await ws.write(workbookBlob(fsFormat)); await ws.close();
+    setCurrentFile(name); markSaved(); await refreshWorkspace(); }
+  catch(e){ alert('Could not create workbook: '+e.message); }
+}
 function buildWorkbookObj(){
   const rows=data.map(r=>{ const o={}; for(const f of FIELDS){ const v=r[f.key]; o[f.key]= f.type==='date'? (v?fmtDate(v):null) : v; } return o; });
   return {app:'project-forecast-tool', version:2, datumVersion:DATUM_VERSION, savedAt:new Date().toISOString(),
@@ -4618,7 +4683,7 @@ async function doSave(saveAs){
       const ws=await fsHandle.createWritable();
       await ws.write(workbookBlob(fsFormat));
       await ws.close();
-      stateDirty=false;
+      setCurrentFile(fsHandle.name); markSaved();
       savedStatus(fsHandle.name);
       return;
     }catch(err){
@@ -4629,7 +4694,7 @@ async function doSave(saveAs){
   const blob=workbookBlob('xlsx');
   const a=el('a',{href:URL.createObjectURL(blob),download:'forecast-workbook-'+fmtDate(new Date())+'.xlsx'});
   document.body.append(a); a.click(); a.remove();
-  stateDirty=false;
+  setCurrentFile('forecast-workbook-'+fmtDate(new Date())+'.xlsx'); markSaved();
   savedStatus(null);
 }
 async function autoSaveToFile(){
@@ -4638,7 +4703,7 @@ async function autoSaveToFile(){
     const ws=await fsHandle.createWritable();
     await ws.write(workbookBlob(fsFormat));
     await ws.close();
-    stateDirty=false;
+    markSaved();
     savedStatus(fsHandle.name+' (auto)');
   }catch(e){ /* silent: next manual Save will surface any problem */ }
 }
@@ -4647,7 +4712,7 @@ async function doOpen(){
     try{
       const [h]=await window.showOpenFilePicker({types:[{description:'Forecast workbook',accept:{'application/octet-stream':['.xlsx','.json']}}]});
       const file=await h.getFile();
-      if(await openWorkbookFile(file)){ fsHandle=h; fsFormat=/\.json$/i.test(file.name)?'json':'xlsx'; }
+      if(await openWorkbookFile(file)){ fsHandle=h; fsFormat=/\.json$/i.test(file.name)?'json':'xlsx'; setCurrentFile(file.name); markSaved(); }
       return;
     }catch(err){ if(err&&err.name==='AbortError')return; }
   }
@@ -4919,7 +4984,13 @@ function init(){
   $('#btnSaveAsWb').addEventListener('click',()=>doSave(true));
   $('#btnOpenWb').addEventListener('click',doOpen);
   $('#wbFile').addEventListener('change',e=>{ if(e.target.files[0])openWorkbookFile(e.target.files[0]); e.target.value=''; });
-  setInterval(autoSaveToFile,120000);
+  setInterval(autoSaveToFile,45000);
+  $('#btnWorkspace').addEventListener('click',pickWorkspace);
+  $('#btnWsNew').addEventListener('click',newInWorkspace);
+  $('#btnWsReconnect').addEventListener('click',reconnectWorkspace);
+  $('#wsFiles').addEventListener('change',e=>{ if(e.target.value)openFromWorkspace(e.target.value); });
+  restoreWorkspace();
+  updateSaveIndicator();
   $('#btnExportCfg').addEventListener('click',exportConfig);
   $('#btnImportCfg').addEventListener('click',()=>$('#cfgFile').click());
   $('#cfgFile').addEventListener('change',e=>{ if(e.target.files[0])importConfig(e.target.files[0]); });

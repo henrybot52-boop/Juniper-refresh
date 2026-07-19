@@ -94,6 +94,10 @@ and Cost Actuals all share one date range** — the plan window (start week +
 number of weeks) set on the Project Forecast tab, automatically extended
 through the latest actual week — so the week columns line up 1:1 across tabs.
 
+## Workspace folder & auto-save
+
+**Workspace…** (Edge/Chrome) picks a folder Datum saves to and loads from — the folder is remembered across sessions. Open any saved workbook from the folder dropdown, or **New in folder** to create one. Once a workbook has a file target, Datum **auto-saves to it every ~45s** while you work. The header shows the **current workbook name** (📄) and a **save-state pill** (● unsaved / ✓ saved HH:MM) so you always know what you are working on and whether it is saved. In browsers without the folder API, Save/Open to individual files still works.
+
 ## Saving your work
 
 Everything you type auto-saves in the browser as you work. For durable files:
