@@ -1354,8 +1354,15 @@ function projBill(proj,emp){ const p=state.plans[proj]; return (p&&p._rateTable&
 function projMarkup(proj){ const p=state.plans[proj]; return (p&&+p._nlMarkup)||0; }
 function rowRevenue(r){
   const proj=r.projectNumber||r.projectName;
-  if(r.hours) return r.hours*projBill(proj,r.employee);            // labor priced at bill rate — negative hours (reversals) net out
-  return (r.totalCost||0)*(1+projMarkup(proj)/100);               // subs/expenses (0 hours) at cost + markup
+  if(r.hours) return r.hours*projBill(proj,r.employee);            // labor priced at bill rate — negative hours (reversals) net out; bill rate already recovers fringe/oncost burden
+  // 0-hour rows: only genuine subcontractors + expenses are billable (cost + markup).
+  // Fringe/overhead burden lines (blank employee, cost in the fringe/oncost columns) earn $0 —
+  // that burden is already recovered through the labor bill rate, so billing it again double-counts revenue.
+  const m=state.mapping;
+  const base=(m.subsCost||m.expensesCost)
+    ? (r.subsCost||0)+(r.expensesCost||0)
+    : (r.totalCost||0)-(r.fringe||0)-(r.oncost||0);               // fallback when subs/expenses aren't mapped: strip burden from total
+  return base*(1+projMarkup(proj)/100);
 }
 function renderBilling(){
   if(!data.length)return;
