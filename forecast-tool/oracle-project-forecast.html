@@ -265,13 +265,13 @@
 <section id="tab-explorer" class="hidden">
   <div class="filterbar" id="filterbar-exp"></div>
   <div class="card">
-    <h2>Pivot builder</h2>
+    <h2>Pivot builder <span class="hint">— including <b>Revenue (price)</b> &amp; <b>Net margin</b>. Group by project / employee / task and filter to find where revenue is off.</span></h2>
     <h3>Group rows by (in order)</h3>
     <div class="checkgrid" id="expDims"></div>
     <div class="row" style="margin-top:12px">
       <label>Value: <select id="expMetric"></select></label>
       <label><input type="checkbox" id="expByPeriod" checked> Spread across periods (columns)</label>
-      <label><input type="checkbox" id="expAllMetrics"> Show all cost columns instead</label>
+      <label><input type="checkbox" id="expAllMetrics"> Show all columns (incl. revenue &amp; margin)</label>
       <button id="btnExpRun" class="primary">Build pivot</button>
       <button id="btnExpCsv">Export CSV</button>
     </div>
@@ -1239,7 +1239,8 @@ function makeFilterDropdown(key){
 document.addEventListener('click',()=>{ $$('.fpanel.open').forEach(p=>{ p.classList.remove('open'); buildAllFilterbars(); refreshActiveTab(); }); });
 
 /* ===================== Aggregation ===================== */
-function initMetrics(){ const o={}; METRICS.forEach(m=>o[m.key]=0); return o; }
+function initMetrics(){ const o={}; METRICS.forEach(m=>o[m.key]=0); o._revenue=0; o._margin=0; return o; }
+const EXP_METRICS = METRICS.concat([{key:'_revenue',label:'Revenue (price)',money:true},{key:'_margin',label:'Net margin',money:true}]);
 function aggregate(rows, dims){
   const map=new Map();
   for(const r of rows){
@@ -1250,6 +1251,8 @@ function aggregate(rows, dims){
     let p=g.periods.get(r._pk);
     if(!p){ p=initMetrics(); g.periods.set(r._pk,p); }
     for(const m of METRICS){ const v=r[m.key]||0; p[m.key]+=v; g.totals[m.key]+=v; }
+    const rv=rowRevenue(r), mg=rv-(r.totalCost||0);
+    p._revenue+=rv; p._margin+=mg; g.totals._revenue+=rv; g.totals._margin+=mg;
     if(state.mapping.billedStatus && !isBilled(r.billedStatus)) g.unbilled += r.totalCost||0;
   }
   return [...map.values()];
@@ -1435,7 +1438,7 @@ function setupExplorer(){
     dimBox.append(el('label',null,cb,f.label));
   }
   const ms=$('#expMetric'); ms.innerHTML='';
-  METRICS.forEach(m=>ms.append(el('option',{value:m.key},m.label)));
+  EXP_METRICS.forEach(m=>ms.append(el('option',{value:m.key},m.label)));
   ms.value=state.settings.expMetric;
   ms.addEventListener('change',()=>{ state.settings.expMetric=ms.value; saveState(); });
   $('#btnExpRun').addEventListener('click',renderExplorer);
@@ -1457,11 +1460,11 @@ function renderExplorer(){
   const dimLabels=dims.map(d=>FIELDS.find(f=>f.key===d).label);
   const t=$('#expTable'); t.innerHTML='';
   let header, makeRow, csvHeader, makeCsv;
-  const mObj=METRICS.find(m=>m.key===metric);
+  const mObj=EXP_METRICS.find(m=>m.key===metric)||METRICS[6];
   if(allMetrics){
-    header=[...dimLabels,...METRICS.map(m=>m.label)];
-    makeRow=g=>[...g.parts.map(p=>el('td',null,p)), ...METRICS.map(m=>el('td',{class:numCls(g.totals[m.key])}, fmtMetric(g.totals[m.key],m.key)))];
-    makeCsv=g=>[...g.parts, ...METRICS.map(m=>g.totals[m.key])];
+    header=[...dimLabels,...EXP_METRICS.map(m=>m.label)];
+    makeRow=g=>[...g.parts.map(p=>el('td',null,p)), ...EXP_METRICS.map(m=>el('td',{class:numCls(g.totals[m.key])}, fmtMetric(g.totals[m.key],m.key)))];
+    makeCsv=g=>[...g.parts, ...EXP_METRICS.map(m=>g.totals[m.key])];
   } else if(byPeriod){
     header=[...dimLabels,...cols.map(pkLabel),'Total'];
     makeRow=g=>[...g.parts.map(p=>el('td',null,p)),
@@ -1479,9 +1482,9 @@ function renderExplorer(){
   groups.slice(0,LIMIT).forEach(g=>tb.append(el('tr',null,...makeRow(g))));
   // grand total row
   const gt=initMetrics();
-  for(const g of groups) for(const m of METRICS) gt[m.key]+=g.totals[m.key];
+  for(const g of groups) for(const m of EXP_METRICS) gt[m.key]=(gt[m.key]||0)+g.totals[m.key];
   if(allMetrics){
-    tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), ...METRICS.map(m=>el('td',{class:'num'},fmtMetric(gt[m.key],m.key)))));
+    tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), ...EXP_METRICS.map(m=>el('td',{class:'num'},fmtMetric(gt[m.key],m.key)))));
   } else if(byPeriod){
     const perC=cols.map(c=>groups.reduce((a,g)=>{const p=g.periods.get(c);return a+(p?p[metric]:0);},0));
     tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), ...perC.map(v=>el('td',{class:'num'},fmtMetric(v,metric))), el('td',{class:'num'},fmtMetric(gt[metric],metric))));
