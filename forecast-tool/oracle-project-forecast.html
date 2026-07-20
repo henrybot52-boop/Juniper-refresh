@@ -1285,8 +1285,8 @@ function renderDashboard(){
   const k=$('#kpis'); k.innerHTML='';
   const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
   kpi('Total cost (filtered)', fmtMoney(tot.totalCost), rows.length.toLocaleString()+' transactions');
-  kpi('Revenue (price)', fmtMoney(revenue), cov<100? cov+'% of hours have bill rates' : 'hours × bill rate (Rate Table)');
-  kpi('Net margin', fmtMoney(margin), revenue? (100*margin/revenue).toFixed(1)+'% of price':'');
+  kpi('Revenue (price)', fmtMoney(revenue), cov===0? '⚠ no bill rates yet — set them on the Rate Table tab' : (cov<100? cov+'% of hours have bill rates (Rate Table)' : 'hours × bill rate (Rate Table)'));
+  kpi('Net margin', fmtMoney(margin), revenue? (100*margin/revenue).toFixed(1)+'% of price':'set bill rates to see margin');
   kpi('Hours', fmtNum(tot.hours,1), 'Labor: '+fmtMoney(tot.salaries+tot.fringe));
   kpi('Subs / Expenses', fmtMoney(tot.subsCost+tot.expensesCost), 'Oncost: '+fmtMoney(tot.oncost));
   if(state.mapping.billedStatus) kpi('Unbilled cost', fmtMoney(unbilled), tot.totalCost? (100*unbilled/tot.totalCost).toFixed(1)+'% of total':'');
