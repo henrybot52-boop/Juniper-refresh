@@ -226,7 +226,6 @@
   <span class="tabgroup"><span class="glabel">Forecast</span>
     <button data-tab="pforecast">Project Forecast</button>
     <button data-tab="pactuals">Actuals vs Forecast</button>
-    <button data-tab="forecast" class="adv">Portfolio Forecast</button>
     <button data-tab="ev" class="adv">Earned Value</button></span>
   <span class="tabgroup"><span class="glabel">Rates &amp; costs</span>
     <button data-tab="rates">Rate Table</button>
@@ -323,53 +322,6 @@
   <div class="card">
     <div class="tablewrap" style="max-height:640px"><table id="expTable"></table></div>
     <div class="hint" id="expInfo" style="margin-top:8px"></div>
-  </div>
-</section>
-
-<!-- ============ FORECAST TAB ============ -->
-<section id="tab-forecast" class="hidden">
-  <div class="filterbar" id="filterbar-fc"></div>
-  <div class="card">
-    <h2>Forecast configuration</h2>
-    <div class="row">
-      <label>Forecast level:
-        <select id="fcLevel">
-          <option value="projectNumber,projectName">Project</option>
-          <option value="projectNumber,projectName,topTaskNumber,topTaskName">Project + Top Task</option>
-          <option value="projectManager">Project Manager</option>
-          <option value="costCenter">Cost Center</option>
-          <option value="businessUnit,division">Business Unit + Division</option>
-          <option value="expenditureType">Expenditure/Event Type</option>
-        </select>
-      </label>
-      <label>Metric:
-        <select id="fcMetric"></select>
-      </label>
-      <label>Method:
-        <select id="fcMethod">
-          <option value="avgN">Average of last N periods</option>
-          <option value="weighted">Weighted average (recent heavier)</option>
-          <option value="linear">Linear trend (last N periods)</option>
-          <option value="last">Repeat last period</option>
-        </select>
-      </label>
-      <label>Look-back N: <input type="number" id="fcLookback" min="1" max="36" value="3"></label>
-      <label>Horizon (months): <input type="number" id="fcHorizon" min="1" max="36" value="6"></label>
-      <label>Monthly adjust %: <input type="number" id="fcGrowth" step="0.5" value="0" title="Applied compounding each forecast month, e.g. -5 ramps spend down 5%/month"></label>
-      <label><input type="checkbox" id="fcExcludeLatest" checked> Latest period is partial — exclude from burn-rate</label>
-      <button id="btnFcRun" class="primary">Run forecast</button>
-      <button id="btnFcCsv">Export CSV</button>
-    </div>
-    <p class="hint">Enter a <b>Budget / EAC</b> per row to get remaining budget, runway (months until the budget runs out at the forecast burn rate) and a projected depletion date. Budgets are saved in your browser and survive next week’s upload.</p>
-  </div>
-  <div class="card">
-    <div class="tablewrap" style="max-height:560px"><table id="fcTable"></table></div>
-    <div class="hint" id="fcInfo" style="margin-top:8px"></div>
-  </div>
-  <div class="card">
-    <h2>Forecast chart <span class="hint">— pick a row to see actuals vs forecast</span></h2>
-    <div class="row" style="margin-bottom:10px"><select id="fcChartPick" style="max-width:560px"></select></div>
-    <div class="chartbox" style="height:340px"><canvas id="chForecast"></canvas></div>
   </div>
 </section>
 
@@ -652,7 +604,6 @@
       Export/Import settings moves just the configuration, without data.</p>
     <div class="row">
       <button id="btnSnapshots">Restore point / undo…</button>
-      <button id="btnClearBudgets">Clear saved budgets</button>
       <button id="btnClearAll" style="border-color:var(--bad);color:var(--bad)">Reset everything</button>
     </div>
   </div>
@@ -786,8 +737,6 @@ let state = {
     billedValues:'billed,invoiced,fully billed,y,yes',
     billCutoff:'', billBasis:'gl',
     expDims:['projectNumber','projectName'], expMetric:'totalCost',
-    fcLevel:'projectNumber,projectName', fcMetric:'totalCost', fcMethod:'avgN',
-    fcLookback:3, fcHorizon:6, fcGrowth:0, fcExcludeLatest:true,
     ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12,
     ohMult:2.3474, ohExceptions:'Jeff Frahm=2.1138',
   },
@@ -796,7 +745,6 @@ let state = {
 };
 let raw = { workbook:null, sheetName:null, headerRowIdx:0, headers:[], rows:[] }; // parsed file
 let data = [];                 // canonical rows after mapping
-let lastForecast = null;       // results of last forecast run
 let lastPivot = null;
 let charts = {};
 
@@ -1193,7 +1141,7 @@ function filteredRows(){
   return data.filter(r=>active.every(([k,vals])=>vals.includes(r[k]||'(blank)')));
 }
 function buildAllFilterbars(){
-  ['dash','exp','fc'].forEach(suffix=>buildFilterbar('#filterbar-'+suffix));
+  ['dash','exp'].forEach(suffix=>buildFilterbar('#filterbar-'+suffix));
 }
 function buildFilterbar(sel){
   const bar=$(sel); bar.innerHTML='';
@@ -1521,204 +1469,6 @@ function renderExplorer(){
 }
 
 /* ===================== Forecast ===================== */
-function setupForecast(){
-  const s=state.settings;
-  const ms=$('#fcMetric'); ms.innerHTML='';
-  METRICS.forEach(m=>ms.append(el('option',{value:m.key},m.label)));
-  $('#fcLevel').value=s.fcLevel; $('#fcMetric').value=s.fcMetric; $('#fcMethod').value=s.fcMethod;
-  $('#fcLookback').value=s.fcLookback; $('#fcHorizon').value=s.fcHorizon;
-  $('#fcGrowth').value=s.fcGrowth; $('#fcExcludeLatest').checked=s.fcExcludeLatest;
-  $('#btnFcRun').addEventListener('click',()=>{ readFcSettings(); renderForecast(); });
-  $('#btnFcCsv').addEventListener('click',exportForecastCsv);
-  $('#fcChartPick').addEventListener('change',drawForecastChart);
-}
-function readFcSettings(){
-  const s=state.settings;
-  s.fcLevel=$('#fcLevel').value; s.fcMetric=$('#fcMetric').value; s.fcMethod=$('#fcMethod').value;
-  s.fcLookback=Math.max(1,+$('#fcLookback').value||3);
-  s.fcHorizon=Math.max(1,+$('#fcHorizon').value||6);
-  s.fcGrowth=+$('#fcGrowth').value||0;
-  s.fcExcludeLatest=$('#fcExcludeLatest').checked;
-  saveState();
-}
-function forecastSeries(values, opts){
-  // values: array of numbers (chronological, complete-month basis). Returns array of length horizon.
-  const {method, lookback, horizon, growth} = opts;
-  const use=values.slice(-lookback);
-  const g=1+growth/100;
-  const out=[];
-  if(!use.length) return Array(horizon).fill(0);
-  if(method==='linear' && use.length>=2){
-    const n=use.length;
-    let sx=0,sy=0,sxy=0,sxx=0;
-    use.forEach((y,x)=>{sx+=x;sy+=y;sxy+=x*y;sxx+=x*x;});
-    const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx||1);
-    const icpt=(sy-slope*sx)/n;
-    for(let t=0;t<horizon;t++) out.push((icpt+slope*(n+t))*Math.pow(g,t+1));
-    return out;
-  }
-  let base;
-  if(method==='last') base=use[use.length-1];
-  else if(method==='weighted'){
-    let ws=0,vs=0; use.forEach((v,i)=>{const w=i+1;ws+=w;vs+=v*w;}); base=vs/ws;
-  } else { base=use.reduce((a,b)=>a+b,0)/use.length; }
-  for(let t=0;t<horizon;t++) out.push(base*Math.pow(g,t+1));
-  return out;
-}
-function renderForecast(){
-  if(!data.length) return;
-  const s=state.settings;
-  const dims=s.fcLevel.split(',').filter(k=>state.mapping[k]);
-  if(!dims.length){ $('#fcInfo').textContent='None of the columns for this level are mapped.'; return; }
-  const rows=filteredRows();
-  const metric=s.fcMetric;
-  const allCols=periodCols(rows);
-  if(!allCols.length){ $('#fcInfo').textContent='No periods could be parsed from the data.'; return; }
-  const lastActual=allCols[allCols.length-1];
-  // history columns used for the burn-rate calc
-  const histCols = s.fcExcludeLatest && allCols.length>1 ? allCols.slice(0,-1) : allCols;
-  // fill the full continuous month range so gaps count as zero-spend months
-  const firstHist=histCols[0], lastHist=histCols[histCols.length-1];
-  const histRange=[]; for(let k=firstHist;k<=lastHist;k++) histRange.push(k);
-  const futCols=[]; for(let t=1;t<=s.fcHorizon;t++) futCols.push(lastActual+t);
-  const groups=aggregate(rows,dims);
-  groups.sort((a,b)=>b.totals[metric]-a.totals[metric]);
-  const mObj=METRICS.find(m=>m.key===metric);
-  const fmt=v=>fmtMetric(v,metric);
-
-  const results=groups.map(g=>{
-    const series=histRange.map(k=>{const p=g.periods.get(k);return p?p[metric]:0;});
-    const fc=forecastSeries(series,{method:s.fcMethod,lookback:s.fcLookback,horizon:s.fcHorizon,growth:s.fcGrowth});
-    const actual=g.totals[metric];
-    const burn=series.slice(-s.fcLookback).reduce((a,b)=>a+b,0)/Math.min(s.fcLookback,series.length||1);
-    const fcSum=fc.reduce((a,b)=>a+b,0);
-    const bKey=s.fcLevel+'::'+g.key;
-    const budget=state.budgets[bKey];
-    let remaining=null,runway=null,depletion=null,pct=null;
-    if(budget!=null && budget!==''){
-      remaining=budget-actual;
-      pct=budget? actual/budget*100:null;
-      if(burn>0){
-        runway=remaining/burn;
-        if(runway>=0 && runway<600){
-          const dk=lastActual+Math.ceil(runway);
-          depletion=pkLabel(dk);
-        }
-      }
-    }
-    return {g,series,fc,actual,burn,fcSum,bKey,budget,remaining,runway,depletion,pct,
-      projected: actual+fcSum};
-  });
-  lastForecast={results,dims,metric,histRange,futCols,lastActual};
-
-  const t=$('#fcTable'); t.innerHTML='';
-  const dimLabels=dims.map(d=>FIELDS.find(f=>f.key===d).label);
-  const recentCols=histRange.slice(-Math.min(s.fcLookback,6));
-  const header=[...dimLabels,'Actual to date',
-    ...recentCols.map(k=>pkLabel(k)+' (act)'),
-    'Burn/'+ (mObj.money?'mo':'mo'),
-    ...futCols.map(k=>pkLabel(k)+' (fc)'),
-    'Fcst '+s.fcHorizon+'mo total','Projected total','Budget / EAC','Remaining','% used','Runway (mo)','Depleted'];
-  t.append(el('thead',null,el('tr',null,...header.map((h,i)=>el('th',{class:i>=dims.length?'num':''},h)))));
-  const tb=el('tbody');
-  const LIMIT=500;
-  results.slice(0,LIMIT).forEach(res=>{
-    const {g}=res;
-    const budgetIn=el('input',{class:'budget-in',type:'text',placeholder:'enter…',value:res.budget!=null?res.budget:''});
-    budgetIn.addEventListener('change',()=>{
-      const v=parseNumber(budgetIn.value);
-      if(budgetIn.value.trim()==='') delete state.budgets[res.bKey];
-      else state.budgets[res.bKey]=v;
-      saveState(); renderForecast();
-    });
-    let pctPill='';
-    if(res.pct!=null){
-      const cls=res.pct>100?'bad':res.pct>85?'warn':'ok';
-      pctPill=el('span',{class:'pill '+cls},res.pct.toFixed(0)+'%');
-    }
-    tb.append(el('tr',null,
-      ...g.parts.map(p=>el('td',null,p)),
-      el('td',{class:numCls(res.actual)},fmt(res.actual)),
-      ...recentCols.map(k=>{const p=g.periods.get(k);const v=p?p[metric]:0;return el('td',{class:numCls(v)},v?fmt(v):'');}),
-      el('td',{class:numCls(res.burn)},fmt(res.burn)),
-      ...res.fc.map(v=>el('td',{class:numCls(v),style:'color:#7dd3fc'},fmt(v))),
-      el('td',{class:numCls(res.fcSum),style:'color:#7dd3fc'},fmt(res.fcSum)),
-      el('td',{class:numCls(res.projected)},fmt(res.projected)),
-      el('td',{class:'num'},budgetIn),
-      el('td',{class:res.remaining!=null?numCls(res.remaining):'num'},res.remaining!=null?fmt(res.remaining):''),
-      el('td',{class:'num'},pctPill),
-      el('td',{class:'num'},res.runway!=null?res.runway.toFixed(1):''),
-      el('td',null,res.depletion||''),
-    ));
-  });
-  // totals
-  const totActual=results.reduce((a,r)=>a+r.actual,0);
-  const totFc=results.reduce((a,r)=>a+r.fcSum,0);
-  const totBurn=results.reduce((a,r)=>a+r.burn,0);
-  const totBud=results.reduce((a,r)=>a+(r.budget||0),0);
-  const perFut=futCols.map((k,i)=>results.reduce((a,r)=>a+r.fc[i],0));
-  const perRecent=recentCols.map(k=>results.reduce((a,r)=>{const p=r.g.periods.get(k);return a+(p?p[metric]:0);},0));
-  tb.append(el('tr',{class:'total'},
-    el('td',{colspan:dims.length},'TOTAL'),
-    el('td',{class:'num'},fmt(totActual)),
-    ...perRecent.map(v=>el('td',{class:'num'},fmt(v))),
-    el('td',{class:'num'},fmt(totBurn)),
-    ...perFut.map(v=>el('td',{class:'num'},fmt(v))),
-    el('td',{class:'num'},fmt(totFc)),
-    el('td',{class:'num'},fmt(totActual+totFc)),
-    el('td',{class:'num'},totBud?fmt(totBud):''),
-    el('td',{class:'num'},totBud?fmt(totBud-totActual):''),
-    el('td',{class:'num'},''),el('td',{class:'num'},''),el('td')));
-  t.append(tb);
-  $('#fcInfo').textContent=results.length.toLocaleString()+' groups'+(results.length>LIMIT?` (showing top ${LIMIT} — export CSV for all)`:'')+
-    ` · burn-rate = avg of last ${s.fcLookback} complete period(s)` + (s.fcExcludeLatest?` · ${pkLabel(lastActual)} excluded as partial`:'');
-
-  // chart picker
-  const pick=$('#fcChartPick'); pick.innerHTML='';
-  pick.append(el('option',{value:'__ALL__'},'— All groups combined —'));
-  results.slice(0,60).forEach((r,i)=>pick.append(el('option',{value:i},r.g.key)));
-  drawForecastChart();
-}
-function drawForecastChart(){
-  if(!lastForecast) return;
-  const {results,histRange,futCols,metric}=lastForecast;
-  const v=$('#fcChartPick').value;
-  let series,fc,title;
-  if(v==='__ALL__'){
-    series=histRange.map((k,i)=>results.reduce((a,r)=>a+r.series[i],0));
-    fc=futCols.map((k,i)=>results.reduce((a,r)=>a+r.fc[i],0));
-    title='All groups';
-  } else {
-    const r=results[+v]; if(!r)return;
-    series=r.series; fc=r.fc; title=r.g.key;
-  }
-  const labels=[...histRange.map(pkLabel),...futCols.map(pkLabel)];
-  const actualData=[...series, ...futCols.map(()=>null)];
-  const fcData=[...histRange.map((k,i)=>i===histRange.length-1?series[i]:null), ...fc];
-  drawChart('chForecast',{
-    type:'line',
-    data:{labels,datasets:[
-      {label:'Actuals — '+title,data:actualData,borderColor:'#38bdf8',backgroundColor:'#38bdf8',tension:.2,pointRadius:3},
-      {label:'Forecast',data:fcData,borderColor:'#fbbf24',backgroundColor:'#fbbf24',borderDash:[6,5],tension:.2,pointRadius:3},
-    ]},
-    options:chartOpts()
-  });
-}
-function exportForecastCsv(){
-  if(!lastForecast){ alert('Run a forecast first.'); return; }
-  const {results,dims,futCols,histRange}=lastForecast;
-  const s=state.settings;
-  const recentCols=histRange.slice(-Math.min(s.fcLookback,6));
-  const dimLabels=dims.map(d=>FIELDS.find(f=>f.key===d).label);
-  const header=[...dimLabels,'Actual to date',...recentCols.map(k=>pkLabel(k)+' actual'),'Burn per month',
-    ...futCols.map(k=>pkLabel(k)+' forecast'),'Forecast total','Projected total','Budget','Remaining','Pct used','Runway months','Depletion'];
-  const rows=results.map(r=>[...r.g.parts, r.actual,
-    ...recentCols.map(k=>{const p=r.g.periods.get(k);return p?p[metricOf()]:0;}),
-    r.burn, ...r.fc, r.fcSum, r.projected, r.budget??'', r.remaining??'', r.pct!=null?r.pct.toFixed(1):'', r.runway!=null?r.runway.toFixed(1):'', r.depletion||'']);
-  function metricOf(){ return lastForecast.metric; }
-  downloadCSV('forecast.csv',[header,...rows]);
-}
-
 /* ===================== Project pages: Forecast (baseline) & Actuals vs updated forecast ===================== */
 let ppCtx=null; // context of the currently rendered project page
 function ppRender(){ if(!ppCtx)return; ppCtx.mode==='f'?renderForecastPage():renderActualsPage(); }
@@ -4319,7 +4069,6 @@ function setupSettings(){
   $('#setDecimals').addEventListener('change',e=>{ s.decimals=+e.target.value; saveState(); refreshActiveTab(); });
   $('#setBilledValues').addEventListener('change',e=>{ s.billedValues=e.target.value; saveState(); refreshActiveTab(); });
   $('#btnSnapshots').addEventListener('click',showSnapshots);
-  $('#btnClearBudgets').addEventListener('click',()=>{ if(confirm('Delete all saved budgets?')){ state.budgets={}; saveState(); refreshActiveTab(); } });
   $('#btnClearAll').addEventListener('click',()=>{ if(confirm('Reset mapping, filters, settings and budgets?')){ localStorage.removeItem(STORE_KEY); location.reload(); } });
 }
 
@@ -4638,7 +4387,7 @@ function importConfig(file){
 /* ===================== Tabs ===================== */
 function switchTab(name){
   $$('nav.tabs button[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','pforecast','pactuals','rates','ev','co','subco','risk','billing','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  ['upload','dashboard','explorer','pforecast','pactuals','rates','ev','co','subco','risk','billing','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
 function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
@@ -4647,7 +4396,6 @@ function refreshActiveTab(){
   if(!data.length) return;
   if(t==='dashboard') renderDashboard();
   else if(t==='explorer') renderExplorer();
-  else if(t==='forecast') renderForecast();
   else if(t==='pforecast') renderForecastPage();
   else if(t==='pactuals') renderActualsPage();
   else if(t==='rates') renderRatesTab();
@@ -4721,7 +4469,7 @@ function loadSample(){
 function demoRand(s){ let h=0; for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0; return ((h>>>0)%1000)/1000; }
 function seedDemoPlan(){
   // pre-populate the project pages for the biggest sample project: rate table,
-  // baseline forecast, an already-revised updated forecast, plus demo budgets,
+  // baseline forecast, an already-revised updated forecast, plus
   // so every page shows realistic numbers immediately
   const totals=new Map();
   for(const r of data){ const k=r.projectNumber||r.projectName; totals.set(k,(totals.get(k)||0)+(r.totalCost||0)); }
@@ -4815,15 +4563,7 @@ function seedDemoPlan(){
       {id:'b3',period:'2026-05',invoice:'INV-1003',amount:Math.round(meta._soldCost*0.15/1000)*1000,date:'2026-06-05',status:'Draft',link:'',notes:'Pending PM review'},
     ];
     meta._spLinks={co:'https://sharepoint.example.com/project/change-orders',billing:'https://sharepoint.example.com/project/billing',risk:''};
-  }
-  // demo budgets for the portfolio Forecast tab (~130% of actuals to date)
-  state.budgets={};
-  const names=new Map();
-  for(const r of data){ const k=r.projectNumber||r.projectName; if(!names.has(k))names.set(k,r.projectName||''); }
-  for(const [pn,tot] of ranked){
-    state.budgets['projectNumber,projectName::'+pn+' | '+names.get(pn)]=Math.round(tot*1.3/10000)*10000;
-  }
-  saveState();
+  }  saveState();
 }
 
 /* ===================== Init ===================== */
@@ -4892,7 +4632,7 @@ function init(){
   $('#mapProfile').addEventListener('change',e=>{ if(e.target.value)applyMapProfile(e.target.value); });
   $('#btnMapSave').addEventListener('click',()=>{ const n=prompt('Save this column mapping as a profile named:'); if(!n)return; const p=mapProfiles(); p[n.trim()]=Object.assign({},state.mapping); setMapProfiles(p); refreshMapProfiles(); $('#mapProfile').value=n.trim(); });
   $('#btnMapDel').addEventListener('click',()=>{ const n=$('#mapProfile').value; if(!n)return; if(confirm('Delete mapping profile \"'+n+'\"?')){ const p=mapProfiles(); delete p[n]; setMapProfiles(p); refreshMapProfiles(); } });
-  setupExplorer(); setupForecast(); setupProjectPages(); setupEvTab(); setupCoTab(); setupSubTab(); setupRiskTab(); setupBillingTab(); setupSettings();
+  setupExplorer(); setupProjectPages(); setupEvTab(); setupCoTab(); setupSubTab(); setupRiskTab(); setupBillingTab(); setupSettings();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
