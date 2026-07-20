@@ -886,6 +886,20 @@ function runHealthCheck(){
     for(const r of data){ if(!(r.hours>0))continue; const pj=r.projectNumber||r.projectName, key=pj+'||'+r.employee; if(seenE.has(key))continue; seenE.add(key);
       const rt=(state.plans[pj]&&state.plans[pj]._rateTable)||{}; if(!(rt[r.employee]&&+rt[r.employee].bill))noBill++; }
     if(noBill) add('info',noBill+' project/person combination(s) have no bill rate — revenue for those is counted as 0 until set on the Rate Table.');
+    // negative-hours reversals that fail to net out (their employee has no bill rate) => revenue overstated
+    const projAgg={};
+    for(const r of data){
+      const pj=r.projectNumber||r.projectName; if(!pj)continue;
+      const a=projAgg[pj]||(projAgg[pj]={rev:0,posH:0,negH:0,negRows:0});
+      const bill=projBill(pj,r.employee);
+      if(r.hours>0 && bill>0){ a.rev+=r.hours*bill; a.posH+=r.hours; }
+      else if(r.hours<0 && !(bill>0)){ a.negH+=(-r.hours); a.negRows++; }
+    }
+    let unNetRows=0,unNetHours=0,estOver=0;
+    for(const pj in projAgg){ const a=projAgg[pj];
+      if(a.negRows){ unNetRows+=a.negRows; unNetHours+=a.negH; estOver+=a.negH*(a.posH?a.rev/a.posH:0); }
+    }
+    if(unNetRows) add('warn',unNetRows+' negative-hours reversal row(s) totalling '+fmtNum(unNetHours,1)+' h have no bill rate on their employee, so they do NOT reduce revenue — Dashboard revenue may be overstated by ~'+fmtMoney(estOver)+' (estimated at each project’s average bill rate). Match these rows to a Rate Table bill rate, or fix the employee name so each reversal nets against its original labor.');
     if(!issues.some(i=>i.sev==='err'||i.sev==='warn')) add('ok','No problems found — data and rates look clean.');
   }
   const wrap=el('div',null,el('h1',null,'Health check'),el('p',{class:'sub'},'A quick scan of the loaded data, mapping and rates.'));
@@ -1340,8 +1354,15 @@ function projBill(proj,emp){ const p=state.plans[proj]; return (p&&p._rateTable&
 function projMarkup(proj){ const p=state.plans[proj]; return (p&&+p._nlMarkup)||0; }
 function rowRevenue(r){
   const proj=r.projectNumber||r.projectName;
-  if(r.hours) return r.hours*projBill(proj,r.employee);            // labor priced at bill rate — negative hours (reversals) net out
-  return (r.totalCost||0)*(1+projMarkup(proj)/100);               // subs/expenses (0 hours) at cost + markup
+  if(r.hours) return r.hours*projBill(proj,r.employee);            // labor priced at bill rate — negative hours (reversals) net out; bill rate already recovers fringe/oncost burden
+  // 0-hour rows: only genuine subcontractors + expenses are billable (cost + markup).
+  // Fringe/overhead burden lines (blank employee, cost in the fringe/oncost columns) earn $0 —
+  // that burden is already recovered through the labor bill rate, so billing it again double-counts revenue.
+  const m=state.mapping;
+  const base=(m.subsCost||m.expensesCost)
+    ? (r.subsCost||0)+(r.expensesCost||0)
+    : (r.totalCost||0)-(r.fringe||0)-(r.oncost||0);               // fallback when subs/expenses aren't mapped: strip burden from total
+  return base*(1+projMarkup(proj)/100);
 }
 function renderBilling(){
   if(!data.length)return;
