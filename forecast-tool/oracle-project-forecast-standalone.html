@@ -1358,8 +1358,8 @@ function projBill(proj,emp){ const p=state.plans[proj]; return (p&&p._rateTable&
 function projMarkup(proj){ const p=state.plans[proj]; return (p&&+p._nlMarkup)||0; }
 function rowRevenue(r){
   const proj=r.projectNumber||r.projectName;
-  if(r.hours>0) return r.hours*projBill(proj,r.employee);          // labor priced at bill rate
-  return (r.totalCost||0)*(1+projMarkup(proj)/100);               // subs/expenses at cost + markup
+  if(r.hours) return r.hours*projBill(proj,r.employee);            // labor priced at bill rate — negative hours (reversals) net out
+  return (r.totalCost||0)*(1+projMarkup(proj)/100);               // subs/expenses (0 hours) at cost + markup
 }
 function renderBilling(){
   if(!data.length)return;
