@@ -168,6 +168,29 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
   a.addlink{color:var(--accent);font-size:11.5px;margin-left:10px;cursor:pointer;text-decoration:none;opacity:.75;font-weight:400}
   a.addlink:hover{opacity:1;text-decoration:underline}
   .footer-note{color:var(--muted);font-size:11.5px;text-align:center;padding:14px}
+  /* header dropdown menus (File / Tools) */
+  .menu{position:relative;display:inline-block}
+  .menu>.menubtn::after{content:" ▾";opacity:.7;font-size:11px}
+  .menu>.menubtn.open{background:#33445c;border-color:var(--accent)}
+  .menupanel{position:absolute;top:calc(100% + 6px);right:0;z-index:120;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:6px;min-width:210px;box-shadow:0 12px 34px rgba(0,0,0,.55);display:none;flex-direction:column;gap:2px}
+  .menupanel.open{display:flex}
+  .menupanel button,.menupanel .menuitem{width:100%;text-align:left;background:none;border:none;border-radius:6px;padding:8px 11px;font-size:13px;color:var(--text)}
+  .menupanel button:hover{background:#33445c}
+  .menupanel select{width:100%}
+  .menupanel .menusep{height:1px;background:var(--border);margin:5px 4px}
+  .menupanel .menulabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:5px 11px 2px}
+  /* grouped, collapsible tabs */
+  nav.tabs{align-items:stretch;flex-wrap:wrap}
+  nav.tabs .tabgroup{display:flex;align-items:stretch;gap:2px}
+  nav.tabs .tabgroup+.tabgroup{border-left:1px solid var(--border)}
+  nav.tabs .glabel{align-self:center;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#64748b;padding:0 6px 0 12px;user-select:none;white-space:nowrap}
+  nav.tabs .tabgroup:first-child .glabel{padding-left:0}
+  nav.tabs .adv{display:none}
+  nav.tabs.show-adv .adv{display:flex}
+  nav.tabs .tabtoggle{align-self:center;margin-left:auto;font-size:12px;color:var(--accent);background:none;border:1px solid var(--border);padding:4px 10px}
+  nav.tabs .tabtoggle:hover{background:#22304a}
+  nav.tabs button.gear{align-self:center;border:none;background:none;font-size:16px;padding:6px 10px;border-bottom:3px solid transparent}
+  nav.tabs button.gear.active{border-bottom-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -180,40 +203,62 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
   <span id="saveState" class="pill"></span>
   <span id="dataStatus" class="pill">No data loaded</span>
   <div class="spacer"></div>
-  <button id="btnSample" class="small">Load sample data</button>
-  <button id="btnHealth" class="small" title="Scan the loaded data & settings for problems">Health check</button>
-  <button id="btnCompare" class="small" title="Compare the loaded extract to a previous week's file">Compare extract…</button>
-  <input type="file" id="cmpFile" accept=".xlsx,.xls,.csv,.tsv,.txt" class="hidden">
-  <button id="btnWorkspace" class="small" title="Choose a folder Datum saves to and loads from (Edge/Chrome)">Workspace…</button>
-  <select id="wsFiles" class="small" title="Open a saved workbook from your workspace folder" style="max-width:170px"><option value="">📁 open from folder…</option></select>
-  <button id="btnWsNew" class="small" title="Create a new workbook file in the workspace folder">New in folder</button>
-  <button id="btnWsReconnect" class="small hidden" style="border-color:var(--warn);color:var(--warn)" title="Re-grant access to your saved workspace folder">Reconnect folder</button>
   <button id="btnSaveWb" class="small" title="Save the workbook — data, forecasts, rates, budgets, settings. In Edge/Chrome it writes back to the same file, like Excel.">Save</button>
-  <button id="btnSaveAsWb" class="small" title="Choose where to save — Excel workbook (.xlsx, readable in Excel) or JSON">Save As…</button>
-  <button id="btnOpenWb" class="small" title="Open a saved workbook (.xlsx or .json) and continue where you left off">Open</button>
-  <input type="file" id="wbFile" accept=".json,.xlsx,.fwb" class="hidden">
-  <button id="btnExportCfg" class="small">Export settings</button>
-  <button id="btnImportCfg" class="small">Import settings</button>
-  <input type="file" id="cfgFile" accept=".json" class="hidden">
+  <div class="menu">
+    <button class="small menubtn" id="menuFileBtn" title="Open, save, workspace &amp; settings">File</button>
+    <div class="menupanel" id="menuFilePanel">
+      <div class="menulabel">Workbook</div>
+      <button id="btnSaveAsWb" title="Choose where to save — Excel workbook (.xlsx, readable in Excel) or JSON">Save As…</button>
+      <button id="btnOpenWb" title="Open a saved workbook (.xlsx or .json) and continue where you left off">Open…</button>
+      <div class="menusep"></div>
+      <div class="menulabel">Workspace folder</div>
+      <select id="wsFiles" class="small" title="Open a saved workbook from your workspace folder"><option value="">📁 open from folder…</option></select>
+      <button id="btnWorkspace" title="Choose a folder Datum saves to and loads from (Edge/Chrome)">Choose workspace…</button>
+      <button id="btnWsNew" title="Create a new workbook file in the workspace folder">New in folder</button>
+      <button id="btnWsReconnect" class="hidden" style="color:var(--warn)" title="Re-grant access to your saved workspace folder">Reconnect folder</button>
+      <div class="menusep"></div>
+      <div class="menulabel">Settings</div>
+      <button id="btnExportCfg">Export settings</button>
+      <button id="btnImportCfg">Import settings</button>
+    </div>
+  </div>
+  <div class="menu">
+    <button class="small menubtn" id="menuToolsBtn" title="Data health, comparison &amp; sample data">Tools</button>
+    <div class="menupanel" id="menuToolsPanel">
+      <button id="btnHealth" title="Scan the loaded data &amp; settings for problems">Health check</button>
+      <button id="btnCompare" title="Compare the loaded extract to a previous week's file">Compare extract…</button>
+      <div class="menusep"></div>
+      <button id="btnSample" title="Load a demo dataset to explore the tool">Load sample data</button>
+    </div>
+  </div>
   <button id="btnUploadTop" class="primary">Upload extract</button>
+  <input type="file" id="cmpFile" accept=".xlsx,.xls,.csv,.tsv,.txt" class="hidden">
+  <input type="file" id="wbFile" accept=".json,.xlsx,.fwb" class="hidden">
+  <input type="file" id="cfgFile" accept=".json" class="hidden">
   <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.tsv,.txt" class="hidden">
 </header>
 
-<nav class="tabs">
-  <button data-tab="upload" class="active">1 · Upload &amp; Mapping</button>
-  <button data-tab="dashboard">2 · Dashboard</button>
-  <button data-tab="explorer">3 · Pivot Explorer</button>
-  <button data-tab="forecast">4 · Forecast</button>
-  <button data-tab="pforecast">5 · Project Forecast</button>
-  <button data-tab="pactuals">6 · Actuals vs Forecast</button>
-  <button data-tab="subs">7 · Cost Actuals</button>
-  <button data-tab="rates">8 · Rate Table</button>
-  <button data-tab="ev">9 · Earned Value</button>
-  <button data-tab="co">10 · Change Orders</button>
-  <button data-tab="subco">11 · Subcontractors</button>
-  <button data-tab="risk">12 · Risk Register</button>
-  <button data-tab="billing">13 · Billing</button>
-  <button data-tab="settings">14 · Settings</button>
+<nav class="tabs" id="tabnav">
+  <span class="tabgroup"><span class="glabel">Set up</span>
+    <button data-tab="upload" class="active">Upload &amp; Mapping</button></span>
+  <span class="tabgroup"><span class="glabel">Analyze</span>
+    <button data-tab="dashboard">Dashboard</button>
+    <button data-tab="explorer">Pivot Explorer</button></span>
+  <span class="tabgroup"><span class="glabel">Forecast</span>
+    <button data-tab="pforecast">Project Forecast</button>
+    <button data-tab="pactuals">Actuals vs Forecast</button>
+    <button data-tab="forecast" class="adv">Portfolio Forecast</button>
+    <button data-tab="ev" class="adv">Earned Value</button></span>
+  <span class="tabgroup"><span class="glabel">Rates &amp; costs</span>
+    <button data-tab="rates">Rate Table</button>
+    <button data-tab="subs" class="adv">Cost Actuals</button>
+    <button data-tab="subco" class="adv">Subcontractors</button></span>
+  <span class="tabgroup adv"><span class="glabel">Commercial</span>
+    <button data-tab="co">Change Orders</button>
+    <button data-tab="risk">Risk Register</button>
+    <button data-tab="billing">Billing</button></span>
+  <button id="btnAdvTabs" class="tabtoggle" title="Show or hide the advanced tabs">Show advanced ▾</button>
+  <button data-tab="settings" class="gear" title="Settings">⚙</button>
 </nav>
 
 <main>
@@ -4800,7 +4845,7 @@ function importConfig(file){
 
 /* ===================== Tabs ===================== */
 function switchTab(name){
-  $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+  $$('nav.tabs button[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
   ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','co','subco','risk','billing','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
   refreshActiveTab();
 }
@@ -4994,7 +5039,26 @@ function seedDemoPlan(){
 function init(){
   loadState();
   // tabs
-  $$('nav.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+  $$('nav.tabs button[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+  // grouped tabs: Basic/Advanced toggle
+  const tabnav=$('#tabnav');
+  function applyAdv(on){
+    tabnav.classList.toggle('show-adv',on);
+    $('#btnAdvTabs').textContent = on?'Hide advanced ▴':'Show advanced ▾';
+    if(!on){ const a=$('nav.tabs button.active'); if(a && (a.classList.contains('adv')||a.closest('.tabgroup.adv'))) switchTab('dashboard'); }
+  }
+  applyAdv(!!state.settings.showAdv);
+  $('#btnAdvTabs').addEventListener('click',()=>{ state.settings.showAdv=!tabnav.classList.contains('show-adv'); saveState(); applyAdv(state.settings.showAdv); });
+  // header dropdown menus (File / Tools)
+  $$('.menu>.menubtn').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const panel=btn.nextElementSibling, isOpen=panel.classList.contains('open');
+    $$('.menupanel.open').forEach(p=>p.classList.remove('open'));
+    $$('.menubtn.open').forEach(b=>b.classList.remove('open'));
+    if(!isOpen){ panel.classList.add('open'); btn.classList.add('open'); }
+  }));
+  $$('.menupanel').forEach(p=>p.addEventListener('click',e=>{ if(e.target.closest('button')){ p.classList.remove('open'); const b=p.previousElementSibling; if(b)b.classList.remove('open'); } }));
+  document.addEventListener('click',()=>{ $$('.menupanel.open').forEach(p=>p.classList.remove('open')); $$('.menubtn.open').forEach(b=>b.classList.remove('open')); });
   // upload
   const fi=$('#fileInput');
   $('#btnUploadTop').addEventListener('click',()=>fi.click());
