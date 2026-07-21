@@ -3061,9 +3061,22 @@ function renderCoPricing(){
           tr.append(el('td',{class:'num sumcol'},ti));
         }
         tr._cost=el('td',{class:'num'}); tr._rev=el('td',{class:'num'});
-        tr.append(tr._cost,tr._rev,
-          el('td',null,el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove line',
-            onclick:()=>{ p.labor.splice(p.labor.indexOf(L),1); saveState(); renderCoPricing(); }},'✕')));
+        const acts=el('td',{style:'white-space:nowrap'});
+        if(!comp){
+          acts.append(
+            el('span',{class:'item-link',style:'margin-right:9px',title:'Extend forward — copy the last filled week’s hours into every following week through the end of the shown period',
+              onclick:()=>{
+                let li=-1; for(let i=0;i<weeks.length;i++){ const v=L.weeks[weeks[i]]; if(v!=null&&+v!==0)li=i; }
+                if(li<0){ alert('Enter hours in a week first — the last filled week is what gets extended.'); return; }
+                const v=L.weeks[weeks[li]];
+                for(let i=li+1;i<weeks.length;i++)L.weeks[weeks[i]]=v;
+                saveState(); renderCoPricing(); }},'⇥'),
+            el('span',{class:'item-link',style:'margin-right:9px',title:'Clear all weekly hours in this row',
+              onclick:()=>{ if(!Object.keys(L.weeks).length)return; L.weeks={}; saveState(); renderCoPricing(); }},'⌫'));
+        }
+        acts.append(el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove line',
+          onclick:()=>{ p.labor.splice(p.labor.indexOf(L),1); saveState(); renderCoPricing(); }},'✕'));
+        tr.append(tr._cost,tr._rev,acts);
         tr._L=L;
         ltb.append(tr);
       }
