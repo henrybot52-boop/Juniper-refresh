@@ -3304,7 +3304,15 @@ function setupCoTab(){
   $('#coPriceAddCat').addEventListener('click',()=>{ if(coPricing){ coEnsureStruct(coPricing); coPricing.price.struct.push({cat:'New category',tasks:['New task']}); saveState(); renderCoPricing(); } });
   $('#coPriceViewBtn').addEventListener('click',()=>{ if(coPricing){ coPricing.price.view=coPricing.price.view==='comp'?'week':'comp'; saveState(); renderCoPricing(); } });
   $('#coPriceAddNL').addEventListener('click',()=>{ if(coPricing){ coPricing.price.nl.push({desc:'',cost:'',markup:ppCtx?ppCtx.meta._nlMarkup||0:0}); saveState(); renderCoPricing(); } });
-  $('#coPriceStart').addEventListener('change',e=>{ if(!coPricing)return; const v=e.target.value; if(!v)return; const [y,m,d]=v.split('-').map(Number); coPricing.price.start=wkKey(new Date(y,m-1,d)); saveState(); renderCoPricing(); });
+  $('#coPriceStart').addEventListener('change',e=>{ if(!coPricing)return; const v=e.target.value; if(!v)return;
+    const [y,m,d]=v.split('-').map(Number); const ns=wkKey(new Date(y,m-1,d)), os=coPricing.price.start;
+    if(ns!==os){
+      // shift every line's weekly hours by the same offset so the pattern moves with the new start
+      const delta=wkDiff(os,ns);
+      for(const L of coPricing.price.labor||[]){ if(!L.weeks)continue; const w={}; for(const k in L.weeks)w[wkAdd(k,delta)]=L.weeks[k]; L.weeks=w; }
+      coPricing.price.start=ns;
+    }
+    saveState(); renderCoPricing(); });
   $('#coPriceWeeks').addEventListener('change',e=>{ if(!coPricing)return; coPricing.price.weeks=Math.max(1,Math.min(52,+e.target.value||8)); saveState(); renderCoPricing(); });
   $('#coPriceXlsx').addEventListener('click',exportCoPriceXlsx);
   $('#coPriceImp').addEventListener('click',()=>{ if(coPricing)$('#coPriceFile').click(); });
@@ -3498,6 +3506,17 @@ function renderCoTab(){
       saveState(); renderCoTab(); });
     const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',
       onclick:()=>{ if(confirm('Delete '+(co.num||'this change order')+'?')){ meta._cos=meta._cos.filter(x=>x!==co); saveState(); renderCoTab(); } }},'✕');
+    const dup=el('span',{class:'item-link',style:'margin-right:8px',title:'Copy as template — duplicates this CO with all its pricing (categories, tasks, people, rates, weekly hours) as a new Pending change order',
+      onclick:()=>{
+        const c=JSON.parse(JSON.stringify(co));
+        c.id=Date.now()+'-'+Math.random().toString(36).slice(2,6);
+        c.num='CO-'+String(meta._cos.length+1).padStart(2,'0');
+        c.clientNum=''; c.status='Pending'; c.tasks=''; c.notes='';
+        c.desc=(co.desc?co.desc+' ':'')+'(copy)';
+        c.date=fmtDate(new Date());
+        delete c.statusLog; delete c.executedAt; delete c._inForecast;
+        meta._cos.push(c); saveState(); renderCoTab();
+      }},'⧉ copy');
     const priced=co.price&&((co.price.labor&&co.price.labor.length)||(co.price.nl&&co.price.nl.length));
     const priceLink=el('span',{class:'item-link',style:'color:var(--accent)',title:'Price this change order with staff & hours',onclick:()=>openCoPricing(co)}, priced?'price ✎':'price');
     const canFcst = co.status==='Executed' && co.price && (co.price.labor||[]).some(L=>coLineHours(L)>0 && String(L.emp||'').trim());
@@ -3524,7 +3543,7 @@ function renderCoTab(){
       el('td',{class:'num'},acCell),
       el('td',null,txt(co,'date','108px')),
       el('td',null,txt(co,'notes','220px')),
-      el('td',null,priceLink,fcstLink||'',' ',del)));
+      el('td',null,priceLink,fcstLink||'',' ',dup,del)));
   }
   tb.append(el('tr',{class:'total'},
     el('td',{colspan:4},'EXECUTED TOTAL (in forecast)'),
