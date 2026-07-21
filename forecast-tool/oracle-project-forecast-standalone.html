@@ -504,6 +504,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
       <label>Project: <select id="coProject" style="max-width:430px"></select></label>
       <button id="btnCoAdd" class="primary small">+ Add change order</button>
       <button id="btnCoCsv" class="small">Export Excel</button>
+      <button id="btnCoPriceWb" class="small" title="Export every priced change order into one Excel workbook — a Summary tab plus one tab per CO with its full weekly pricing">Export pricing workbook</button>
       <button id="btnCoImp" class="small" title="Import change orders from an Excel (.xlsx) or CSV file with columns: CO #, Client CO #, Description, Status, Delta contract value, Delta cost budget, Delta contingency, Date, Notes">Import</button>
       <input type="file" id="coFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
     </div>
@@ -3328,6 +3329,7 @@ function setupCoTab(){
     saveState(); renderCoTab();
   });
   $('#btnCoCsv').addEventListener('click',exportCoXlsx);
+  $('#btnCoPriceWb').addEventListener('click',exportCoPricingWorkbook);
   $('#btnCoImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#coFile').click(); });
   $('#coFile').addEventListener('change',e=>{ if(e.target.files[0])importCoFile(e.target.files[0]); e.target.value=''; });
   $('#coPriceClose').addEventListener('click',closeCoPricing);
@@ -3376,6 +3378,82 @@ function exportCoXlsx(){
   const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
   const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=el('a',{href:URL.createObjectURL(blob),download:'change-orders-'+ppCtx.proj+'.xlsx'});
+  document.body.append(a); a.click(); a.remove();
+}
+function exportCoPricingWorkbook(){
+  if(!ppCtx){alert('Open a project first.');return;}
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const cos=(ppCtx.meta._cos||[]).filter(c=>c.price&&((c.price.labor&&c.price.labor.length)||(c.price.nl&&c.price.nl.length)));
+  if(!cos.length){alert('No priced change orders yet — click "price" on a change order first.');return;}
+  const BRAND='1F4E79', MONEY0='"$"#,##0', HRS='#,##0.0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const wb=XLSX.utils.book_new();
+  // unique, Excel-safe sheet name per CO
+  const used=new Set(['summary']);
+  const tabName=c=>{ let base=String(c.num||'CO').replace(/[:\\\/?*\[\]]/g,'-').trim().slice(0,28)||'CO';
+    let name=base,i=2; while(used.has(name.toLowerCase())){ name=base.slice(0,25)+' ('+(i++)+')'; }
+    used.add(name.toLowerCase()); return name; };
+  // ---- Summary tab ----
+  const sHead=['Tab','CO #','Client CO #','Description','Status','Hours','Labor cost','Labor revenue','Subs/exp cost','Subs/exp revenue','Total cost','Total revenue','Margin','Margin %','Δ Contract value','Δ Cost budget'];
+  const sAoa=[['Change Order Pricing — '+ppCtx.proj],['Generated',fmtDate(new Date()),'','One tab per priced change order; figures from each CO’s weekly pricing.'],[],sHead];
+  const tabs=[]; const G={h:0,lc:0,lr:0,nc:0,nr:0,cost:0,rev:0,cap:0,sold:0};
+  for(const c of cos){
+    const name=tabName(c); tabs.push([c,name]);
+    const T=coPriceTotals(c);
+    G.h+=T.hours;G.lc+=T.laborCost;G.lr+=T.laborRev;G.nc+=T.nlCost;G.nr+=T.nlRev;G.cost+=T.cost;G.rev+=T.rev;G.cap+=+c.dCap||0;G.sold+=+c.dSold||0;
+    sAoa.push([name,c.num||'',c.clientNum||'',c.desc||'',c.status||'',T.hours,T.laborCost,T.laborRev,T.nlCost,T.nlRev,T.cost,T.rev,T.rev-T.cost,T.rev?(T.rev-T.cost)/T.rev:'',+c.dCap||0,+c.dSold||0]);
+  }
+  sAoa.push([],['TOTAL','','','','',G.h,G.lc,G.lr,G.nc,G.nr,G.cost,G.rev,G.rev-G.cost,G.rev?(G.rev-G.cost)/G.rev:'',G.cap,G.sold]);
+  const sws=XLSX.utils.aoa_to_sheet(sAoa);
+  if(sws['A1'])sws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  { const rng=XLSX.utils.decode_range(sws['!ref']);
+    for(let C=0;C<=rng.e.c;C++){ const cell=sws[XLSX.utils.encode_cell({r:3,c:C})]; if(cell)cell.s=HDR; }
+    for(let R=4;R<=rng.e.r;R++){
+      const hc=sws[XLSX.utils.encode_cell({r:R,c:5})]; if(hc&&typeof hc.v==='number')hc.z=HRS;
+      for(const C of [6,7,8,9,10,11,12,14,15]){ const cell=sws[XLSX.utils.encode_cell({r:R,c:C})]; if(cell&&typeof cell.v==='number')cell.z=MONEY0; }
+      const mc=sws[XLSX.utils.encode_cell({r:R,c:13})]; if(mc&&typeof mc.v==='number')mc.z='0.0%';
+    }
+    sws['!cols']=[{wch:12},{wch:9},{wch:13},{wch:34},{wch:10},{wch:9},{wch:12},{wch:14},{wch:13},{wch:15},{wch:12},{wch:14},{wch:12},{wch:9},{wch:16},{wch:14}];
+  }
+  XLSX.utils.book_append_sheet(wb,sws,'Summary');
+  // ---- one tab per priced CO (labor grid; subs/expenses below, laid out so a re-import ignores them) ----
+  for(const [co,name] of tabs){
+    const weeks=coPriceWeeks(co);
+    const head=['Category','Task','Employee/Vendor','Cost $/hr','Bill $/hr',...weeks.map(w=>'WE '+w),'Total hrs','Cost','Revenue'];
+    const aoa=[[(co.num||'')+(co.desc?' — '+co.desc:'')],['Status',co.status||'','','Generated',fmtDate(new Date())],[],head];
+    for(const L of (co.price.labor||[])){ const hrs=coLineHours(L);
+      aoa.push([L.category||'',L.task||'',L.emp||'',+L.cost||0,+L.bill||0,...weeks.map(w=>(L.weeks&&L.weeks[w]!=null)?L.weeks[w]:''),hrs,hrs*(+L.cost||0),hrs*(+L.bill||0)]); }
+    const wkTot=weeks.map(w=>(co.price.labor||[]).reduce((a,L)=>a+((L.weeks&&+L.weeks[w])||0),0));
+    const T=coPriceTotals(co);
+    aoa.push([],['Weekly hours','','','','',...wkTot,T.hours,T.laborCost,T.laborRev]);
+    const wkEnd=4+weeks.length, cCost=wkEnd+2, cRev=wkEnd+3;
+    let nlHdrRow=-1;
+    if(co.price.nl&&co.price.nl.length){
+      aoa.push([]);
+      nlHdrRow=aoa.length;
+      const nlHead=[]; nlHead[0]='Subs / Expenses'; nlHead[3]='Markup %'; nlHead[cCost]='Cost'; nlHead[cRev]='Revenue';
+      aoa.push(nlHead);
+      for(const N of co.price.nl){ const row=[]; row[0]=N.desc||''; row[3]=+N.markup||0; row[cCost]=+N.cost||0; row[cRev]=(+N.cost||0)*(1+(+N.markup||0)/100); aoa.push(row); }
+      const tot=[]; tot[0]='TOTAL — labor + subs/expenses'; tot[cCost]=T.cost; tot[cRev]=T.rev;
+      aoa.push([],tot);
+    }
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    if(ws['A1'])ws['A1'].s={font:{bold:true,sz:14,color:{rgb:BRAND}}};
+    const rng=XLSX.utils.decode_range(ws['!ref']);
+    for(let C=0;C<=rng.e.c;C++){ const c=ws[XLSX.utils.encode_cell({r:3,c:C})]; if(c)c.s=HDR; }
+    if(nlHdrRow>=0)for(const C of [0,3,cCost,cRev]){ const c=ws[XLSX.utils.encode_cell({r:nlHdrRow,c:C})]; if(c)c.s=HDR; }
+    for(let R=4;R<=rng.e.r;R++){
+      for(const C of [3,4]){ const c=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(c&&typeof c.v==='number'&&(nlHdrRow<0||R<nlHdrRow||C!==3))c.z=MONEY0; }
+      for(let C=5;C<=wkEnd;C++){ const c=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(c&&typeof c.v==='number')c.z=HRS; }
+      const tc=ws[XLSX.utils.encode_cell({r:R,c:wkEnd+1})]; if(tc&&typeof tc.v==='number')tc.z=HRS;
+      for(const C of [cCost,cRev]){ const c=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(c&&typeof c.v==='number')c.z=MONEY0; }
+    }
+    ws['!cols']=[{wch:16},{wch:18},{wch:20},{wch:10},{wch:10},...weeks.map(()=>({wch:9})),{wch:10},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,name);
+  }
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'co-pricing-workbook-'+ppCtx.proj+'.xlsx'});
   document.body.append(a); a.click(); a.remove();
 }
 function importCoFile(file){
