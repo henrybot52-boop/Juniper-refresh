@@ -630,6 +630,7 @@
       <button id="coPriceAddCat" class="small">+ Add category</button>
       <button id="coPriceRates" class="small" title="Copy each person's cost/bill rate from this pricing up to the project Rate Table">→ Rate Table</button>
       <button id="coPriceXlsx" class="small">Export Excel</button>
+      <button id="coPriceFee" class="small" title="Export a clean fee table — Category, Task, Fee (price to owner) with subtotals — sized to copy straight out of Excel into a proposal letter">Export fee table</button>
       <button id="coPriceImp" class="small" title="Import a pricing workbook/CSV: Category, Task, Employee, Cost $/hr, Bill $/hr, and WE yyyy-mm-dd week columns">Import Excel/CSV</button>
       <input type="file" id="coPriceFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
     </div>
@@ -3204,6 +3205,55 @@ function exportCoPriceXlsx(){
   const a=el('a',{href:URL.createObjectURL(blob),download:'co-pricing-'+(co.num||'CO')+'.xlsx'});
   document.body.append(a); a.click(); a.remove();
 }
+function exportCoFeeXlsx(){
+  const co=coPricing; if(!co){alert('Open pricing first.');return;}
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  coEnsureStruct(co);
+  const BRAND='1F4E79', MONEY0='"$"#,##0';
+  // fee per (category, task) = hours x bill, in the grid's category/task order
+  const fees=[]; // {cat, task, fee}
+  for(const C of co.price.struct){
+    for(const T of C.tasks){
+      const fee=(co.price.labor||[]).filter(L=>(L.category||'')===C.cat&&(L.task||'')===T)
+        .reduce((a,L)=>a+coLineHours(L)*(+L.bill||0),0);
+      if(fee>0.005) fees.push({cat:C.cat||'General', task:T||'', fee});
+    }
+  }
+  const nl=(co.price.nl||[]).map(N=>({desc:N.desc||'Expense', fee:(+N.cost||0)*(1+(+N.markup||0)/100)})).filter(N=>N.fee>0.005);
+  if(!fees.length&&!nl.length){alert('No fee to export yet — enter hours and bill rates (fees of $0 are left out).');return;}
+  const aoa=[['Fee Summary — '+(co.num||'Change order')+(co.desc?' — '+co.desc:'')],[],['Category','Task','Fee']];
+  const hdrRow=2, boldRows=[];
+  let cur=null;
+  for(let i=0;i<fees.length;i++){
+    const f=fees[i];
+    aoa.push([f.cat===cur?'':f.cat, f.task, f.fee]);
+    cur=f.cat;
+    const catFees=fees.filter(x=>x.cat===f.cat);
+    const last=i===fees.length-1||fees[i+1].cat!==f.cat;
+    if(last&&catFees.length>1){ boldRows.push(aoa.length); aoa.push(['',f.cat+' subtotal',catFees.reduce((a,x)=>a+x.fee,0)]); }
+  }
+  for(let i=0;i<nl.length;i++) aoa.push([i===0?'Subconsultants / Expenses':'', nl[i].desc, nl[i].fee]);
+  if(nl.length>1){ boldRows.push(aoa.length); aoa.push(['','Subconsultants / Expenses subtotal',nl.reduce((a,x)=>a+x.fee,0)]); }
+  boldRows.push(aoa.length);
+  aoa.push(['','TOTAL FEE',fees.reduce((a,x)=>a+x.fee,0)+nl.reduce((a,x)=>a+x.fee,0)]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  if(ws['A1'])ws['A1'].s={font:{bold:true,sz:14,color:{rgb:BRAND}}};
+  for(let C=0;C<3;C++){ const c=ws[XLSX.utils.encode_cell({r:hdrRow,c:C})];
+    if(c)c.s={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}}; }
+  const rng=XLSX.utils.decode_range(ws['!ref']);
+  for(let R=hdrRow+1;R<=rng.e.r;R++){
+    const c=ws[XLSX.utils.encode_cell({r:R,c:2})]; if(c&&typeof c.v==='number')c.z=MONEY0;
+    if(boldRows.includes(R)){ for(let C=0;C<3;C++){ const bc=ws[XLSX.utils.encode_cell({r:R,c:C})];
+      if(bc)bc.s={font:{bold:true,sz:11},border:{top:{style:'thin',color:{rgb:'94A3B8'}}}}; } }
+  }
+  ws['!cols']=[{wch:26},{wch:34},{wch:14}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Fee');
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'fee-'+(co.num||'CO')+'.xlsx'});
+  document.body.append(a); a.click(); a.remove();
+}
 function importCoPriceFile(file){
   if(!coPricing)return;
   const name=(file.name||'').toLowerCase();
@@ -3330,6 +3380,7 @@ function setupCoTab(){
     saveState(); renderCoPricing(); });
   $('#coPriceWeeks').addEventListener('change',e=>{ if(!coPricing)return; coPricing.price.weeks=Math.max(1,Math.min(52,+e.target.value||8)); saveState(); renderCoPricing(); });
   $('#coPriceXlsx').addEventListener('click',exportCoPriceXlsx);
+  $('#coPriceFee').addEventListener('click',exportCoFeeXlsx);
   $('#coPriceImp').addEventListener('click',()=>{ if(coPricing)$('#coPriceFile').click(); });
   $('#coPriceFile').addEventListener('change',e=>{ if(e.target.files[0])importCoPriceFile(e.target.files[0]); e.target.value=''; });
   spLinkSetup('coSpLink','coSpOpen','co');
