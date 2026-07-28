@@ -118,8 +118,8 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
   #ppTable tr:hover td:first-child{background:#22304a}
   #ppTable tr.total td:first-child{background:var(--panel2)}
   #ppTable td.sumcol,#ppTable th.sumcol{border-left:1px solid #3d5070}
-  #fpTable tr.taskrow td{background:#20304a;font-weight:600;border-top:1px solid #3d5070}
-  #fpTable td.taskcell{color:#cfe3f7}
+  #fpTable tr.taskrow td,#ppTable tr.taskrow td{background:#20304a;font-weight:600;border-top:1px solid #3d5070}
+  #fpTable td.taskcell,#ppTable td.taskcell{color:#cfe3f7}
   .caret{cursor:pointer;margin-right:7px;color:var(--accent);user-select:none}
   td.childlabel{padding-left:30px}
   a.addperson{color:var(--accent);font-size:11px;margin-left:8px;cursor:pointer;text-decoration:none;opacity:.7;font-weight:400}
@@ -2359,7 +2359,22 @@ function renderActualsPage(){
   t.append(el('thead',null,el('tr',null,...headCells)));
   const tb=el('tbody');
   const colCount=headCells.length;
-  for(const it of ppCtx.items){
+  // group items under task bands with weekly $ spend per task
+  const taskMap=new Map();
+  for(const it of ppCtx.items){ const tk=fpTaskOf(it); if(!taskMap.has(tk))taskMap.set(tk,[]); taskMap.get(tk).push(it); }
+  ppCtx._taskRows=[];
+  const itemsInOrder=[];
+  for(const [task,tItems] of taskMap){
+    const trT=el('tr',{class:'taskrow'});
+    trT.append(el('td',{class:'taskcell',title:'Task — weekly $ spend: actual to date, then updated-forecast $ (hours × cost rate) for future weeks'},task));
+    if(hiddenWeeks.length){ let h=0; for(const it of tItems)for(const wk of hiddenWeeks)h+=it.costW.get(wk)||0; trT.append(el('td',{class:'num',style:'color:#8aa0bd'},h?fmtMoney(h):'')); }
+    const weekTds=visWeeks.map(wk=>{ const td=el('td',{class:'num'+(wk>lastActualWeek?' fut-h':'')}); trT.append(td); return td; });
+    const sums={};
+    ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','origEac','over'].forEach((k,i)=>{ const td=el('td',{class:'num'+(i===0?' sumcol':'')}); sums[k]=td; trT.append(td); });
+    ppCtx._taskRows.push({items:tItems,weekTds,sums});
+    tb.append(trT);
+    itemsInOrder.push(...tItems);
+  for(const it of tItems){
     const tr=el('tr');
     tr.append(makeItemCell(it,tr,colCount));
     if(hiddenWeeks.length){
@@ -2417,7 +2432,8 @@ function renderActualsPage(){
     tr.append(rateTd, mk('actC'), mk('eacC'), mk('eacRev'), mk('origEac'), mk('over'));
     tb.append(tr);
     updateItemSummary(it);
-  }
+  }}
+  ppCtx.items=itemsInOrder;
   const trTot=el('tr',{class:'total'});
   trTot.append(el('td',null,'TOTAL'));
   if(hiddenWeeks.length) trTot.append(el('td',{class:'num'}));
@@ -2529,7 +2545,26 @@ function updatePlanTotals(){
   T.origEac.textContent=baseH?fmtNum(baseH,1)+' h':'';
   T.over.textContent=hasBase?(overSum>0?'+':'')+fmtNum(overSum,1)+' h':'';
   T.over.className='num '+(hasBase&&overSum>0.5?'neg':hasBase?'pos':'');
+  updateTaskRows();
   renderApTotals();
+}
+function updateTaskRows(){
+  if(!ppCtx||ppCtx.mode!=='a'||!ppCtx._taskRows)return;
+  const node=ppCtx.node;
+  for(const T of ppCtx._taskRows){
+    ppCtx.visWeeks.forEach((wk,i)=>{
+      let v=0;
+      if(wk<=ppCtx.lastActualWeek){ for(const it of T.items)v+=it.costW.get(wk)||0; }
+      else for(const it of T.items){ const p=node.current[it.label+'|'+wk]; if(p!=null)v+=p*(it.isLabor?costRateOf(it):1); }
+      T.weekTds[i].textContent=v?fmtMoney(v):'';
+      T.weekTds[i].title=(wk<=ppCtx.lastActualWeek?'Actual spend, week ending ':'Forecast spend (hours × cost rate), week ending ')+wk;
+    });
+    let actC=0,eacC=0,eacR=0;
+    for(const it of T.items){ const c=itemCalc(it); actC+=it.cost; eacC+=c.eacCost; eacR+=c.eacRev||0; }
+    T.sums.actC.textContent=actC?fmtMoney(actC):'';
+    T.sums.eacC.textContent=eacC?fmtMoney(eacC):'';
+    T.sums.eacRev.textContent=eacR?fmtMoney(eacR):'';
+  }
 }
 function renderApTotals(){
   if(!ppCtx)return;
