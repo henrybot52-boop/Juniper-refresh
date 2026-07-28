@@ -314,6 +314,7 @@
     <div class="row" style="margin-top:12px">
       <label>Value: <select id="expMetric"></select></label>
       <label><input type="checkbox" id="expByPeriod" checked> Spread across periods (columns)</label>
+      <label>Columns: <select id="expPeriod" title="Months use the GL period; weeks use the transaction/GL date with the same week-ending day as the forecast pages"><option value="month">Months</option><option value="week">Weeks</option></select></label>
       <label><input type="checkbox" id="expAllMetrics"> Show all columns (incl. revenue &amp; margin)</label>
       <button id="btnExpRun" class="primary">Build pivot</button>
       <button id="btnExpCsv">Export CSV</button>
@@ -738,7 +739,7 @@ let state = {
     periodSource:'periodName', currency:'$', decimals:0,
     billedValues:'billed,invoiced,fully billed,y,yes',
     billCutoff:'', billBasis:'gl',
-    expDims:['projectNumber','projectName'], expMetric:'totalCost',
+    expDims:['projectNumber','projectName'], expMetric:'totalCost', expPeriod:'month',
     ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12,
     ohMult:2.3474, ohExceptions:'Jeff Frahm=2.1138',
   },
@@ -1419,6 +1420,9 @@ function setupExplorer(){
   $('#btnExpCsv').addEventListener('click',()=>{ if(lastPivot)downloadCSV('pivot.csv',lastPivot); });
   $('#expAllMetrics').addEventListener('change',e=>{ if(e.target.checked)$('#expByPeriod').checked=false; });
   $('#expByPeriod').addEventListener('change',e=>{ if(e.target.checked)$('#expAllMetrics').checked=false; });
+  $('#expPeriod').value=state.settings.expPeriod||'month';
+  $('#expPeriod').addEventListener('change',e=>{ state.settings.expPeriod=e.target.value; saveState();
+    $('#expByPeriod').checked=true; $('#expAllMetrics').checked=false; });
 }
 function renderExplorer(){
   if(!data.length) return;
@@ -1432,6 +1436,23 @@ function renderExplorer(){
   const groups=aggregate(rows,dims);
   groups.sort((a,b)=>b.totals[metric]-a.totals[metric]);
   const dimLabels=dims.map(d=>FIELDS.find(f=>f.key===d).label);
+  // period columns: months (GL period) or weeks (transaction/GL date, forecast week-ending)
+  const wkMode = byPeriod && (state.settings.expPeriod==='week');
+  let colKeys=cols, colLabels=cols.map(pkLabel), valOf=(g,c)=>{const p=g.periods.get(c);return p?p[metric]:0;}, undated=0;
+  if(wkMode){
+    const wmap=new Map(), wset=new Set();
+    const mv=r=> metric==='_revenue'? rowRevenue(r) : metric==='_margin'? rowRevenue(r)-(r.totalCost||0) : (r[metric]||0);
+    for(const r of rows){
+      const d=r.transactionDate||r.glDate; if(!d){ undated++; continue; }
+      const key=dims.map(dd=>r[dd]||'(blank)').join(' | ');
+      const wk=wkKey(d); wset.add(wk);
+      let m2=wmap.get(key); if(!m2){ m2=new Map(); wmap.set(key,m2); }
+      m2.set(wk,(m2.get(wk)||0)+mv(r));
+    }
+    colKeys=[...wset].sort();
+    colLabels=colKeys.map(k=>'WE '+wkLabel(k));
+    valOf=(g,c)=>{const m2=wmap.get(g.key);return m2?(m2.get(c)||0):0;};
+  }
   const t=$('#expTable'); t.innerHTML='';
   let header, makeRow, csvHeader, makeCsv;
   const mObj=EXP_METRICS.find(m=>m.key===metric)||METRICS[6];
@@ -1440,17 +1461,18 @@ function renderExplorer(){
     makeRow=g=>[...g.parts.map(p=>el('td',null,p)), ...EXP_METRICS.map(m=>el('td',{class:numCls(g.totals[m.key])}, fmtMetric(g.totals[m.key],m.key)))];
     makeCsv=g=>[...g.parts, ...EXP_METRICS.map(m=>g.totals[m.key])];
   } else if(byPeriod){
-    header=[...dimLabels,...cols.map(pkLabel),'Total'];
+    header=[...dimLabels,...colLabels,'Total'];
     makeRow=g=>[...g.parts.map(p=>el('td',null,p)),
-      ...cols.map(c=>{const p=g.periods.get(c);const v=p?p[metric]:0;return el('td',{class:numCls(v)},v?fmtMetric(v,metric):'');}),
+      ...colKeys.map(c=>{const v=valOf(g,c);return el('td',{class:numCls(v)},v?fmtMetric(v,metric):'');}),
       el('td',{class:numCls(g.totals[metric])+' '},fmtMetric(g.totals[metric],metric))];
-    makeCsv=g=>[...g.parts, ...cols.map(c=>{const p=g.periods.get(c);return p?p[metric]:0;}), g.totals[metric]];
+    makeCsv=g=>[...g.parts, ...colKeys.map(c=>valOf(g,c)), g.totals[metric]];
   } else {
     header=[...dimLabels,mObj.label];
     makeRow=g=>[...g.parts.map(p=>el('td',null,p)), el('td',{class:numCls(g.totals[metric])},fmtMetric(g.totals[metric],metric))];
     makeCsv=g=>[...g.parts, g.totals[metric]];
   }
-  t.append(el('thead',null,el('tr',null,...header.map((h,i)=>el('th',{class:i>=dims.length?'num':''},h)))));
+  const hdrTitle=i=> (wkMode && !allMetrics && byPeriod && i>=dims.length && i-dims.length<colKeys.length) ? 'Week ending '+colKeys[i-dims.length] : '';
+  t.append(el('thead',null,el('tr',null,...header.map((h,i)=>el('th',{class:i>=dims.length?'num':'',title:hdrTitle(i)},h)))));
   const tb=el('tbody');
   const LIMIT=1000;
   groups.slice(0,LIMIT).forEach(g=>tb.append(el('tr',null,...makeRow(g))));
@@ -1460,14 +1482,17 @@ function renderExplorer(){
   if(allMetrics){
     tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), ...EXP_METRICS.map(m=>el('td',{class:'num'},fmtMetric(gt[m.key],m.key)))));
   } else if(byPeriod){
-    const perC=cols.map(c=>groups.reduce((a,g)=>{const p=g.periods.get(c);return a+(p?p[metric]:0);},0));
+    const perC=colKeys.map(c=>groups.reduce((a,g)=>a+valOf(g,c),0));
     tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), ...perC.map(v=>el('td',{class:'num'},fmtMetric(v,metric))), el('td',{class:'num'},fmtMetric(gt[metric],metric))));
   } else {
     tb.append(el('tr',{class:'total'}, el('td',{colspan:dims.length},'TOTAL'), el('td',{class:'num'},fmtMetric(gt[metric],metric))));
   }
   t.append(tb);
-  $('#expInfo').textContent = groups.length.toLocaleString()+' groups'+(groups.length>LIMIT?` (showing top ${LIMIT} — export CSV for all)`:'');
-  lastPivot=[header, ...groups.map(makeCsv)];
+  $('#expInfo').textContent = groups.length.toLocaleString()+' groups'
+    +(groups.length>LIMIT?` (showing top ${LIMIT} — export CSV for all)`:'')
+    +(wkMode&&byPeriod&&!allMetrics? ' · '+colKeys.length+' weeks'+(undated?' · '+undated.toLocaleString()+' undated rows excluded from week columns (still in Total)':'') : '');
+  const csvHead = (wkMode&&byPeriod&&!allMetrics)? [...dimLabels,...colKeys.map(k=>'WE '+k),'Total'] : header;
+  lastPivot=[csvHead, ...groups.map(makeCsv)];
 }
 
 /* ===================== Forecast ===================== */
