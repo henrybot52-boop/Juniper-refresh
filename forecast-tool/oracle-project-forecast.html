@@ -315,6 +315,7 @@
       <label>Value: <select id="expMetric"></select></label>
       <label><input type="checkbox" id="expByPeriod" checked> Spread across periods (columns)</label>
       <label>Columns: <select id="expPeriod" title="Months use the GL period; weeks use the transaction/GL date with the same week-ending day as the forecast pages"><option value="month">Months</option><option value="week">Weeks</option></select></label>
+      <label>Sort: <select id="expSort" title="Value sorts biggest first; Row labels sorts by the grouped columns in order — task numbers sort in WBS order (1.9 before 1.10)"><option value="value">Value (high → low)</option><option value="rows">Row labels (task order)</option></select></label>
       <label><input type="checkbox" id="expAllMetrics"> Show all columns (incl. revenue &amp; margin)</label>
       <button id="btnExpRun" class="primary">Build pivot</button>
       <button id="btnExpCsv">Export CSV</button>
@@ -739,7 +740,7 @@ let state = {
     periodSource:'periodName', currency:'$', decimals:0,
     billedValues:'billed,invoiced,fully billed,y,yes',
     billCutoff:'', billBasis:'gl',
-    expDims:['projectNumber','projectName'], expMetric:'totalCost', expPeriod:'month',
+    expDims:['projectNumber','projectName'], expMetric:'totalCost', expPeriod:'month', expSort:'value',
     ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12,
     ohMult:2.3474, ohExceptions:'Jeff Frahm=2.1138',
   },
@@ -1423,6 +1424,8 @@ function setupExplorer(){
   $('#expPeriod').value=state.settings.expPeriod||'month';
   $('#expPeriod').addEventListener('change',e=>{ state.settings.expPeriod=e.target.value; saveState();
     $('#expByPeriod').checked=true; $('#expAllMetrics').checked=false; });
+  $('#expSort').value=state.settings.expSort||'value';
+  $('#expSort').addEventListener('change',e=>{ state.settings.expSort=e.target.value; saveState(); });
 }
 function renderExplorer(){
   if(!data.length) return;
@@ -1434,7 +1437,9 @@ function renderExplorer(){
   const allMetrics=$('#expAllMetrics').checked;
   const cols=periodCols(rows);
   const groups=aggregate(rows,dims);
-  groups.sort((a,b)=>b.totals[metric]-a.totals[metric]);
+  if(state.settings.expSort==='rows')
+    groups.sort((a,b)=>{ for(let i=0;i<dims.length;i++){ const c=taskCompare(a.parts[i]||'',b.parts[i]||''); if(c)return c; } return 0; });
+  else groups.sort((a,b)=>b.totals[metric]-a.totals[metric]);
   const dimLabels=dims.map(d=>FIELDS.find(f=>f.key===d).label);
   // period columns: months (GL period) or weeks (transaction/GL date, forecast week-ending)
   const wkMode = byPeriod && (state.settings.expPeriod==='week');
