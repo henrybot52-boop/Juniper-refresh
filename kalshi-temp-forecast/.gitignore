@@ -1,0 +1,11 @@
+# Generated data / outputs
+data/
+*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/

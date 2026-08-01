@@ -1,0 +1,70 @@
+# Kalshi daily-temperature forecasting — configuration
+#
+# Everything that is city-specific lives here so the same code can be pointed at
+# other Kalshi temperature markets (KNYC, KMDW, KLAX, ...) by editing this file.
+# Read with Python's stdlib `tomllib` (3.11+), so no extra dependency.
+
+[station]
+# NWS/ASOS station identifier used by api.weather.gov and IEM.
+id = "KATT"
+name = "Camp Mabry, Austin TX"
+# IANA timezone. The "climate day" (the period the NWS CLI report covers) runs
+# local-midnight to local-midnight in THIS zone. Getting this right is critical.
+timezone = "America/Chicago"
+
+# IEM ASOS network + local id, used as a secondary daily-high source and for the
+# ASOS "daily.py" service. For KATT the ASOS id is "ATT" in network "TX_ASOS".
+iem_asos_network = "TX_ASOS"
+iem_asos_station = "ATT"
+
+[markets]
+# Thresholds (deg F) you want P(daily_high >= threshold) for. Kalshi Austin
+# markets are typically strike buckets; list every strike edge you care about.
+thresholds_f = [95, 98, 100, 101, 102, 103, 105]
+
+[watcher]
+# How often obs_watcher polls api.weather.gov, in seconds (5-10 min recommended;
+# KATT reports ~hourly so faster polling mostly re-reads the same METAR).
+poll_interval_seconds = 420
+# The CLI settlement sensor (continuous max) can read 1-2 F above the METAR spot
+# temperature. When no 6-hour-max METAR field is available, the watcher adds this
+# offset to the spot-based running max as a rough settlement adjustment.
+settlement_sensor_offset_f = 1.0
+# Local clock hour the daily high typically peaks (used by the intraday model to
+# estimate how much additional warming is still possible).
+peak_hour_local = 16
+# Base standard deviation (deg F) of the remaining-rise estimate at the start of
+# the climate day. Shrinks toward 0 as the day progresses.
+remaining_rise_sigma_f = 4.0
+
+[history]
+# Years of history to download for training / calibration.
+years = 5
+
+# MOS guidance models to pull from the IEM MOS archive. `iem_model` is the model
+# code the IEM mos.py service expects; `max_field` is the CSV column holding the
+# max/min temperature (populated at the 00Z valid time = daytime max).
+#   NBM short-range guidance -> iem_model "NBS", column "txn"
+#   GFS MOS (MAV)            -> iem_model "GFS", column "n_x"
+[[history.mos_models]]
+name = "NBM"
+iem_model = "NBS"
+max_field = "txn"
+
+[[history.mos_models]]
+name = "GFS"
+iem_model = "GFS"
+max_field = "n_x"
+
+[paths]
+# Output locations (relative to the project directory).
+data_dir = "data"
+training_parquet = "data/training.parquet"
+calibration_csv = "data/calibration_table.csv"
+
+[http]
+# Contact string sent in the User-Agent to api.weather.gov (NWS asks for one).
+user_agent = "kalshi-temp-forecast (contact: you@example.com)"
+max_retries = 4
+backoff_base_seconds = 2.0
+timeout_seconds = 30
