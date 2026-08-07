@@ -2428,6 +2428,16 @@ function renderActualsPage(){
     const td=el('td',{class:'num'+(i===0?' sumcol':'')}); ppCtx._totSum[k]=td; trTot.append(td);
   });
   tb.append(trTot);
+  // weekly revenue ±: achieved (actual hours × bill) vs expected (forecast hours × bill), per week
+  const trRev=el('tr',{class:'total'});
+  trRev.append(el('td',{title:'Revenue variance per week: achieved (actual hours × bill rate; non-labor at cost + markup) minus expected (updated-forecast hours × bill rate). Green = ahead of forecast revenue, red = behind. Rows marked no-bill count $0.'},'Revenue ±'));
+  if(hiddenWeeks.length) trRev.append(el('td',{class:'num'}));
+  ppCtx._revVarTds=[];
+  for(const wk of visWeeks){ const td=el('td',{class:'wk num'}); ppCtx._revVarTds.push(td); trRev.append(td); }
+  ppCtx._revVarSum=el('td',{class:'num sumcol'});
+  trRev.append(ppCtx._revVarSum);
+  for(let i=1;i<11;i++) trRev.append(el('td'));
+  tb.append(trRev);
   t.append(tb);
   updatePlanTotals();
   updatePlanChart();
@@ -2529,8 +2539,40 @@ function updatePlanTotals(){
   T.origEac.textContent=baseH?fmtNum(baseH,1)+' h':'';
   T.over.textContent=hasBase?(overSum>0?'+':'')+fmtNum(overSum,1)+' h':'';
   T.over.className='num '+(hasBase&&overSum>0.5?'neg':hasBase?'pos':'');
+  updateRevVariance();
   updateTaskRows();
   renderApTotals();
+}
+function updateRevVariance(){
+  if(!ppCtx||ppCtx.mode!=='a'||!ppCtx._revVarTds)return;
+  const node=ppCtx.node;
+  const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
+  let cum=0;
+  ppCtx.visWeeks.forEach((wk,i)=>{
+    const td=ppCtx._revVarTds[i];
+    if(wk>ppCtx.lastActualWeek){ td.textContent=''; td.className='wk num'; td.title=''; return; }
+    let ach=0,exp=0;
+    for(const it of ppCtx.items){
+      if(node.nb[it.label])continue;
+      if(it.isLabor){
+        const bill=billRateOf(it);
+        ach+=(it.hoursW.get(wk)||0)*bill;
+        const p=node.current[it.label+'|'+wk]; if(p!=null)exp+=p*bill;
+      } else {
+        ach+=(it.costW.get(wk)||0)*mkup;
+        const p=node.current[it.label+'|'+wk]; if(p!=null)exp+=p*mkup;
+      }
+    }
+    const d=ach-exp; cum+=d;
+    const show=Math.abs(d)>0.5;
+    td.textContent=show?(d>0?'+':'−')+fmtMoney(Math.abs(d)):'';
+    td.className='wk num '+(show?(d>0?'pos':'neg'):'');
+    td.title=show||ach||exp?('Week ending '+wk+' — achieved '+fmtMoney(ach)+' vs expected '+fmtMoney(exp)):'';
+  });
+  const s=ppCtx._revVarSum, show=Math.abs(cum)>0.5;
+  s.textContent=show?(cum>0?'+':'−')+fmtMoney(Math.abs(cum)):'';
+  s.className='num sumcol '+(show?(cum>0?'pos':'neg'):'');
+  s.title='Revenue variance to date: achieved − expected, summed over actual weeks';
 }
 function updateTaskRows(){
   if(!ppCtx||ppCtx.mode!=='a'||!ppCtx._taskRows)return;
