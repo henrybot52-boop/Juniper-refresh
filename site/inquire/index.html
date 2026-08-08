@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inquire | Juniper Floral Studio</title>
+    <meta name="description" content="Start your wedding floral inquiry with Juniper Floral Studio. Full-service garden-style florals for Austin, Hill Country, and Central Texas weddings." />
+    <meta property="og:title" content="Inquire | Juniper Floral Studio" />
+    <meta property="og:description" content="Start your wedding floral inquiry with Juniper Floral Studio. Full-service garden-style florals for Austin, Hill Country, and Central Texas weddings." />
+    <meta property="og:image" content="/images/jeanna/jeanna-1.jpg" />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/site.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="bg-cream">
+    <header class="fixed top-0 inset-x-0 z-50 nav-blur">
+      <nav class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="/"><img src="/images/juniper-logo.png" alt="Juniper Floral Studio" class="h-12" /></a>
+        <button
+          class="md:hidden border border-deep/30 rounded-full px-4 py-2 text-sm"
+          data-nav-toggle
+          aria-label="Toggle navigation"
+        >
+          Menu
+        </button>
+        <div class="hidden md:flex md:items-center md:gap-8 text-sm uppercase tracking-[0.2em]">
+          <a href="/" class="text-deep hover:text-gold">Home</a>
+          <a href="/blog/" class="text-deep hover:text-gold">Journal</a>
+          <a href="/about/" class="text-deep hover:text-gold">About</a>
+          <a href="/portfolio/" class="text-deep hover:text-gold">Portfolio</a>
+          <a href="/services/" class="text-deep hover:text-gold">Services</a>
+          <a href="/inquire/" class="text-deep hover:text-gold">Inquire</a>
+        </div>
+      </nav>
+      <div class="md:hidden hidden px-6 pb-6 text-sm uppercase tracking-[0.2em] bg-cream/95" data-nav-menu>
+        <div class="flex flex-col gap-4">
+          <a href="/" class="text-deep hover:text-gold">Home</a>
+          <a href="/blog/" class="text-deep hover:text-gold">Journal</a>
+          <a href="/about/" class="text-deep hover:text-gold">About</a>
+          <a href="/portfolio/" class="text-deep hover:text-gold">Portfolio</a>
+          <a href="/services/" class="text-deep hover:text-gold">Services</a>
+          <a href="/inquire/" class="text-deep hover:text-gold">Inquire</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="pt-24">
+      <section class="relative hero-mask overflow-hidden">
+        <img loading="lazy"
+          src="/images/nicole-reception.jpg"
+          alt="Reception florals in soft candlelight"
+          class="w-full h-[55vh] object-cover"
+        />
+        <div class="absolute inset-0 z-10 flex items-center">
+          <div class="max-w-6xl mx-auto px-6 text-white">
+            <p class="badge text-xs uppercase text-gold tracking-[0.4em]">Inquire</p>
+            <h1 class="text-4xl md:text-5xl font-serif mt-4">Share your celebration details</h1>
+            <p class="mt-6 max-w-2xl text-lg text-white/90">
+              Tell us about your date, Austin or Hill Country venue, and floral vision. We will be in touch within 48 hours with next steps.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="max-w-6xl mx-auto px-6 py-16 reveal">
+        <div class="grid lg:grid-cols-[1.05fr_0.95fr] gap-12 items-start">
+          <div class="bg-white/70 p-8 md:p-10 rounded-[32px] card-shadow">
+            <p class="badge text-xs uppercase text-gold tracking-[0.4em]">Inquiry form</p>
+            <h2 class="text-3xl md:text-4xl font-serif mt-4">Let's begin</h2>
+            <p class="mt-4 text-lg">
+              We take on a limited number of weddings and events to keep our design process thoughtful and personal.
+            </p>
+            <form
+              class="mt-8 space-y-6"
+              name="inquiry"
+              method="POST"
+              data-netlify="true"
+              data-netlify-honeypot="bot-field"
+            >
+              <input type="hidden" name="form-name" value="inquiry" />
+              <p class="hidden">
+                <label>
+                  Don't fill this out if you are human: <input name="bot-field" />
+                </label>
+              </p>
+              <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label for="name" class="text-sm uppercase tracking-[0.2em] text-deep">Name</label>
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required
+                    class="form-field w-full mt-3 px-4 py-3 rounded-2xl border border-deep/10"
+                  />
+                </div>
+                <div>
+                  <label for="email" class="text-sm uppercase tracking-[0.2em] text-deep">Email</label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    class="form-field w-full mt-3 px-4 py-3 rounded-2xl border border-deep/10"
+                  />
+                </div>
+              </div>
+              <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label for="phone" class="text-sm uppercase tracking-[0.2em] text-deep">Phone</label>
+                  <input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    class="form-field w-full mt-3 px-4 py-3 rounded-2xl border border-deep/10"
+                  />
+                </div>
+                <div>
+                  <label for="event-date" class="text-sm uppercase tracking-[0.2em] text-deep">Event date</label>
+                  <input
+                    id="event-date"
+                    name="event-date"
+                    type="date"
+                    required
+                    class="form-field w-full mt-3 px-4 py-3 rounded-2xl border border-deep/10"
+                  />
+                </div>
+              </div>
+              <div>
+                <label for="event-type" class="text-sm uppercase tracking-[0.2em] text-deep">Event type</label>
+                <select
+                  id="event-type"
+                  name="event-type"
+                  required
+                  class="form-field w-full mt-3 px-4 py-3 rounded-2xl border border-deep/10"
+                >
+                  <option value="" disabled selected>Select one</option>
+                  <option>Wedding</option>
+                  <option>Wedding weekend</option>
+                  <option>Elopement</option>
+                  <option>Private event</option>
+                  <option>Corporate event</option>
+                  <option>Styled shoot</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div>
+                <label for="message" class="text-sm uppercase tracking-[0.2em] text-deep">Message</label>
+                <textarea
+                  id="message"
+                  name="message"
+                  rows="6"
+                  required
+                  class="form-field w-full mt-3 px-4 py-3 rounded-2xl border border-deep/10"
+                ></textarea>
+              </div>
+              <button
+                type="submit"
+                class="bg-gold text-deep px-6 py-3 rounded-full text-sm uppercase tracking-[0.2em]"
+              >
+                Send inquiry
+              </button>
+            </form>
+          </div>
+          <div class="space-y-8">
+            <div class="p-8 rounded-[28px] bg-warm card-shadow">
+              <p class="text-xs uppercase tracking-[0.3em] text-gold">What to expect</p>
+              <h3 class="font-serif text-2xl mt-4">A guided planning experience</h3>
+              <p class="mt-4">
+                We respond to all inquiries within 48 hours. From there, we schedule a consultation and build a floral plan
+                tailored to your venue, color story, and floral priorities.
+              </p>
+            </div>
+            <div class="p-8 rounded-[28px] bg-white/70 card-shadow">
+              <p class="text-xs uppercase tracking-[0.3em] text-gold">Details</p>
+              <div class="mt-4 space-y-3 text-sm uppercase tracking-[0.2em]">
+                <p>Serving Austin, Hill Country venues, and Central Texas celebrations</p>
+                <p>4800 Steiner Ranch Blvd #20104, Austin, TX</p>
+                <p>Full-service wedding and event florals</p>
+                <p>Design-led installations and personal florals</p>
+              </div>
+              <div class="mt-6">
+                <p class="text-sm uppercase tracking-[0.2em] text-gold">Email</p>
+                <p class="mt-2"><a href="mailto:hello@juniperfloralstudio.com">hello@juniperfloralstudio.com</a></p>
+              </div>
+              <div class="mt-6">
+                <p class="text-sm uppercase tracking-[0.2em] text-gold">Phone</p>
+                <p class="mt-2"><a href="tel:+17373954520">(737) 395-4520</a></p>
+              </div>
+              <a
+                href="/portfolio/"
+                class="mt-8 inline-flex text-sm uppercase tracking-[0.2em] text-deep"
+              >
+                View recent work
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="bg-cream border-t border-gold/30">
+      <div class="max-w-6xl mx-auto px-6 py-10 grid md:grid-cols-3 gap-6">
+        <div>
+          <p class="font-serif text-xl">Juniper Floral Studio</p>
+          <p class="mt-4 footer-text">Garden-style floral design for weddings and events.</p>
+        </div>
+        <div>
+          <p class="text-sm uppercase tracking-[0.2em] text-gold">Contact</p>
+          <p class="mt-3 footer-text"><a href="mailto:hello@juniperfloralstudio.com">hello@juniperfloralstudio.com</a></p>
+          <p class="footer-text"><a href="tel:+17373954520">(737) 395-4520</a></p>
+          <p class="footer-text">4800 Steiner Ranch Blvd #20104, Austin, TX</p>
+        </div>
+        <div>
+          <p class="text-sm uppercase tracking-[0.2em] text-gold">Social</p>
+          <div class="mt-3 flex flex-col gap-2 footer-text">
+            <a href="https://www.instagram.com/juniperfloralstudio" class="hover:text-gold">Instagram</a>
+            <a href="https://www.facebook.com" class="hover:text-gold">Facebook</a>
+            <a href="https://www.pinterest.com" class="hover:text-gold">Pinterest</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script src="/scripts/site.js"></script>
+  </body>
+</html>

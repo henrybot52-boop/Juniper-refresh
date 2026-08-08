@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Juniper Floral Studio | Garden-Style Wedding Florals in Austin, Texas</title>
+    <meta name="description" content="Juniper Floral Studio creates lush, garden-style wedding florals in Austin, Texas. Bridal bouquets, ceremony arches, reception centerpieces — every petal placed with intention. Now booking 2026 & 2027." />
+    <meta property="og:title" content="Juniper Floral Studio | Garden-Style Wedding Florals" />
+    <meta property="og:description" content="Lush, garden-style wedding florals in Austin, Texas. Bridal bouquets, ceremony installations, and full-service floral design. Now booking 2026 & 2027." />
+    <meta property="og:image" content="/images/kathrine-rizzi/kathrine-rizzi-4.jpg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://juniperfloralstudio.com" />
+    <meta name="theme-color" content="#f6f1e9" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      /* ── Critical inline styles ── */
+      *{box-sizing:border-box;margin:0;padding:0}
+      html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+      body{font-family:"Manrope",system-ui,sans-serif;color:#2f2a26;background:#f6f1e9;font-size:16px;line-height:1.7;overflow-x:hidden}
+      h1,h2,h3,h4{font-family:"Playfair Display",Georgia,serif;letter-spacing:.01em;font-weight:500}
+      ::selection{background:#f1d7d2;color:#2f2a26}
+      img{max-width:100%;display:block}
+      a{text-decoration:none;color:inherit}
+
+      /* ── Colors ── */
+      :root{
+        --cream:#f6f1e9;--blush:#f1d7d2;--sage:#98a08e;--deep:#2f2a26;
+        --gold:#c3a071;--warm:#efe6da;--white:#ffffff;
+      }
+
+      /* ── Skip link ── */
+      .skip-link{position:absolute;top:-100%;left:1rem;background:var(--gold);color:var(--deep);padding:.75rem 1.5rem;z-index:9999;border-radius:0 0 8px 8px;font-size:.875rem;font-weight:600}
+      .skip-link:focus{top:0}
+
+      /* ── Nav ── */
+      .nav-bar{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(246,241,233,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(195,160,113,.15);transition:background .4s,box-shadow .4s}
+      .nav-bar.scrolled{background:rgba(246,241,233,.98);box-shadow:0 1px 20px rgba(0,0,0,.06)}
+      .nav-inner{max-width:1200px;margin:0 auto;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+      .nav-logo{height:64px;width:auto}
+      .nav-links{display:none;gap:2rem;align-items:center;font-size:.75rem;text-transform:uppercase;letter-spacing:.2em}
+      .nav-links a{color:var(--deep);transition:color .3s}.nav-links a:hover{color:var(--gold)}
+      .nav-toggle{display:flex;align-items:center;gap:.5rem;border:1px solid rgba(47,42,38,.25);border-radius:9999px;padding:.5rem 1rem;font-size:.8rem;background:none;cursor:pointer;color:var(--deep);min-height:44px;min-width:44px}
+      .nav-mobile{display:none;padding:0 1.5rem 1.5rem;flex-direction:column;gap:1rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.18em}
+      .nav-mobile.open{display:flex}
+      .nav-mobile a{padding:.75rem 0;border-bottom:1px solid rgba(195,160,113,.15);color:var(--deep);min-height:44px;display:flex;align-items:center}
+      @media(min-width:768px){.nav-links{display:flex}.nav-toggle{display:none}}
+
+      /* ── Booking banner ── */
+      .booking-banner{display:none}
+
+      /* ── Hero ── */
+      .hero{position:relative;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+      .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+      .hero-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,16,14,.55) 0%,rgba(30,26,22,.3) 50%,rgba(20,16,14,.65) 100%);z-index:1}
+      .hero-content{position:relative;z-index:2;text-align:center;padding:1.5rem}
+      .hero h1{font-size:clamp(3rem,8vw,8rem);color:var(--white);line-height:.92;letter-spacing:-.01em;font-weight:400}
+      .hero-sub{margin-top:1.5rem;font-size:clamp(1rem,2.2vw,1.5rem);color:rgba(255,255,255,.8);font-weight:300;letter-spacing:.08em}
+      .hero-btn{display:inline-block;margin-top:2.5rem;background:var(--gold);color:var(--deep);padding:1rem 2.25rem;border-radius:9999px;font-size:.75rem;text-transform:uppercase;letter-spacing:.25em;font-weight:600;transition:background .3s,transform .3s}
+      .hero-btn:hover{background:#d4af82;transform:translateY(-2px)}
+      .scroll-indicator{position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);z-index:2;display:flex;flex-direction:column;align-items:center;gap:.5rem;color:rgba(255,255,255,.5);font-size:.65rem;text-transform:uppercase;letter-spacing:.3em}
+      .scroll-chevron{width:20px;height:20px;border-right:1.5px solid rgba(255,255,255,.5);border-bottom:1.5px solid rgba(255,255,255,.5);transform:rotate(45deg);animation:scrollBounce 2s ease-in-out infinite}
+      @keyframes scrollBounce{0%,100%{transform:rotate(45deg) translate(0,0);opacity:.5}50%{transform:rotate(45deg) translate(4px,4px);opacity:1}}
+
+      /* ── Section spacing ── */
+      .section-pad{padding:5rem 1.5rem}
+      @media(min-width:768px){.section-pad{padding:7rem 2rem}}
+
+      /* ── Philosophy split ── */
+      .split{display:flex;flex-direction:column;min-height:100vh}
+      .split-img{width:100%;height:50vh;position:relative;overflow:hidden}
+      .split-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+      .split-text{width:100%;display:flex;align-items:center;padding:4rem 2rem}
+      .split-text-inner{max-width:520px;margin:0 auto}
+      @media(min-width:768px){.split{flex-direction:row;min-height:100vh}.split-img{width:50%;height:auto;min-height:100vh}.split-text{width:50%;padding:4rem 4rem}}
+      .split.reverse{flex-direction:column-reverse}
+      @media(min-width:768px){.split.reverse{flex-direction:row}}
+
+      .label{font-size:.7rem;text-transform:uppercase;letter-spacing:.35em;color:var(--gold)}
+      .section-title{font-size:clamp(1.75rem,4vw,3.25rem);margin-top:1.25rem;line-height:1.15}
+      .body-text{margin-top:1.5rem;color:rgba(47,42,38,.75);font-size:1rem;line-height:1.8}
+      .text-link{display:inline-block;margin-top:2rem;font-size:.75rem;text-transform:uppercase;letter-spacing:.2em;color:var(--deep);border-bottom:1px solid var(--gold);padding-bottom:4px;transition:color .3s}
+      .text-link:hover{color:var(--gold)}
+
+      /* ── Gallery strip ── */
+      .gallery-section{background:var(--deep);padding:1rem 0}
+      .gallery-strip{display:flex;gap:1rem;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2rem 1.5rem}
+      .gallery-strip::-webkit-scrollbar{display:none}
+      .gallery-strip img{scroll-snap-align:start;flex:0 0 auto;height:72vh;width:auto;aspect-ratio:3/4;object-fit:cover;border-radius:10px;transition:transform .5s ease}
+      @media(min-width:768px){.gallery-strip{padding:2.5rem 2rem;gap:1.25rem}.gallery-strip img{height:78vh;border-radius:12px}}
+
+      /* ── Services parallax ── */
+      .services-section{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden}
+      .services-bg{position:absolute;inset:0;background-color:var(--deep);background-image:url('/images/kathrine-rizzi/kathrine-rizzi-2.jpg');background-size:cover;background-position:center;background-attachment:fixed}
+      @supports(-webkit-touch-callout:none){.services-bg{background-attachment:scroll}}
+      @media(max-width:768px){.services-bg{background-attachment:scroll}}
+      .services-bg-overlay{position:absolute;inset:0;background:rgba(47,42,38,.75)}
+      .services-bg-mobile{display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+      @media(max-width:768px){.services-bg{background-image:none}.services-bg-mobile{display:block}}
+      .services-inner{position:relative;z-index:2;width:100%;max-width:1200px;margin:0 auto;padding:5rem 1.5rem}
+      .card-grid{display:grid;grid-template-columns:1fr;gap:1.25rem;margin-top:3rem}
+      @media(min-width:640px){.card-grid{grid-template-columns:repeat(2,1fr)}}
+      @media(min-width:1024px){.card-grid{grid-template-columns:repeat(4,1fr)}}
+      .glass-card{background:rgba(255,255,255,.08);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:2.25rem 2rem;color:var(--white);transition:transform .4s,background .4s}
+      .glass-card:hover{transform:translateY(-4px);background:rgba(255,255,255,.14)}
+      .glass-card .num{font-size:.7rem;color:var(--gold);text-transform:uppercase;letter-spacing:.25em}
+      .glass-card h3{font-family:"Playfair Display",serif;font-size:1.5rem;margin-top:.75rem;font-weight:500}
+      .glass-card p{margin-top:1rem;color:rgba(255,255,255,.65);font-size:.875rem;line-height:1.7}
+
+      /* ── Testimonials ── */
+      .testimonials{position:relative;min-height:70vh;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--deep)}
+      .testimonial-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(20px) brightness(.4);transform:scale(1.15)}
+      .testimonial-overlay{position:absolute;inset:0;background:rgba(47,42,38,.6)}
+      .testimonial-slider{position:relative;z-index:2;width:100%;max-width:800px;margin:0 auto;padding:4rem 1.5rem;overflow:hidden}
+      .testimonial-track{display:flex;transition:transform .6s cubic-bezier(.25,.46,.45,.94)}
+      .testimonial-slide{flex:0 0 100%;text-align:center;padding:0 1rem}
+      .testimonial-quote{font-size:.5rem;display:block;color:var(--gold);font-family:"Playfair Display",serif;line-height:1;margin-bottom:-1rem}
+      .testimonial-slide blockquote{font-family:"Playfair Display",serif;font-size:clamp(1.15rem,2.5vw,1.65rem);color:var(--white);line-height:1.6;font-style:italic;font-weight:400}
+      .testimonial-slide cite{display:block;margin-top:2rem;font-size:.75rem;text-transform:uppercase;letter-spacing:.3em;color:var(--gold);font-style:normal}
+      .testimonial-dots{display:flex;justify-content:center;gap:.75rem;margin-top:2.5rem;position:relative;z-index:2}
+      .testimonial-dots button{width:8px;height:8px;border-radius:50%;border:1px solid var(--gold);background:transparent;cursor:pointer;transition:background .3s;padding:0;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
+      .testimonial-dots button::after{content:'';width:8px;height:8px;border-radius:50%;border:1px solid var(--gold);transition:background .3s}
+      .testimonial-dots button{border:none;background:none}
+      .testimonial-dots button.active::after{background:var(--gold)}
+
+      /* ── Featured grid ── */
+      .featured-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem}
+      @media(min-width:768px){.featured-grid{gap:1.5rem}}
+      .featured-item{position:relative;overflow:hidden;border-radius:10px;aspect-ratio:3/4}
+      @media(min-width:768px){.featured-item{border-radius:12px}}
+      .featured-item img{width:100%;height:100%;object-fit:cover;transition:transform .7s ease}
+      .featured-item:hover img{transform:scale(1.05)}
+      .featured-overlay{position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(20,16,14,.75) 100%);display:flex;align-items:flex-end;padding:1.25rem;transition:opacity .4s}
+      .featured-overlay p{color:var(--white);font-family:"Playfair Display",serif;font-size:clamp(1rem,2vw,1.5rem)}
+      /* Desktop: overlay hidden until hover */
+      @media(min-width:768px){.featured-overlay{opacity:0}.featured-item:hover .featured-overlay{opacity:1}}
+      /* Mobile: always visible */
+      @media(max-width:767px){.featured-overlay{opacity:1}}
+
+      /* ── About section ── */
+      .about-section .split-text{background:var(--warm)}
+
+      /* ── CTA ── */
+      .cta-section{background:var(--deep);padding:6rem 1.5rem}
+      @media(min-width:768px){.cta-section{padding:8rem 2rem}}
+      .cta-inner{max-width:720px;margin:0 auto;text-align:center}
+      .cta-inner h2{font-size:clamp(2rem,5vw,3.5rem);color:var(--cream);line-height:1.1;margin-top:1.5rem}
+      .cta-inner .body-text{color:rgba(246,241,233,.55)}
+      .cta-links{margin-top:2rem;display:flex;flex-direction:column;align-items:center;gap:.75rem}
+      .cta-links a,.cta-links span{color:rgba(246,241,233,.4);font-size:.8rem;text-transform:uppercase;letter-spacing:.2em}
+      .cta-links a:hover{color:var(--gold)}
+      .cta-btn{display:inline-block;margin-top:2.5rem;background:var(--gold);color:var(--deep);padding:1rem 2.5rem;border-radius:9999px;font-size:.75rem;text-transform:uppercase;letter-spacing:.25em;font-weight:600;transition:background .3s,transform .3s}
+      .cta-btn:hover{background:#d4af82;transform:translateY(-2px)}
+
+      /* ── Footer ── */
+      .site-footer{background:var(--cream);border-top:1px solid rgba(195,160,113,.25);padding:3rem 1.5rem}
+      .footer-inner{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:2rem}
+      @media(min-width:768px){.footer-inner{grid-template-columns:repeat(3,1fr);gap:3rem}}
+      .footer-col p,.footer-col a{color:rgba(47,42,38,.6);font-size:.9rem;line-height:1.8}
+      .footer-col a:hover{color:var(--gold)}
+      .footer-col .col-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.2em;color:var(--gold);margin-bottom:.75rem}
+      .footer-bottom{max-width:1200px;margin:2rem auto 0;padding-top:1.5rem;border-top:1px solid rgba(195,160,113,.12);text-align:center;color:rgba(47,42,38,.35);font-size:.8rem}
+
+      /* ── Floating CTA ── */
+      .floating-cta{position:fixed;bottom:1.25rem;right:1.25rem;z-index:90;background:var(--gold);color:var(--deep);padding:.875rem 1.5rem;border-radius:9999px;font-size:.7rem;text-transform:uppercase;letter-spacing:.18em;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.3);transition:transform .3s,opacity .3s;min-height:44px;display:flex;align-items:center}
+      .floating-cta.hidden-cta{opacity:0;transform:translateY(20px);pointer-events:none}
+      @media(min-width:768px){.floating-cta{bottom:2rem;right:2rem}}
+
+      /* ── Reveal animation ── */
+      .reveal{opacity:0;transform:translateY(28px);transition:opacity .9s cubic-bezier(.25,.46,.45,.94),transform .9s cubic-bezier(.25,.46,.45,.94)}
+      .reveal.visible{opacity:1;transform:translateY(0)}
+      .reveal-d1{transition-delay:150ms}
+      .reveal-d2{transition-delay:300ms}
+      .reveal-d3{transition-delay:450ms}
+    </style>
+  </head>
+  <body>
+    <a href="#main" class="skip-link">Skip to content</a>
+
+    <!-- Booking Banner -->
+    <!-- Navigation -->
+    <header class="nav-bar" role="navigation">
+      <nav class="nav-inner" aria-label="Main navigation">
+        <a href="/" aria-label="Juniper Floral Studio — Home">
+          <img src="/images/juniper-logo.png" alt="Juniper Floral Studio" class="nav-logo" width="160" height="48" />
+        </a>
+        <button class="nav-toggle" aria-label="Open navigation menu" aria-expanded="false" data-nav-toggle>
+          <svg width="18" height="14" viewBox="0 0 18 14" fill="none" aria-hidden="true"><line x1="0" y1="1" x2="18" y2="1" stroke="currentColor" stroke-width="1.5"/><line x1="0" y1="7" x2="18" y2="7" stroke="currentColor" stroke-width="1.5"/><line x1="0" y1="13" x2="18" y2="13" stroke="currentColor" stroke-width="1.5"/></svg>
+          Menu
+        </button>
+        <div class="nav-links">
+          <a href="/">Home</a>
+          <a href="/about/">About</a>
+          <a href="/portfolio/">Portfolio</a>
+          <a href="/services/">Services</a>
+          <a href="#inquire" style="color:var(--gold);font-weight:500">Now Booking 2026</a>
+        </div>
+      </nav>
+      <div class="nav-mobile" data-nav-menu aria-label="Mobile navigation">
+        <a href="/">Home</a>
+        <a href="/about/">About</a>
+        <a href="/portfolio/">Portfolio</a>
+        <a href="/services/">Services</a>
+        <a href="#inquire">Inquire</a>
+      </div>
+    </header>
+
+    <!-- Floating Mobile CTA -->
+    <a href="#inquire" class="floating-cta hidden-cta" id="floatingCta" aria-label="Inquire about wedding florals">Inquire Now</a>
+
+    <main id="main">
+
+      <!-- ═══════════════════════════════════════════
+           SECTION 1: HERO — Cinematic Full Screen
+           ═══════════════════════════════════════════ -->
+      <section class="hero">
+        <img src="/images/kathrine-rizzi/kathrine-rizzi-4.jpg" alt="Lush garden-style bridal bouquet with garden roses, ranunculus, and trailing greenery" class="hero-img" fetchpriority="high" />
+        <div class="hero-overlay" aria-hidden="true"></div>
+        <div class="hero-content">
+          <h1>Juniper<br/>Floral Studio</h1>
+          <p class="hero-sub">Garden-Style Wedding Florals · Austin, Texas</p>
+          <a href="#inquire" class="hero-btn">Begin Your Inquiry</a>
+        </div>
+        <div class="scroll-indicator" aria-hidden="true">
+          <span>Scroll</span>
+          <div class="scroll-chevron"></div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════
+           SECTION 2: PHILOSOPHY — Split Screen
+           ═══════════════════════════════════════════ -->
+      <section class="split" aria-labelledby="philosophy-heading">
+        <div class="split-img">
+          <img loading="lazy" src="/images/hannah/hannah-3.jpg" alt="Bride holding a lush garden-style bouquet of peonies and garden roses" width="960" height="1280" />
+        </div>
+        <div class="split-text" style="background:var(--cream)">
+          <div class="split-text-inner reveal">
+            <p class="label">Our Philosophy</p>
+            <h2 id="philosophy-heading" class="section-title">Florals that feel like they grew here</h2>
+            <p class="body-text">
+              We believe the most beautiful arrangements don't look arranged at all. Every stem is placed with care, but the result should feel effortless — as if the flowers simply decided to bloom right there, in that moment, for you.
+            </p>
+            <p class="body-text" style="margin-top:1rem">
+              Garden roses layered with ranunculus, trailing jasmine, textured eucalyptus. We design with the seasons and let nature lead. Each bloom is chosen not just for beauty, but for the emotion it carries — a language of flowers that has been spoken since the Victorian era.
+            </p>
+            <a href="/about/" class="text-link">Read our story</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════
+           SECTION 3: GALLERY STRIP — Horizontal Scroll
+           ═══════════════════════════════════════════ -->
+      <section class="gallery-section" aria-label="Wedding floral portfolio gallery">
+        <div class="gallery-strip" role="region" aria-label="Scrollable photo gallery" tabindex="0">
+          <img loading="lazy" src="/images/kathrine-rizzi/kathrine-rizzi-3.jpg" alt="Garden-style ceremony arch with cascading roses and eucalyptus" width="600" height="800" />
+          <img loading="lazy" src="/images/kathrine-rizzi/kathrine-rizzi-5.jpg" alt="Romantic bridal bouquet with blush garden roses and trailing ribbon" width="600" height="800" />
+          <img loading="lazy" src="/images/kathrine-rizzi/kathrine-rizzi-8.jpg" alt="Reception table centerpiece with lush garden florals and candles" width="600" height="800" />
+          <img loading="lazy" src="/images/nicole/nicole-3.jpg" alt="Bride holding a wild, gardenesque bouquet of seasonal blooms" width="600" height="800" />
+          <img loading="lazy" src="/images/nicole/nicole-7.jpg" alt="Ceremony aisle lined with loose floral arrangements" width="600" height="800" />
+          <img loading="lazy" src="/images/jeanna/jeanna-4.jpg" alt="Bridal party bouquets in soft pinks and creams" width="600" height="800" />
+          <img loading="lazy" src="/images/jeanna/jeanna-7.jpg" alt="Full ceremony floral installation with organic greenery" width="600" height="800" />
+          <img loading="lazy" src="/images/hannah/hannah-3.jpg" alt="Close-up of a lush garden-style bridal bouquet" width="600" height="800" />
+          <img loading="lazy" src="/images/hannah/hannah-6.jpg" alt="Reception florals with warm-toned roses and dahlias" width="600" height="800" />
+          <img loading="lazy" src="/images/danielle/danielle-3.jpg" alt="Romantic wedding florals with cascading greenery" width="600" height="800" />
+          <img loading="lazy" src="/images/allison/allison-3.jpg" alt="Elegant bridal bouquet with garden roses and eucalyptus" width="600" height="800" />
+          <img loading="lazy" src="/images/nadine/nadine-1.jpg" alt="Garden-style arrangement with wildflowers and natural textures" width="600" height="800" />
+          <img loading="lazy" src="/images/jess-rich/jess-rich-3.jpg" alt="Lush bridal bouquet with peonies, roses, and trailing foliage" width="600" height="800" />
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════
+           SECTION 4: SERVICES — Parallax + Glass Cards
+           ═══════════════════════════════════════════ -->
+      <section class="services-section" aria-labelledby="services-heading">
+        <div class="services-bg" aria-hidden="true"></div>
+        <img loading="lazy" src="/images/kathrine-rizzi/kathrine-rizzi-2.jpg" alt="" class="services-bg-mobile" aria-hidden="true" />
+        <div class="services-bg-overlay" aria-hidden="true"></div>
+        <div class="services-inner">
+          <div class="reveal" style="text-align:center;margin-bottom:3rem">
+            <p class="label">What We Do</p>
+            <h2 id="services-heading" style="font-size:clamp(2rem,5vw,3.25rem);color:var(--white);margin-top:1rem">Full-Service Floral Design</h2>
+            <p style="color:rgba(255,255,255,.55);max-width:600px;margin:1.25rem auto 0;font-size:1rem">From the first consultation to the final petal, we handle every detail so you can be fully present on your day.</p>
+          </div>
+          <div class="card-grid">
+            <div class="glass-card reveal">
+              <p class="num">01</p>
+              <h3>Weddings</h3>
+              <p>Bridal bouquets, ceremony arches, reception tablescapes, aisle installations — every petal tells your love story.</p>
+            </div>
+            <div class="glass-card reveal reveal-d1">
+              <p class="num">02</p>
+              <h3>Events</h3>
+              <p>Corporate galas, private dinners, milestone celebrations, and editorial shoots with bespoke, seasonal blooms.</p>
+            </div>
+            <div class="glass-card reveal reveal-d2">
+              <p class="num">03</p>
+              <h3>Installations</h3>
+              <p>Statement arches, suspended garlands, living walls, and floral chandeliers that transform any space into something unforgettable.</p>
+            </div>
+            <div class="glass-card reveal reveal-d3">
+              <p class="num">04</p>
+              <h3>Personal Florals</h3>
+              <p>Wearable flowers, boutonnieres, corsages, and hair florals crafted with artful detail and botanical intention.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════
+           SECTION 5: TESTIMONIALS — Rotating Quotes
+           ═══════════════════════════════════════════ -->
+      <section class="testimonials" aria-labelledby="testimonials-heading">
+        <img loading="lazy" src="/images/jeanna/jeanna-7.jpg" alt="" class="testimonial-bg-img" aria-hidden="true" />
+        <div class="testimonial-overlay" aria-hidden="true"></div>
+        <h2 id="testimonials-heading" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Client Testimonials</h2>
+        <div class="testimonial-slider" aria-label="Client testimonials">
+          <div class="testimonial-track" id="testimonialTrack">
+            <div class="testimonial-slide" role="group" aria-label="Testimonial 1 of 3">
+              <span class="testimonial-quote" aria-hidden="true" style="font-size:5rem">&ldquo;</span>
+              <blockquote>
+                We cannot even begin to express how much we loved Kate and her team. From the very moment we met her, we were in love. The florals were beyond anything we could have dreamed.
+              </blockquote>
+              <cite>Jessica &amp; Richard</cite>
+            </div>
+            <div class="testimonial-slide" role="group" aria-label="Testimonial 2 of 3">
+              <span class="testimonial-quote" aria-hidden="true" style="font-size:5rem">&ldquo;</span>
+              <blockquote>
+                What Kate created was a beautiful work of art. The bouquet was bright and gardenesque, and somehow she managed to turn bright blue jellybeans into an exotic flower.
+              </blockquote>
+              <cite>Sayward &amp; John</cite>
+            </div>
+            <div class="testimonial-slide" role="group" aria-label="Testimonial 3 of 3">
+              <span class="testimonial-quote" aria-hidden="true" style="font-size:5rem">&ldquo;</span>
+              <blockquote>
+                Kate is absolutely amazing. She provides incredible florals, fantastic advice, and became our decor team day-of. We couldn't have done it without her.
+              </blockquote>
+              <cite>Danielle &amp; Shane</cite>
+            </div>
+          </div>
+          <div class="testimonial-dots" role="tablist" aria-label="Select testimonial">
+            <button role="tab" aria-selected="true" aria-label="Testimonial 1" class="active" data-slide="0"></button>
+            <button role="tab" aria-selected="false" aria-label="Testimonial 2" data-slide="1"></button>
+            <button role="tab" aria-selected="false" aria-label="Testimonial 3" data-slide="2"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════
+           SECTION 6: FEATURED WORK — 2×2 Grid
+           ═══════════════════════════════════════════ -->
+      <section class="section-pad" style="background:var(--cream)" aria-labelledby="featured-heading">
+        <div style="max-width:1200px;margin:0 auto">
+          <div class="reveal" style="text-align:center;margin-bottom:3.5rem">
+            <p class="label">Portfolio</p>
+            <h2 id="featured-heading" class="section-title">Featured Work</h2>
+          </div>
+          <div class="featured-grid reveal">
+            <a href="/portfolio/" class="featured-item" aria-label="View Kathrine and Rizzi's wedding florals">
+              <img loading="lazy" src="/images/kathrine-rizzi/kathrine-rizzi-8.jpg" alt="Kathrine and Rizzi's wedding — romantic garden-style florals" width="600" height="800" />
+              <div class="featured-overlay"><p>Kathrine &amp; Rizzi</p></div>
+            </a>
+            <a href="/portfolio/" class="featured-item" aria-label="View Nicole and Tyler's wedding florals">
+              <img loading="lazy" src="/images/nicole/nicole-7.jpg" alt="Nicole and Tyler's wedding — lush ceremony installations" width="600" height="800" />
+              <div class="featured-overlay"><p>Nicole &amp; Tyler</p></div>
+            </a>
+            <a href="/portfolio/" class="featured-item" aria-label="View Hannah and David's wedding florals">
+              <img loading="lazy" src="/images/hannah/hannah-6.jpg" alt="Hannah and David's wedding — warm-toned reception florals" width="600" height="800" />
+              <div class="featured-overlay"><p>Hannah &amp; David</p></div>
+            </a>
+            <a href="/portfolio/" class="featured-item" aria-label="View Jeanna and Matt's wedding florals">
+              <img loading="lazy" src="/images/jeanna/jeanna-4.jpg" alt="Jeanna and Matt's wedding — elegant bridal party bouquets" width="600" height="800" />
+              <div class="featured-overlay"><p>Jeanna &amp; Matt</p></div>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════
+           SECTION 7: ABOUT KATE — Split Screen
+           ═══════════════════════════════════════════ -->
+      <section class="split reverse about-section" aria-labelledby="about-heading">
+        <div class="split-text">
+          <div class="split-text-inner reveal">
+            <p class="label">Meet Kate</p>
+            <h2 id="about-heading" class="section-title">A family-led floral studio rooted in love</h2>
+            <p class="body-text">
+              Kate Jones founded Juniper Floral Studio with a simple belief: flowers should make you feel something. Every wedding, every event, every single stem is an opportunity to create wonder.
+            </p>
+            <p class="body-text" style="margin-top:1rem">
+              A lifelong student of the Victorian language of flowers, Kate designs with botanical intention — choosing each bloom not just for its beauty, but for the emotion it carries. Peonies for romance, ranunculus for charm, garden roses for passion. Every arrangement tells a story only flowers can speak.
+            </p>
+            <p class="body-text" style="margin-top:1rem">
+              What started as a passion project has grown into a family affair — supported by her husband Jordan and her parents, who help bring each vision to life with warmth, dedication, and a whole lot of early mornings at the flower market.
+            </p>
+            <a href="/about/" class="text-link">Read the full story</a>
+          </div>
+        </div>
+        <div class="split-img" style="order:-1">
+          <img loading="lazy" src="/images/jessica-details.jpg" alt="Kate arranging a garden-style floral centerpiece in her studio" width="960" height="1280" />
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════
+           SECTION 8: CTA — Inquiry
+           ═══════════════════════════════════════════ -->
+      <section class="cta-section" id="inquire" aria-labelledby="cta-heading">
+        <div class="cta-inner reveal">
+          <p class="label">Begin Your Story</p>
+          <h2 id="cta-heading">Let's design something unforgettable</h2>
+          <p class="body-text" style="color:rgba(246,241,233,.55);max-width:560px;margin:1.5rem auto 0">
+            Share your date, your venue, and the feeling you want your flowers to create. We respond to every inquiry within 48 hours.
+          </p>
+          <a href="mailto:hello@juniperfloralstudio.com?subject=Wedding%20Inquiry" class="cta-btn">Start Your Inquiry</a>
+          <div class="cta-links">
+            <a href="mailto:hello@juniperfloralstudio.com">hello@juniperfloralstudio.com</a>
+            <a href="tel:+17373954520">(737) 395-4520</a>
+            <span style="color:rgba(246,241,233,.3)">4800 Steiner Ranch Blvd #20104, Austin, TX · (737) 395-4520 &amp; Beyond</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer" role="contentinfo">
+      <div class="footer-inner">
+        <div class="footer-col">
+          <p style="font-family:'Playfair Display',serif;font-size:1.25rem;color:var(--deep)">Juniper Floral Studio</p>
+          <p style="margin-top:.75rem">Garden-style floral design for weddings and events in Austin, Texas. Crafted with seasonal blooms and botanical intention.</p>
+        </div>
+        <div class="footer-col">
+          <p class="col-label">Contact</p>
+          <p><a href="mailto:hello@juniperfloralstudio.com">hello@juniperfloralstudio.com</a></p>
+          <p><a href="tel:+17373954520">(737) 395-4520</a></p>
+          <p>4800 Steiner Ranch Blvd #20104, Austin, TX · (737) 395-4520</p>
+        </div>
+        <div class="footer-col">
+          <p class="col-label">Follow Along</p>
+          <p><a href="https://www.instagram.com/juniperfloralstudio" target="_blank" rel="noopener noreferrer">Instagram →</a></p>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2025 Juniper Floral Studio. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <script src="/scripts/site.js"></script>
+    <script>
+      /* ── Nav scroll state ── */
+      (function(){
+        const nav=document.querySelector('.nav-bar');
+        let ticking=false;
+        window.addEventListener('scroll',()=>{
+          if(!ticking){requestAnimationFrame(()=>{nav.classList.toggle('scrolled',window.scrollY>60);ticking=false});ticking=true}
+        });
+      })();
+
+      /* ── Mobile nav toggle ── */
+      (function(){
+        const btn=document.querySelector('[data-nav-toggle]');
+        const menu=document.querySelector('[data-nav-menu]');
+        if(!btn||!menu)return;
+        btn.addEventListener('click',()=>{
+          const open=menu.classList.toggle('open');
+          btn.setAttribute('aria-expanded',open);
+        });
+        menu.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{
+          menu.classList.remove('open');btn.setAttribute('aria-expanded','false');
+        }));
+      })();
+
+      /* ── Floating CTA ── */
+      (function(){
+        const cta=document.getElementById('floatingCta');
+        if(!cta)return;
+        let ticking=false;
+        window.addEventListener('scroll',()=>{
+          if(!ticking){requestAnimationFrame(()=>{cta.classList.toggle('hidden-cta',window.scrollY<500);ticking=false});ticking=true}
+        });
+      })();
+
+      /* ── Reveal on scroll ── */
+      (function(){
+        const els=document.querySelectorAll('.reveal');
+        const obs=new IntersectionObserver((entries)=>{
+          entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target)}});
+        },{threshold:0.12,rootMargin:'0px 0px -40px 0px'});
+        els.forEach(el=>obs.observe(el));
+      })();
+
+      /* ── Testimonial slider ── */
+      (function(){
+        const track=document.getElementById('testimonialTrack');
+        const dots=document.querySelectorAll('.testimonial-dots button');
+        if(!track||!dots.length)return;
+        let current=0;const total=dots.length;
+        function goTo(i){
+          current=i;
+          track.style.transform='translateX(-'+i*100+'%)';
+          dots.forEach((d,j)=>{d.classList.toggle('active',j===i);d.setAttribute('aria-selected',j===i)});
+        }
+        dots.forEach(d=>d.addEventListener('click',()=>goTo(parseInt(d.dataset.slide))));
+        // Auto-rotate
+        let timer=setInterval(()=>goTo((current+1)%total),6000);
+        track.closest('.testimonial-slider').addEventListener('pointerenter',()=>clearInterval(timer));
+        track.closest('.testimonial-slider').addEventListener('pointerleave',()=>{timer=setInterval(()=>goTo((current+1)%total),6000)});
+      })();
+    </script>
+  </body>
+</html>

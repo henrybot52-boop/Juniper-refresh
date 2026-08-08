@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drew & Kaila's Wedding | Juniper Floral Studio</title>
+    <meta name="description" content="Drew & Kaila's wedding floral design by Juniper Floral Studio." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/site.css" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .lightbox {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: rgba(0,0,0,0.92);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .lightbox.active { display: flex; }
+      .lightbox img {
+        max-height: 90vh;
+        max-width: 90vw;
+        object-fit: contain;
+        border-radius: 12px;
+      }
+      .lightbox-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(255,255,255,0.15);
+        border: none;
+        color: white;
+        font-size: 2rem;
+        padding: 12px 18px;
+        cursor: pointer;
+        border-radius: 50%;
+        backdrop-filter: blur(4px);
+        transition: background 0.2s;
+      }
+      .lightbox-nav:hover { background: rgba(255,255,255,0.3); }
+      .lightbox-prev { left: 20px; }
+      .lightbox-next { right: 20px; }
+      .lightbox-close {
+        position: absolute;
+        top: 20px;
+        right: 24px;
+        background: none;
+        border: none;
+        color: white;
+        font-size: 2rem;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body class="bg-cream">
+    <header class="fixed top-0 inset-x-0 z-50 nav-blur">
+      <nav class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="/"><img src="/images/juniper-logo.png" alt="Juniper Floral Studio" class="h-12" /></a>
+        <button class="md:hidden border border-deep/30 rounded-full px-4 py-2 text-sm" data-nav-toggle aria-label="Toggle navigation">Menu</button>
+        <div class="hidden md:flex md:items-center md:gap-8 text-sm uppercase tracking-[0.2em]">
+          <a href="/" class="text-deep hover:text-gold">Home</a>
+          <a href="/blog/" class="text-deep hover:text-gold">Journal</a>
+          <a href="/about/" class="text-deep hover:text-gold">About</a>
+          <a href="/portfolio/" class="text-deep hover:text-gold">Portfolio</a>
+          <a href="/services/" class="text-deep hover:text-gold">Services</a>
+          <a href="/inquire/" class="text-deep hover:text-gold">Inquire</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="pt-24">
+      <section class="max-w-6xl mx-auto px-6 py-16 reveal">
+        <a href="/portfolio/" class="text-sm uppercase tracking-[0.2em] text-gold hover:text-deep transition">&larr; Back to Portfolio</a>
+        <h1 class="text-4xl md:text-5xl font-serif mt-6">Drew & Kaila's Wedding</h1>
+        <p class="mt-4 text-lg max-w-2xl text-deep/70">
+          An elegant garden-style celebration designed with lush textures, romantic blooms, and thoughtful detail at every turn.
+        </p>
+      </section>
+
+      <section class="max-w-6xl mx-auto px-6 pb-20">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div class="cursor-pointer rounded-2xl overflow-hidden" onclick="openLightbox(0)">
+            <img loading="lazy" src="/images/drew-kaila/drew-kaila-1.jpg" alt="Drew & Kaila wedding floral design" class="w-full h-64 md:h-80 object-cover hover:scale-[1.03] transition duration-500" />
+          </div>
+          <div class="cursor-pointer rounded-2xl overflow-hidden" onclick="openLightbox(1)">
+            <img loading="lazy" src="/images/drew-kaila/drew-kaila-2.jpg" alt="Drew & Kaila wedding floral arrangement" class="w-full h-64 md:h-80 object-cover hover:scale-[1.03] transition duration-500" />
+          </div>
+          <div class="cursor-pointer rounded-2xl overflow-hidden" onclick="openLightbox(2)">
+            <img loading="lazy" src="/images/drew-kaila/drew-kaila-3.jpg" alt="Drew & Kaila wedding bouquet" class="w-full h-64 md:h-80 object-cover hover:scale-[1.03] transition duration-500" />
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-warm">
+        <div class="max-w-6xl mx-auto px-6 py-16 reveal">
+          <div class="rounded-[32px] bg-deep text-cream p-10 md:p-16 flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="badge text-xs uppercase tracking-[0.4em] text-gold">Inquire</p>
+              <h2 class="text-3xl md:text-4xl font-serif mt-4">Love what you see?</h2>
+              <p class="mt-4 text-cream/80">Let's create something unforgettable for your day.</p>
+            </div>
+            <a href="/inquire/" class="mt-8 md:mt-0 bg-gold text-deep px-6 py-3 rounded-full text-sm uppercase tracking-[0.2em]">Start your inquiry</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="lightbox" id="lightbox">
+      <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+      <button class="lightbox-nav lightbox-prev" onclick="event.stopPropagation(); navigateLightbox(-1)">&#8249;</button>
+      <img loading="lazy" id="lightbox-img" src="" alt="Wedding photo" />
+      <button class="lightbox-nav lightbox-next" onclick="event.stopPropagation(); navigateLightbox(1)">&#8250;</button>
+    </div>
+
+    <footer class="bg-cream border-t border-gold/30">
+      <div class="max-w-6xl mx-auto px-6 py-10 grid md:grid-cols-3 gap-6">
+        <div>
+          <p class="font-serif text-xl">Juniper Floral Studio</p>
+          <p class="mt-4 footer-text">Garden-style floral design for weddings and events.</p>
+        </div>
+        <div>
+          <p class="text-sm uppercase tracking-[0.2em] text-gold">Contact</p>
+          <p class="mt-3 footer-text"><a href="mailto:hello@juniperfloralstudio.com">hello@juniperfloralstudio.com</a></p>
+          <p class="footer-text"><a href="tel:+17373954520">(737) 395-4520</a></p>
+          <p class="footer-text">4800 Steiner Ranch Blvd #20104, Austin, TX</p>
+        </div>
+        <div>
+          <p class="text-sm uppercase tracking-[0.2em] text-gold">Social</p>
+          <div class="mt-3 flex flex-col gap-2 footer-text">
+            <a href="https://www.instagram.com/juniperfloralstudio" class="hover:text-gold">Instagram</a>
+            <a href="https://www.facebook.com" class="hover:text-gold">Facebook</a>
+            <a href="https://www.pinterest.com" class="hover:text-gold">Pinterest</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script src="/scripts/site.js"></script>
+    <script>
+      const images = [
+        '/images/drew-kaila/drew-kaila-1.jpg',
+        '/images/drew-kaila/drew-kaila-2.jpg',
+        '/images/drew-kaila/drew-kaila-3.jpg'
+      ];
+      let currentIndex = 0;
+
+      function openLightbox(index) {
+        currentIndex = index;
+        document.getElementById('lightbox-img').src = images[index];
+        document.getElementById('lightbox').classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeLightbox() {
+        document.getElementById('lightbox').classList.remove('active');
+        document.body.style.overflow = '';
+      }
+
+      function navigateLightbox(dir) {
+        currentIndex = (currentIndex + dir + images.length) % images.length;
+        document.getElementById('lightbox-img').src = images[currentIndex];
+      }
+
+      document.getElementById('lightbox').addEventListener('click', function(e) {
+        if (e.target === this) closeLightbox();
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (!document.getElementById('lightbox').classList.contains('active')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') navigateLightbox(-1);
+        if (e.key === 'ArrowRight') navigateLightbox(1);
+      });
+    </script>
+  </body>
+</html>
