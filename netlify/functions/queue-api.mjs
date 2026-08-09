@@ -32,6 +32,12 @@ function keyOk(supplied) {
 }
 
 async function publish(item, token) {
+  // Instagram publishes JPEG and nothing else. Catch it here with a message a
+  // human can act on, rather than letting Meta return an opaque media error.
+  if (!/\.jpe?g$/i.test(new URL(item.image).pathname)) {
+    throw new Error('Instagram only accepts JPEG images, and this one is not a .jpg — swap the photo for a JPEG version.');
+  }
+
   const createRes = await fetch(`${GRAPH}/${IG_USER_ID}/media`, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },

@@ -7,7 +7,7 @@ This file is generated for reading. To change what gets posted, edit `netlify/ig
 
 | # | Wedding | Caption | Photo |
 |---|---|---|---|
-| 1 | allison | Soft palettes, and just enough green to keep them honest. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-1.webp) |
+| 1 | allison | Soft palettes, and just enough green to keep them honest. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-1.jpg) |
 | 2 | brittney | The kind of arrangement that looks gathered rather than arranged. | [1066x1600](https://juniperfloralstudio.com/images/brittney/brittney-2.jpg) |
 | 3 | danielle | Texture does the work here. The palette stays quiet. | [1024x1535](https://juniperfloralstudio.com/images/danielle/danielle-2.jpg) |
 | 4 | drew-kaila | We build them to look like they grew there. | [1066x1600](https://juniperfloralstudio.com/images/drew-kaila/drew-kaila-2.jpg) |
@@ -31,7 +31,7 @@ This file is generated for reading. To change what gets posted, edit `netlify/ig
 | 22 | shannon | Built to be photographed, made to be lived around. | [1600x1066](https://juniperfloralstudio.com/images/shannon/shannon-2.jpg) |
 | 23 | susan | Quiet palettes let the room speak. | [961x1442](https://juniperfloralstudio.com/images/susan/susan-1.jpg) |
 | 24 | teena | Layers of ivory, cream, and something almost pink. | [962x1442](https://juniperfloralstudio.com/images/teena/teena-1.jpg) |
-| 25 | allison | This is what months of planning looks like on the day. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-2.webp) |
+| 25 | allison | This is what months of planning looks like on the day. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-2.jpg) |
 | 26 | danielle | Fresh from the cooler at 6am, in place by noon. | [1024x1536](https://juniperfloralstudio.com/images/danielle/danielle-3.jpg) |
 | 27 | drew-kaila | Depth comes from texture, not from adding more colour. | [1066x1600](https://juniperfloralstudio.com/images/drew-kaila/drew-kaila-3.jpg) |
 | 28 | felicia | A ceremony moment worth standing still for. | [1043x1600](https://juniperfloralstudio.com/images/felicia/felicia-3.jpg) |
@@ -53,7 +53,7 @@ This file is generated for reading. To change what gets posted, edit `netlify/ig
 | 44 | shannon | We build them to look like they grew there. | [1066x1600](https://juniperfloralstudio.com/images/shannon/shannon-3.jpg) |
 | 45 | susan | Blush and ivory, with a little movement through the middle. | [961x1442](https://juniperfloralstudio.com/images/susan/susan-4.jpg) |
 | 46 | teena | Restraint is the hardest part of this job. Also the best part. | [1010x1442](https://juniperfloralstudio.com/images/teena/teena-2.jpg) |
-| 47 | allison | Garden roses hold their shape all day. Worth every penny. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-3.webp) |
+| 47 | allison | Garden roses hold their shape all day. Worth every penny. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-3.jpg) |
 | 48 | danielle | A palette that shifts with the light, from ceremony through last dance. | [1024x1536](https://juniperfloralstudio.com/images/danielle/danielle-4.jpg) |
 | 49 | felicia | Greenery, candlelight, and not much else. | [1043x1600](https://juniperfloralstudio.com/images/felicia/felicia-4.jpg) |
 | 50 | gabby-matthew | The details you notice on the second look. | [1064x1600](https://juniperfloralstudio.com/images/gabby-matthew/gabby-matthew-4.jpg) |
@@ -70,11 +70,11 @@ This file is generated for reading. To change what gets posted, edit `netlify/ig
 | 61 | samantha | Warm tones read beautifully once the sun drops. | [962x1442](https://juniperfloralstudio.com/images/samantha/samantha-3.jpg) |
 | 62 | shannon | Built to be photographed, made to be lived around. | [1066x1600](https://juniperfloralstudio.com/images/shannon/shannon-4.jpg) |
 | 63 | susan | Quiet palettes let the room speak. | [961x1442](https://juniperfloralstudio.com/images/susan/susan-5.jpg) |
-| 64 | allison | Layers of ivory, cream, and something almost pink. | [2163x1442](https://juniperfloralstudio.com/images/allison/allison-4.webp) |
+| 64 | allison | Layers of ivory, cream, and something almost pink. | [2163x1442](https://juniperfloralstudio.com/images/allison/allison-4.jpg) |
 | 65 | danielle | This is what months of planning looks like on the day. | [1024x1535](https://juniperfloralstudio.com/images/danielle/danielle-6.jpg) |
 | 66 | felicia | Fresh from the cooler at 6am, in place by noon. | [1600x1086](https://juniperfloralstudio.com/images/felicia/felicia-5.jpg) |
 | 67 | hannah | Depth comes from texture, not from adding more colour. | [1066x1600](https://juniperfloralstudio.com/images/hannah/hannah-2.jpg) |
-| 68 | inna | A ceremony moment worth standing still for. | [963x1442](https://juniperfloralstudio.com/images/inna/inna-4.webp) |
+| 68 | inna | A ceremony moment worth standing still for. | [963x1442](https://juniperfloralstudio.com/images/inna/inna-4.jpg) |
 | 69 | jeanna | Understated, and all the better for it. | [1600x1064](https://juniperfloralstudio.com/images/jeanna/jeanna-13.jpg) |
 | 70 | jess-rich | The greenery matters as much as the blooms. | [1600x1068](https://juniperfloralstudio.com/images/jess-rich/jess-rich-5.jpg) |
 | 71 | kathrine-rizzi | Balance is the goal. Symmetry rarely is. | [1600x1066](https://juniperfloralstudio.com/images/kathrine-rizzi/kathrine-rizzi-13.jpg) |
@@ -85,18 +85,18 @@ This file is generated for reading. To change what gets posted, edit `netlify/ig
 | 76 | samantha | It should feel like it belongs to the room, not like it arrived in a van. | [963x1442](https://juniperfloralstudio.com/images/samantha/samantha-4.jpg) |
 | 77 | shannon | Held together with wire, ribbon, and a lot of coffee. | [1600x1066](https://juniperfloralstudio.com/images/shannon/shannon-5.jpg) |
 | 78 | susan | The palette was set months before the first stem was cut. | [961x1442](https://juniperfloralstudio.com/images/susan/susan-6.jpg) |
-| 79 | allison | Full without being heavy. That balance takes practice. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-6.webp) |
+| 79 | allison | Full without being heavy. That balance takes practice. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-6.jpg) |
 | 80 | danielle | Blooms chosen for how they age through the day, not just how they open. | [1024x1535](https://juniperfloralstudio.com/images/danielle/danielle-7.jpg) |
 | 81 | hannah | Soft palettes, and just enough green to keep them honest. | [1066x1600](https://juniperfloralstudio.com/images/hannah/hannah-3.jpg) |
 | 82 | jeanna | The kind of arrangement that looks gathered rather than arranged. | [1064x1600](https://juniperfloralstudio.com/images/jeanna/jeanna-2.jpg) |
 | 83 | jess-rich | Texture does the work here. The palette stays quiet. | [1600x1068](https://juniperfloralstudio.com/images/jess-rich/jess-rich-6.jpg) |
 | 84 | kathrine-rizzi | We build them to look like they grew there. | [1066x1600](https://juniperfloralstudio.com/images/kathrine-rizzi/kathrine-rizzi-14.jpg) |
 | 85 | nadine | Blush and ivory, with a little movement through the middle. | [962x1442](https://juniperfloralstudio.com/images/nadine/nadine-5.jpg) |
-| 86 | nenna | Restraint is the hardest part of this job. Also the best part. | [2160x1442](https://juniperfloralstudio.com/images/nenna/nenna-5.webp) |
+| 86 | nenna | Restraint is the hardest part of this job. Also the best part. | [2160x1442](https://juniperfloralstudio.com/images/nenna/nenna-5.jpg) |
 | 87 | nicole | Garden roses hold their shape all day. Worth every penny. | [1066x1600](https://juniperfloralstudio.com/images/nicole/nicole-14.jpg) |
 | 88 | shannon | A palette that shifts with the light, from ceremony through last dance. | [1600x1066](https://juniperfloralstudio.com/images/shannon/shannon-6.jpg) |
 | 89 | susan | Greenery, candlelight, and not much else. | [961x1442](https://juniperfloralstudio.com/images/susan/susan-7.jpg) |
-| 90 | allison | The details you notice on the second look. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-7.webp) |
+| 90 | allison | The details you notice on the second look. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-7.jpg) |
 | 91 | hannah | Neutrals are never actually neutral. There are a dozen shades in here. | [1143x1600](https://juniperfloralstudio.com/images/hannah/hannah-4.jpg) |
 | 92 | jeanna | Designed to frame the moment, never to compete with it. | [1064x1600](https://juniperfloralstudio.com/images/jeanna/jeanna-3.jpg) |
 | 93 | jess-rich | Loose, low, and a little wild. Our favourite brief. | [1600x1068](https://juniperfloralstudio.com/images/jess-rich/jess-rich-7.jpg) |
@@ -104,12 +104,12 @@ This file is generated for reading. To change what gets posted, edit `netlify/ig
 | 95 | nadine | Every stem placed by hand, the morning of. | [962x1442](https://juniperfloralstudio.com/images/nadine/nadine-6.jpg) |
 | 96 | nicole | Colour lives in the details when the palette stays soft. | [1066x1600](https://juniperfloralstudio.com/images/nicole/nicole-15.jpg) |
 | 97 | shannon | Structure underneath, softness on top. That is the whole trick. | [1600x1066](https://juniperfloralstudio.com/images/shannon/shannon-7.jpg) |
-| 98 | allison | A little asymmetry keeps things from feeling stiff. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-8.webp) |
+| 98 | allison | A little asymmetry keeps things from feeling stiff. | [962x1442](https://juniperfloralstudio.com/images/allison/allison-8.jpg) |
 | 99 | hannah | The best compliment we get is that it looked effortless. | [1066x1600](https://juniperfloralstudio.com/images/hannah/hannah-5.jpg) |
 | 100 | jeanna | Seasonal, local where we can, always at its peak. | [1600x1065](https://juniperfloralstudio.com/images/jeanna/jeanna-4.jpg) |
 | 101 | jess-rich | Warm tones read beautifully once the sun drops. | [1600x1068](https://juniperfloralstudio.com/images/jess-rich/jess-rich-8.jpg) |
 | 102 | kathrine-rizzi | Built to be photographed, made to be lived around. | [1066x1600](https://juniperfloralstudio.com/images/kathrine-rizzi/kathrine-rizzi-16.jpg) |
-| 103 | nadine | Quiet palettes let the room speak. | [962x1442](https://juniperfloralstudio.com/images/nadine/nadine-7.webp) |
+| 103 | nadine | Quiet palettes let the room speak. | [962x1442](https://juniperfloralstudio.com/images/nadine/nadine-7.jpg) |
 | 104 | nicole | Layers of ivory, cream, and something almost pink. | [1066x1600](https://juniperfloralstudio.com/images/nicole/nicole-16.jpg) |
 | 105 | shannon | This is what months of planning looks like on the day. | [1600x1066](https://juniperfloralstudio.com/images/shannon/shannon-8.jpg) |
 | 106 | hannah | Fresh from the cooler at 6am, in place by noon. | [1200x1600](https://juniperfloralstudio.com/images/hannah/hannah-6.jpg) |

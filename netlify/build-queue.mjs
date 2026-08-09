@@ -102,7 +102,10 @@ for (const dir of fs.readdirSync(IMAGES).sort()) {
   if (!fs.statSync(full).isDirectory()) continue;
   const photos = [];
   for (const f of fs.readdirSync(full).sort()) {
-    if (!/\.(jpe?g|webp)$/i.test(f)) continue;
+    // JPEG only — Instagram's publishing API rejects everything else
+    // ("JPEG is the only image format supported"). The .webp originals have
+    // .jpg twins alongside them for this reason; the site still serves the webp.
+    if (!/\.jpe?g$/i.test(f)) continue;
     const file = path.join(full, f);
     let dim = null;
     try { dim = dimensions(file); } catch { /* unreadable header — skip below */ }
