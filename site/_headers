@@ -1,0 +1,11 @@
+# Generated from netlify.toml — see note in _redirects.
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/studio/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+

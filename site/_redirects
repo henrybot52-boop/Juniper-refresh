@@ -1,0 +1,35 @@
+# Generated from netlify.toml. Netlify reads _redirects from the published
+# directory; a netlify.toml inside the publish dir is NOT applied on CLI
+# --dir deploys, which silently dropped every rule below.
+
+/journal  /blog/  301
+/journal/*  /blog/:splat  301
+/blog/austin-hill-country-wedding-flowers  /blog/austin-hill-country-wedding-flowers.html  200
+/pages/about-us  /about/  301
+/pages/about-us-1  /about/  301
+/pages/contact-us  /inquire/  301
+/pages/shop  /services/  301
+/pages/gallery-page  /portfolio/  301
+/pages/weddings  /services/  301
+/pages/jess-richard-collection  /portfolio/jess-rich/  301
+/pages/dani-shane-collection  /portfolio/danielle/  301
+/pages/gabby-matthew  /portfolio/gabby-matthew/  301
+/pages/rose-will  /portfolio/rose-will/  301
+/pages/florist-loft-shoot  /portfolio/  301
+/pages/bluffs-shoot  /portfolio/  301
+/pages/brantview-editorial  /portfolio/  301
+/pages/wainfleet-editorial  /portfolio/  301
+/pages/kate-jordan-1  /portfolio/  301
+/pages/rochelle-david  /portfolio/  301
+/pages/shangri-la-editorial  /portfolio/  301
+/pages/sarah-ian  /portfolio/  301
+/collections/all  /services/  301
+/collections/frontpage  /services/  301
+/collections/valentines-day  /inquire/  301
+/products/valentines-day-arrangement  /inquire/  301
+/products/subscription-service  /inquire/  301
+/products/large-valentines-day-arrangement  /inquire/  301
+/products/small-valentines-day-arrangement  /inquire/  301
+/products/large-valentines-day-arrangement-1  /inquire/  301
+/blogs/news  /blog/  301
+/blogs/juniper-blogs  /blog/  301
