@@ -124,6 +124,10 @@
 <script>
 const API='/.netlify/functions/queue-api';
 const PIN_API='/.netlify/functions/pinterest';
+// ?sandbox=1 — demo mode for Pinterest's standard-access review video only.
+// Pins go to Pinterest's API Sandbox (created for real there) and local
+// pinned-state is untouched. Normal use never sets this.
+const SANDBOX=new URLSearchParams(location.search).has('sandbox');
 let KEY=sessionStorage.getItem('studioKey')||'';
 let ITEMS=[], FILTER='pending', POOLS={}, BOARDS=[], PINNED={}, PIN_READY=false;
 // Approving moves an item out of the current filter, so the card used to vanish
@@ -309,7 +313,7 @@ function render(){
           pBtn.disabled=true; pBtn.textContent='Pinning…';
           const r=await fetch(PIN_API,{method:'POST',
             headers:{'x-studio-key':KEY,'content-type':'application/json'},
-            body:JSON.stringify({id:item.id,boardIds,title:pTitle.value,description:pDesc.value})
+            body:JSON.stringify({id:item.id,boardIds,title:pTitle.value,description:pDesc.value,sandbox:SANDBOX||undefined})
           }).then(x=>x.json());
           const fail=(msg)=>{ alert(msg); pBtn.disabled=false; pBtn.textContent='Pin to selected boards'; };
           if(r.error){ fail('Pinterest: '+r.error); return; }
@@ -333,6 +337,13 @@ function render(){
             } else {
               fail(bad.length+' board'+(bad.length===1?'':'s')+' failed:\n\n'+msgs.join('\n'));
             }
+            return;
+          }
+          if(SANDBOX){
+            // Sandbox pins aren't recorded locally — show the success state
+            // directly so the review video shows the completed flow.
+            box.className='pinned'; sum.textContent='Pinned ✓';
+            pBtn.disabled=true; pBtn.textContent='Pinned';
             return;
           }
           // Keep the card visible in the "To pin" queue so the green

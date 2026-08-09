@@ -62,8 +62,8 @@ async function getToken(store) {
   return d.access_token;
 }
 
-async function pin(token, body) {
-  const r = await fetch(`${API}/pins`, {
+async function pin(token, body, api = API) {
+  const r = await fetch(`${api}/pins`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -96,7 +96,7 @@ export default async (req) => {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return json({ error: 'bad-json' }, 400); }
-    const { id, boardIds, title, description } = body || {};
+    const { id, boardIds, title, description, sandbox } = body || {};
 
     const uploads = (await store.get('uploads', { type: 'json', consistency: 'strong' }).catch(() => null)) || [];
     const item = [...uploads, ...(queueData.queue || [])].find((q) => q.id === id);
@@ -110,21 +110,48 @@ export default async (req) => {
       ? `https://juniperfloralstudio.com/portfolio/${slug}/`
       : 'https://juniperfloralstudio.com/portfolio/';
 
+    // Sandbox mode exists for Pinterest's standard-access review: trial apps
+    // may only create pins against api-sandbox.pinterest.com, and the review
+    // asks for a video of the app doing exactly that. The pin is created for
+    // real in the sandbox (against a sandbox board of the same flagship name)
+    // and nothing is recorded locally, so normal state is untouched.
+    let pinTarget = async (boardId) => ({ api: API, boardId });
+    if (sandbox) {
+      const SB = 'https://api-sandbox.pinterest.com/v5';
+      // The sandbox has its own token (generated with the Sandbox environment
+      // selected on the developer page) — production tokens are refused there.
+      const sbToken = process.env.PINTEREST_SANDBOX_TOKEN || token;
+      const auth = { authorization: `Bearer ${sbToken}`, 'content-type': 'application/json' };
+      const existing = await fetch(`${SB}/boards?page_size=100`, { headers: auth }).then((r) => r.json()).catch(() => ({}));
+      let board = (existing.items || []).find((b) => /Austin/i.test(b.name));
+      if (!board) {
+        const made = await fetch(`${SB}/boards`, {
+          method: 'POST', headers: auth,
+          body: JSON.stringify({ name: 'Austin & Hill Country Wedding Flowers', description: 'Garden-style wedding florals by Juniper Floral Studio, Austin TX.' }),
+        }).then((r) => r.json());
+        if (!made.id) return json({ error: 'sandbox board creation failed: ' + (made.message || 'unknown') }, 502);
+        board = made;
+      }
+      pinTarget = async () => ({ api: SB, boardId: board.id, tokenOverride: sbToken });
+    }
+
     const results = [];
-    for (const boardId of boardIds) {
+    for (const requested of boardIds) {
       try {
-        const created = await pin(token, {
+        const { api, boardId, tokenOverride } = await pinTarget(requested);
+        const created = await pin(tokenOverride || token, {
           board_id: boardId,
           title: (title || 'Wedding florals by Juniper Floral Studio').slice(0, 100),
           description: (description || '').slice(0, 800),
           link,
           media_source: { source_type: 'image_url', url: item.image },
-        });
-        results.push({ boardId, ok: true, pinId: created.id });
+        }, api);
+        results.push({ boardId: requested, ok: true, pinId: created.id });
       } catch (e) {
-        results.push({ boardId, ok: false, error: e.message });
+        results.push({ boardId: requested, ok: false, error: e.message });
       }
     }
+    if (sandbox) return json({ ok: results.some((r) => r.ok), results, link, sandbox: true });
 
     // Record which boards this photo has already gone to, so the studio can grey
     // them out and the same photo isn't pinned twice to the same board.
