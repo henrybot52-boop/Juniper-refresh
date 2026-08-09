@@ -2,6 +2,9 @@
 # directory; a netlify.toml inside the publish dir is NOT applied on CLI
 # --dir deploys, which silently dropped every rule below.
 
+# uploaded photos -> the blob-backed photo function (Instagram fetches these)
+/p/*  /.netlify/functions/photo?id=:splat  200
+
 /journal  /blog/  301
 /journal/*  /blog/:splat  301
 /blog/austin-hill-country-wedding-flowers  /blog/austin-hill-country-wedding-flowers.html  200

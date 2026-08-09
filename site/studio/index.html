@@ -84,6 +84,21 @@
   </header>
   <main>
     <div class="banner" id="statusBanner"></div>
+
+    <div class="banner" id="uploadPanel">
+      <b>Add photos</b>
+      <p class="sub" style="margin:6px 0 12px">
+        Pick as many as you like — from Drive, your desktop, anywhere. They're resized and converted to JPEG
+        in the browser before uploading, so big originals are fine and the format is always one Instagram accepts.
+        New photos go to the front of the queue.
+      </p>
+      <div class="row" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp,image/heic" multiple hidden>
+        <button class="primary" id="pickPhotos">Choose photos</button>
+        <input id="photoLabel" placeholder="Label (e.g. Smith wedding)" style="padding:8px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:#fff;min-width:200px">
+        <span class="sub" id="uploadStatus"></span>
+      </div>
+    </div>
     <div class="filters" id="filters"></div>
     <div class="grid" id="grid"></div>
     <div class="empty" id="empty" hidden>Nothing here.</div>
@@ -93,7 +108,7 @@
 <script>
 const API='/.netlify/functions/queue-api';
 let KEY=sessionStorage.getItem('studioKey')||'';
-let ITEMS=[], FILTER='pending';
+let ITEMS=[], FILTER='pending', POOLS={};
 
 const api=(method,body)=>fetch(API,{method,
   headers:{'x-studio-key':KEY,'content-type':'application/json'},
@@ -111,7 +126,7 @@ function showLogin(msg){
 async function load(){
   try{
     const d=await api('GET');
-    ITEMS=d.items||[];
+    ITEMS=d.items||[]; POOLS=d.captionPools||{};
     document.getElementById('login').hidden=true;
     document.getElementById('app').hidden=false;
     const c=d.counts||{};
@@ -120,7 +135,7 @@ async function load(){
     const b=document.getElementById('statusBanner');
     b.className='banner'+(d.postingEnabled?' live':'');
     b.innerHTML=d.postingEnabled
-      ? '<b>Posting is live.</b> Approved posts go out Tuesdays and Fridays at 9am, one per slot.'
+      ? '<b>Posting is live.</b> One approved post goes out each morning at 9am (catch-up cadence — back to Tue/Fri after the first couple of weeks).'
       : '<b>Posting is paused.</b> Nothing will publish on schedule until <code>IG_POSTING_ENABLED</code> is set to <code>true</code> in Netlify. You can still approve here, and “Post now” still works.';
     renderFilters(c); render();
   }catch(e){
@@ -169,6 +184,32 @@ function render(){
 
     const note=document.createElement('div'); note.className='saved'; note.style.minHeight='16px';
     body.appendChild(note);
+
+    // Swap the caption for one written for what the photo actually shows.
+    // A flowers line under a bride-only portrait reads as careless.
+    if(item.status!=='posted'){
+      const pools=document.createElement('div');
+      pools.style.cssText='display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11.5px';
+      const lbl=document.createElement('span');
+      lbl.className='sub'; lbl.textContent='Caption for:';
+      pools.appendChild(lbl);
+      ['flowers','portrait','venue'].forEach(pool=>{
+        const b=document.createElement('button');
+        b.textContent=pool; b.style.cssText='padding:4px 10px;font-size:11.5px;flex:0 0 auto';
+        b.onclick=()=>{
+          const list=(POOLS[pool]||[]);
+          if(!list.length)return;
+          const tagBlock=(item.caption.split('\n\n')[1]||'');
+          const cur=ta.value.split('\n')[0];
+          let pick=list[Math.floor(Math.random()*list.length)];
+          for(let i=0;i<6 && pick===cur;i++) pick=list[Math.floor(Math.random()*list.length)];
+          ta.value=pick+(tagBlock?'\n\n'+tagBlock:'');
+          note.textContent='Swapped — press Save caption to keep it';
+        };
+        pools.appendChild(b);
+      });
+      body.appendChild(pools);
+    }
 
     if(item.status!=='posted'){
       const actions=document.createElement('div'); actions.className='actions';
@@ -235,6 +276,39 @@ document.getElementById('approveAll').onclick=async()=>{
   await api('POST',{action:'bulk',ids,status:'approved'});
   await load();
 };
+
+// ---- photo upload: resize + re-encode as JPEG in the browser ----
+async function toJpegDataUrl(file, maxDim=1440, quality=0.88){
+  const bmp=await createImageBitmap(file,{imageOrientation:'from-image'});
+  const scale=Math.min(1, maxDim/Math.max(bmp.width,bmp.height));
+  const w=Math.round(bmp.width*scale), h=Math.round(bmp.height*scale);
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  c.getContext('2d').drawImage(bmp,0,0,w,h);
+  bmp.close && bmp.close();
+  return c.toDataURL('image/jpeg', quality);
+}
+
+document.getElementById('pickPhotos').onclick=()=>document.getElementById('photoInput').click();
+document.getElementById('photoInput').addEventListener('change', async e=>{
+  const files=[...e.target.files]; e.target.value='';
+  if(!files.length)return;
+  const label=document.getElementById('photoLabel').value.trim();
+  const st=document.getElementById('uploadStatus');
+  let done=0, failed=[];
+  for(const f of files){
+    st.textContent=`Uploading ${done+1} of ${files.length}…`;
+    try{
+      const dataUrl=await toJpegDataUrl(f);
+      const r=await api('POST',{action:'addPhoto',dataUrl,label:label||'added'});
+      if(r.error) throw new Error(r.error);
+      done++;
+    }catch(err){ failed.push(f.name+' ('+err.message+')'); }
+  }
+  st.textContent=`${done} added${failed.length?' · '+failed.length+' failed':''}`;
+  if(failed.length) alert('These could not be added:\n\n'+failed.join('\n')+
+    '\n\nHEIC photos from an iPhone only convert in Safari — on other browsers, export them as JPEG first.');
+  FILTER='pending'; await load();
+});
 
 if(KEY) load(); else showLogin();
 </script>

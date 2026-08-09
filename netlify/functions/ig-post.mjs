@@ -102,5 +102,8 @@ export default async () => {
   }
 };
 
-// Tuesdays and Fridays, 9am Austin (CDT = UTC-5) -> 14:00 UTC.
-export const config = { schedule: '0 14 * * 2,5' };
+// CATCH-UP CADENCE: daily at 9am Austin (CDT = UTC-5) -> 14:00 UTC, to refill
+// the visible grid after the account was quiet. Revert to Tuesdays and Fridays
+// ('0 14 * * 2,5') once the first couple of weeks are through — a burst is
+// useful for a relaunch, a permanent daily cadence burns the queue.
+export const config = { schedule: '0 14 * * *' };

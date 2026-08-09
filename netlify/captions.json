@@ -1,0 +1,59 @@
+{
+  "_note": "Caption pools by what the photograph actually shows. The queue builder seeds every post from 'flowers', which is wrong for shots where no arrangement is visible — a bride alone, a first look, an empty room. The studio page lets you swap pools per photo. Voice throughout: short declaratives, sensory, sentence case, no emoji.",
+
+  "flowers": [
+    "Soft palettes, and just enough green to keep them honest.",
+    "The kind of arrangement that looks gathered rather than arranged.",
+    "Texture does the work here. The palette stays quiet.",
+    "We build them to look like they grew there.",
+    "Blush and ivory, with a little movement through the middle.",
+    "Restraint is the hardest part of this job. Also the best part.",
+    "Garden roses hold their shape all day. Worth every penny.",
+    "Loose, low, and a little wild. Our favourite brief.",
+    "White on white, softened at the edges.",
+    "Every stem placed by hand, the morning of.",
+    "Structure underneath, softness on top. That is the whole trick.",
+    "The greenery matters as much as the blooms.",
+    "Layers of ivory, cream, and something almost pink.",
+    "Depth comes from texture, not from adding more colour.",
+    "Fresh from the cooler at 6am, in place by noon.",
+    "Blooms chosen for how they age through the day, not just how they open.",
+    "Seasonal, local where we can, always at its peak.",
+    "Full without being heavy. That balance takes practice.",
+    "Neutrals are never actually neutral. There are a dozen shades in here.",
+    "A little asymmetry keeps things from feeling stiff."
+  ],
+
+  "portrait": [
+    "The quiet minute before everything begins.",
+    "Some moments you stay out of the way of.",
+    "This is the one they will frame.",
+    "Getting-ready light is the best light of the day.",
+    "A day that was months in the making.",
+    "The look you cannot plan for.",
+    "Standing still, for once.",
+    "Everyone in one place, which almost never happens twice.",
+    "The part of the day nobody rehearses.",
+    "Held together by the people in the room.",
+    "Married, and about ten seconds from being handed a drink.",
+    "You forget the schedule. You remember this.",
+    "Honoured to have had a small part in it.",
+    "The best days look easy from the outside.",
+    "Congratulations to two people who got it right."
+  ],
+
+  "venue": [
+    "The room before anyone arrives.",
+    "Long tables, low light, and room to linger.",
+    "Set, and waiting.",
+    "Candlelight does half the work.",
+    "Designed to frame the moment, never to compete with it.",
+    "Quiet palettes let the room speak.",
+    "It should feel like it belongs to the room, not like it arrived in a van.",
+    "A ceremony moment worth standing still for.",
+    "Greenery, candlelight, and not much else.",
+    "The details you notice on the second look.",
+    "Hours of setup for a room nobody sees empty but us.",
+    "Warm tones read beautifully once the sun drops."
+  ]
+}

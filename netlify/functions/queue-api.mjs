@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import queueData from '../ig-queue.json' with { type: 'json' };
+import captionPools from '../captions.json' with { type: 'json' };
 
 // Back end for the /studio approval page.
 //
@@ -81,7 +82,11 @@ export default async (req) => {
   // just went out, which would show it as still approved and invite a duplicate.
   const overrides = (await store.get('overrides', { type: 'json', consistency: 'strong' }).catch(() => null)) || {};
   const state = (await store.get('post-state', { type: 'json', consistency: 'strong' }).catch(() => null)) || { index: 0, history: [] };
-  const base = queueData.queue || [];
+  // Photos added through the studio live in Blobs and sit at the FRONT of the
+  // queue — freshly added work is what you want going out next, not something
+  // from two years ago.
+  const uploads = (await store.get('uploads', { type: 'json', consistency: 'strong' }).catch(() => null)) || [];
+  const base = [...uploads, ...(queueData.queue || [])];
   const postedIds = new Set((state.history || []).map((h) => h.id));
 
   const merge = () => base.map((q) => {
@@ -99,6 +104,7 @@ export default async (req) => {
     const items = merge();
     return json({
       items,
+      captionPools,
       postingEnabled: String(process.env.IG_POSTING_ENABLED).toLowerCase() === 'true',
       counts: ['posted', 'approved', 'pending', 'skipped'].reduce((a, s) => {
         a[s] = items.filter((i) => i.status === s).length; return a;
@@ -150,6 +156,41 @@ export default async (req) => {
       state.history = [...(state.history || []), { id, postId: body.postId || null, at: body.at || Date.now() }].slice(-200);
       await store.setJSON('post-state', state);
       return json({ ok: true, id });
+    }
+
+    // Store an uploaded photo and put it at the front of the queue. The browser
+    // has already resized it and re-encoded it as JPEG, so what arrives here is
+    // always a format Instagram accepts.
+    if (action === 'addPhoto') {
+      const { dataUrl, caption: cap, label } = body;
+      const m = /^data:image\/jpe?g;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+      if (!m) return json({ error: 'expected a JPEG data URL' }, 400);
+      const bytes = Buffer.from(m[1], 'base64');
+      if (bytes.length > 8 * 1024 * 1024) return json({ error: 'image too large' }, 413);
+
+      const pid = 'up-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      await getStore('photos').set(pid, bytes);
+
+      const entry = {
+        id: pid,
+        wedding: String(label || 'added').slice(0, 60),
+        image: `https://juniperfloralstudio.com/p/${pid}.jpg`,
+        size: '',
+        caption: cap || captionPools.flowers[0],
+        posted: false,
+      };
+      const list = [entry, ...uploads];
+      await store.setJSON('uploads', list);
+      return json({ ok: true, id: pid, image: entry.image });
+    }
+
+    // Remove an uploaded photo from the queue (does not touch posted history).
+    if (action === 'removePhoto') {
+      const list = uploads.filter((u) => u.id !== id);
+      if (list.length === uploads.length) return json({ error: 'unknown-id' }, 404);
+      await store.setJSON('uploads', list);
+      await getStore('photos').delete(id).catch(() => {});
+      return json({ ok: true });
     }
 
     if (action === 'postNow') {
