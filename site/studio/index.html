@@ -317,6 +317,13 @@ function render(){
           if(bad.length){
             // Pinterest repeats the same message per board; say it once, in English.
             const msgs=[...new Set(bad.map(b=>b.error||''))];
+            if(/Trial access may not create Pins/i.test(msgs.join(' '))){
+              fail('Pinterest is connected with full permission, but apps on "Trial access" '
+                +'cannot create real pins yet.\n\nFix: on the Pinterest developer page, press '
+                +'Upgrade access and submit the standard-access request. Nothing here needs to '
+                +'change — pinning starts working the moment Pinterest approves it.');
+              return;
+            }
             const scopes=msgs.join(' ').match(/Missing: \[([^\]]+)\]/);
             if(scopes){
               fail('Pinterest refused: the access token is missing permission to write.\n\n'
