@@ -95,6 +95,14 @@ const CAPTIONS = [
 // to be findable in Austin. Delete the line if you want the purer look.
 const TAGS = '\n\n#austinwedding #austinweddingflorist #hillcountrywedding #texaswedding #weddingflorals #juniperfloralstudio';
 
+// Per-photo captions written for the specific image (netlify/photo-captions.json,
+// keyed by queue id, stored without the tag block). Photos not in the file fall
+// back to the generic pool above — so new photos still get a caption, and the
+// bespoke ones survive a rebuild.
+const BESPOKE = fs.existsSync(path.join('netlify', 'photo-captions.json'))
+  ? JSON.parse(fs.readFileSync(path.join('netlify', 'photo-captions.json'), 'utf8'))
+  : {};
+
 // --- collect photos ----------------------------------------------------------
 const weddings = [];
 for (const dir of fs.readdirSync(IMAGES).sort()) {
@@ -129,12 +137,13 @@ for (;;) {
   for (const w of usable) {
     if (pass >= w.photos.length) continue;
     const p = w.photos[pass];
+    const id = `${w.wedding}-${pass + 1}`;
     queue.push({
-      id: `${w.wedding}-${pass + 1}`,
+      id,
       wedding: w.wedding,
       image: p.url,
       size: `${p.w}x${p.h}`,
-      caption: CAPTIONS[ci++ % CAPTIONS.length] + TAGS,
+      caption: (BESPOKE[id] || CAPTIONS[ci++ % CAPTIONS.length]) + TAGS,
       posted: false,
     });
     added++;
