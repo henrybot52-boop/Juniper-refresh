@@ -34,12 +34,38 @@ function keyOk(supplied) {
   return diff === 0;
 }
 
-const token = () => process.env.PINTEREST_ACCESS_TOKEN;
+// The OAuth flow (pinterest-oauth.mjs) stores a read+write token in Blobs;
+// prefer it over the env token, which Pinterest's quick generator only ever
+// issues read-only. Access tokens last ~30 days — refresh ahead of expiry so
+// the connection survives untouched.
+async function getToken(store) {
+  const saved = await store.get('pinterest-token', { type: 'json', consistency: 'strong' }).catch(() => null);
+  if (!saved) return process.env.PINTEREST_ACCESS_TOKEN || null;
+  if (Date.now() < saved.expiresAt - 5 * 60 * 1000) return saved.access_token;
+  if (!saved.refresh_token) return process.env.PINTEREST_ACCESS_TOKEN || null;
+  const r = await fetch(`${API}/oauth/token`, {
+    method: 'POST',
+    headers: {
+      authorization: 'Basic ' + Buffer.from(`${process.env.PINTEREST_APP_ID}:${process.env.PINTEREST_APP_SECRET}`).toString('base64'),
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: saved.refresh_token }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.access_token) return null; // refresh dead — reconnect via the OAuth link
+  await store.setJSON('pinterest-token', {
+    ...saved,
+    access_token: d.access_token,
+    refresh_token: d.refresh_token || saved.refresh_token,
+    expiresAt: Date.now() + (d.expires_in || 0) * 1000,
+  });
+  return d.access_token;
+}
 
-async function pin(body) {
+async function pin(token, body) {
   const r = await fetch(`${API}/pins`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
   const d = await r.json();
@@ -49,14 +75,15 @@ async function pin(body) {
 
 export default async (req) => {
   if (!keyOk(req.headers.get('x-studio-key'))) return json({ error: 'unauthorised' }, 401);
-  if (!token()) return json({ error: 'not-connected', hint: 'Set PINTEREST_ACCESS_TOKEN once trial access is granted.' }, 503);
 
   const store = getStore('instagram');
+  const token = await getToken(store);
+  if (!token) return json({ error: 'not-connected', hint: 'Connect via the pinterest-oauth link (or set PINTEREST_ACCESS_TOKEN).' }, 503);
 
   // list the account's boards so the studio can offer them as checkboxes —
   // no board names are hardcoded, whatever exists on the account shows up
   if (req.method === 'GET') {
-    const r = await fetch(`${API}/boards?page_size=100`, { headers: { authorization: `Bearer ${token()}` } });
+    const r = await fetch(`${API}/boards?page_size=100`, { headers: { authorization: `Bearer ${token}` } });
     const d = await r.json();
     if (!r.ok) return json({ error: d.message || 'could not list boards' }, 502);
     const pinned = (await store.get('pinned', { type: 'json', consistency: 'strong' }).catch(() => null)) || {};
@@ -86,7 +113,7 @@ export default async (req) => {
     const results = [];
     for (const boardId of boardIds) {
       try {
-        const created = await pin({
+        const created = await pin(token, {
           board_id: boardId,
           title: (title || 'Wedding florals by Juniper Floral Studio').slice(0, 100),
           description: (description || '').slice(0, 800),
