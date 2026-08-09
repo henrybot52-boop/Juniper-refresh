@@ -58,6 +58,23 @@ export default async () => {
       return new Response('container failed', { status: 500 });
     }
 
+    // 1b. a container isn't publishable the moment it's created — publishing
+    //     immediately fails with "Media ID is not available"
+    let ready = false;
+    for (let i = 0; i < 8 && !ready; i++) {
+      const s = await (await fetch(`${GRAPH}/${created.id}?fields=status_code&access_token=${token}`)).json();
+      if (s.status_code === 'FINISHED') { ready = true; break; }
+      if (s.status_code === 'ERROR') {
+        console.error('ig-post: Instagram could not process', item.image);
+        return new Response('image rejected', { status: 500 });
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    if (!ready) {
+      console.error('ig-post: container still processing, will retry next run');
+      return new Response('still processing', { status: 500 });
+    }
+
     // 2. publish it
     const pubRes = await fetch(`${GRAPH}/${IG_USER_ID}/media_publish`, {
       method: 'POST',

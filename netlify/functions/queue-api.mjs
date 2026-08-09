@@ -31,6 +31,20 @@ function keyOk(supplied) {
   return diff === 0;
 }
 
+// A container is not publishable the instant it is created, even though the
+// create call returns an id. Publishing straight away fails with "Media ID is
+// not available", so wait for Instagram to report the image processed.
+async function waitForContainer(id, token, tries = 8) {
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(`${GRAPH}/${id}?fields=status_code&access_token=${token}`);
+    const d = await r.json();
+    if (d.status_code === 'FINISHED') return;
+    if (d.status_code === 'ERROR') throw new Error('Instagram could not process this image.');
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  throw new Error('Instagram is still processing the image. Try again in a moment.');
+}
+
 async function publish(item, token) {
   // Instagram publishes JPEG and nothing else. Catch it here with a message a
   // human can act on, rather than letting Meta return an opaque media error.
@@ -45,6 +59,8 @@ async function publish(item, token) {
   });
   const created = await createRes.json();
   if (created.error || !created.id) throw new Error(created.error?.message || 'could not stage the image');
+
+  await waitForContainer(created.id, token);
 
   const pubRes = await fetch(`${GRAPH}/${IG_USER_ID}/media_publish`, {
     method: 'POST',
@@ -120,6 +136,18 @@ export default async (req) => {
       }
       await store.setJSON('overrides', overrides);
       return json({ ok: true, updated: n });
+    }
+
+    // Record something already published (posted by hand, or recovered after a
+    // publish that succeeded but whose bookkeeping didn't). Without this the
+    // item stays approved and the scheduler would post it a second time.
+    if (action === 'markPosted') {
+      const item = base.find((q) => q.id === id);
+      if (!item) return json({ error: 'unknown-id' }, 404);
+      if (postedIds.has(id)) return json({ ok: true, already: true });
+      state.history = [...(state.history || []), { id, postId: body.postId || null, at: body.at || Date.now() }].slice(-200);
+      await store.setJSON('post-state', state);
+      return json({ ok: true, id });
     }
 
     if (action === 'postNow') {
