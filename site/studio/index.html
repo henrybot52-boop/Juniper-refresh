@@ -168,7 +168,8 @@ async function load(){
     if(PIN_READY){
       b.innerHTML += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px">
         <b style="color:#c8232c">Pinterest connected</b> — ${BOARDS.length} boards.
-        Open <b>Pin to Pinterest</b> on any photo below to pin it. Tick several boards at once:
+        The <b>To pin</b> tab is your pinning queue: every photo not yet on a board,
+        including approved and already-posted ones. Tick several boards at once:
         the element, the palette, and Austin &amp; Hill Country.</div>`;
     }
     renderFilters(c); render();
@@ -181,9 +182,15 @@ async function load(){
 function renderFilters(c){
   const f=document.getElementById('filters');
   const defs=[['pending','To review'],['approved','Approved'],['posted','Posted'],['skipped','Skipped'],['all','All']];
+  // Pinning is separate from the Instagram lifecycle — a photo can be pinned
+  // before it's approved or after it's posted. "To pin" is the pinning queue:
+  // everything (bar skipped) that isn't on any board yet.
+  if(PIN_READY) defs.splice(3,0,['topin','To pin']);
   f.innerHTML='';
   defs.forEach(([k,label])=>{
-    const n=k==='all'?ITEMS.length:(c[k]||0);
+    const n=k==='all'?ITEMS.length
+      :k==='topin'?ITEMS.filter(i=>i.status!=='skipped'&&!(PINNED[i.id]||[]).length).length
+      :(c[k]||0);
     const b=document.createElement('button');
     b.textContent=`${label} (${n})`;
     if(k===FILTER)b.className='on';
@@ -192,7 +199,11 @@ function renderFilters(c){
   });
 }
 
-function visible(){ return FILTER==='all'?ITEMS:ITEMS.filter(i=>i.status===FILTER||STICKY.has(i.id)); }
+function visible(){
+  if(FILTER==='all') return ITEMS;
+  if(FILTER==='topin') return ITEMS.filter(i=>(i.status!=='skipped'&&!(PINNED[i.id]||[]).length)||STICKY.has(i.id));
+  return ITEMS.filter(i=>i.status===FILTER||STICKY.has(i.id));
+}
 
 function render(){
   const g=document.getElementById('grid'); g.innerHTML='';
@@ -243,9 +254,12 @@ function render(){
         pools.appendChild(b);
       });
       body.appendChild(pools);
+    }
 
-      // ---- Pinterest: same photo, several boards, its own search-first text ----
-      if(PIN_READY && BOARDS.length){
+    // ---- Pinterest: same photo, several boards, its own search-first text ----
+    // Deliberately outside the status check: pinning is independent of the
+    // Instagram lifecycle, so approved and already-posted photos stay pinnable.
+    if(PIN_READY && BOARDS.length){
         const already=new Set(PINNED[item.id]||[]);
         const box=document.createElement('details');
         box.style.cssText='border-top:1px solid var(--line);padding-top:10px';
@@ -314,11 +328,13 @@ function render(){
             }
             return;
           }
+          // Keep the card visible in the "To pin" queue so the green
+          // "Pinned to N boards" state is seen, rather than the card vanishing.
+          STICKY.add(item.id);
           await load();
         };
         box.appendChild(pBtn);
         body.appendChild(box);
-      }
     }
 
     if(item.status!=='posted'){
