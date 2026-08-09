@@ -110,6 +110,10 @@ const API='/.netlify/functions/queue-api';
 const PIN_API='/.netlify/functions/pinterest';
 let KEY=sessionStorage.getItem('studioKey')||'';
 let ITEMS=[], FILTER='pending', POOLS={}, BOARDS=[], PINNED={}, PIN_READY=false;
+// Approving moves an item out of the current filter, so the card used to vanish
+// with no confirmation — which looks exactly like a button that did nothing.
+// Items acted on stay visible until the filter changes or Refresh is pressed.
+let STICKY=new Set();
 
 const api=(method,body)=>fetch(API,{method,
   headers:{'x-studio-key':KEY,'content-type':'application/json'},
@@ -160,12 +164,12 @@ function renderFilters(c){
     const b=document.createElement('button');
     b.textContent=`${label} (${n})`;
     if(k===FILTER)b.className='on';
-    b.onclick=()=>{FILTER=k;renderFilters(c);render();};
+    b.onclick=()=>{FILTER=k;STICKY.clear();renderFilters(c);render();};
     f.appendChild(b);
   });
 }
 
-function visible(){ return FILTER==='all'?ITEMS:ITEMS.filter(i=>i.status===FILTER); }
+function visible(){ return FILTER==='all'?ITEMS:ITEMS.filter(i=>i.status===FILTER||STICKY.has(i.id)); }
 
 function render(){
   const g=document.getElementById('grid'); g.innerHTML='';
@@ -297,15 +301,23 @@ function render(){
       ok.onclick=async()=>{ ok.disabled=true;
         const next=item.status==='approved'?'pending':'approved';
         if(ta.value!==item.caption){ await api('POST',{action:'update',id:item.id,caption:ta.value}); item.caption=ta.value; }
-        await api('POST',{action:'update',id:item.id,status:next});
-        item.status=next; await load(); };
+        const res=await api('POST',{action:'update',id:item.id,status:next});
+        if(res && res.error){ alert('Could not save: '+res.error); ok.disabled=false; return; }
+        item.status=next; STICKY.add(item.id); await load();
+        // the card is still on screen — say plainly what happened
+        const card2=[...document.querySelectorAll('#grid .card')].find(c=>c.querySelector('img') && c.querySelector('img').src===item.image);
+        const n2=card2 && card2.querySelector('.saved');
+        if(n2){ n2.textContent = next==='approved' ? 'Approved — it will post on the next slot' : 'Moved back to review'; }
+      };
       actions.appendChild(ok);
 
       const skip=document.createElement('button');
       skip.textContent=item.status==='skipped'?'Unskip':'Skip';
       skip.onclick=async()=>{ skip.disabled=true;
-        await api('POST',{action:'update',id:item.id,status:item.status==='skipped'?'pending':'skipped'});
-        await load(); };
+        const next=item.status==='skipped'?'pending':'skipped';
+        const res=await api('POST',{action:'update',id:item.id,status:next});
+        if(res && res.error){ alert('Could not save: '+res.error); skip.disabled=false; return; }
+        STICKY.add(item.id); await load(); };
       actions.appendChild(skip);
 
       const now=document.createElement('button');
@@ -338,12 +350,14 @@ document.getElementById('go').onclick=async()=>{
   await load();
 };
 document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter')document.getElementById('go').click(); });
-document.getElementById('refresh').onclick=load;
+document.getElementById('refresh').onclick=()=>{STICKY.clear();load();};
 document.getElementById('approveAll').onclick=async()=>{
   const ids=visible().filter(i=>i.status!=='posted').map(i=>i.id);
   if(!ids.length)return;
   if(!confirm(`Approve ${ids.length} post${ids.length===1?'':'s'}?`))return;
-  await api('POST',{action:'bulk',ids,status:'approved'});
+  const res=await api('POST',{action:'bulk',ids,status:'approved'});
+  if(res && res.error){ alert('Could not save: '+res.error); return; }
+  ids.forEach(i=>STICKY.add(i));
   await load();
 };
 
