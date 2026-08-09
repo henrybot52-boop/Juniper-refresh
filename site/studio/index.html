@@ -297,12 +297,24 @@ function render(){
             headers:{'x-studio-key':KEY,'content-type':'application/json'},
             body:JSON.stringify({id:item.id,boardIds,title:pTitle.value,description:pDesc.value})
           }).then(x=>x.json());
-          if(r.error){ alert('Pinterest: '+r.error); pBtn.disabled=false; pBtn.textContent='Pin to selected boards'; }
-          else {
-            const bad=(r.results||[]).filter(x=>!x.ok);
-            if(bad.length) alert('Some boards failed:\n'+bad.map(b=>b.error).join('\n'));
-            await load();
+          const fail=(msg)=>{ alert(msg); pBtn.disabled=false; pBtn.textContent='Pin to selected boards'; };
+          if(r.error){ fail('Pinterest: '+r.error); return; }
+          const bad=(r.results||[]).filter(x=>!x.ok);
+          if(bad.length){
+            // Pinterest repeats the same message per board; say it once, in English.
+            const msgs=[...new Set(bad.map(b=>b.error||''))];
+            const scopes=msgs.join(' ').match(/Missing: \[([^\]]+)\]/);
+            if(scopes){
+              fail('Pinterest refused: the access token is missing permission to write.\n\n'
+                +'Missing scopes: '+scopes[1].replace(/'/g,'')+'\n\n'
+                +'The token needs regenerating with write scopes ticked. Reading boards works, '
+                +'writing does not, so nothing was pinned.');
+            } else {
+              fail(bad.length+' board'+(bad.length===1?'':'s')+' failed:\n\n'+msgs.join('\n'));
+            }
+            return;
           }
+          await load();
         };
         box.appendChild(pBtn);
         body.appendChild(box);
