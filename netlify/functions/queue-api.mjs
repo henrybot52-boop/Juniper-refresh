@@ -77,8 +77,10 @@ export default async (req) => {
   if (!keyOk(req.headers.get('x-studio-key'))) return json({ error: 'unauthorised' }, 401);
 
   const store = getStore('instagram');
-  const overrides = (await store.get('overrides', { type: 'json' }).catch(() => null)) || {};
-  const state = (await store.get('post-state', { type: 'json' }).catch(() => null)) || { index: 0, history: [] };
+  // Strong consistency: an eventually-consistent read here can miss a post that
+  // just went out, which would show it as still approved and invite a duplicate.
+  const overrides = (await store.get('overrides', { type: 'json', consistency: 'strong' }).catch(() => null)) || {};
+  const state = (await store.get('post-state', { type: 'json', consistency: 'strong' }).catch(() => null)) || { index: 0, history: [] };
   const base = queueData.queue || [];
   const postedIds = new Set((state.history || []).map((h) => h.id));
 

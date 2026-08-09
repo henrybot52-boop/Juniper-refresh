@@ -20,8 +20,9 @@ export default async () => {
   const store = getStore('instagram');
   const enabled = String(process.env.IG_POSTING_ENABLED).toLowerCase() === 'true';
 
-  const state = (await store.get('post-state', { type: 'json' }).catch(() => null)) || { index: 0, history: [] };
-  const overrides = (await store.get('overrides', { type: 'json' }).catch(() => null)) || {};
+  // Strong consistency so a stale read can't republish something already sent.
+  const state = (await store.get('post-state', { type: 'json', consistency: 'strong' }).catch(() => null)) || { index: 0, history: [] };
+  const overrides = (await store.get('overrides', { type: 'json', consistency: 'strong' }).catch(() => null)) || {};
   const queue = queueData.queue || [];
   const postedIds = new Set((state.history || []).map((h) => h.id));
 
