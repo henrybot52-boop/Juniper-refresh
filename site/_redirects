@@ -36,3 +36,15 @@
 /products/large-valentines-day-arrangement-1  /inquire/  301
 /blogs/news  /blog/  301
 /blogs/juniper-blogs  /blog/  301
+
+# Leftover Shopify paths still getting real traffic (found in 404 analytics):
+# /cart alone took 173 hits in 30 days. Catch-alls so we stop losing these.
+/cart                    /services/   301
+/cart/*                  /services/   301
+/products/*              /inquire/    301
+/collections/*           /services/   301
+/policies/privacy-policy /privacy/    301
+/policies/*              /privacy/    301
+/account                 /inquire/    301
+/account/*               /inquire/    301
+/search                  /portfolio/  301
