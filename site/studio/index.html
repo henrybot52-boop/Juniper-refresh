@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Studio — post approvals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --cream:#faf8f4; --charcoal:#2f2a26; --line:#e8e2d8; --gold:#8b7d5e;
+         --good:#4a7c59; --warn:#a8622a; --muted:#8a8177; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--charcoal);
+       font-family:'Manrope',system-ui,sans-serif;font-size:15px;line-height:1.6}
+  h1,h2{font-family:'Playfair Display',serif;font-weight:500;margin:0}
+  header{position:sticky;top:0;z-index:20;background:rgba(250,248,244,.96);
+         backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 20px}
+  .bar{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  h1{font-size:20px}
+  .sub{color:var(--muted);font-size:12.5px;letter-spacing:.04em}
+  .spacer{flex:1}
+  button{font-family:inherit;font-size:13px;padding:8px 14px;border-radius:999px;
+         border:1px solid var(--line);background:#fff;color:var(--charcoal);cursor:pointer;
+         transition:all .15s}
+  button:hover{border-color:var(--gold)}
+  button.primary{background:var(--charcoal);color:var(--cream);border-color:var(--charcoal)}
+  button.primary:hover{opacity:.85}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  main{max-width:1100px;margin:0 auto;padding:22px 20px 80px}
+  .pill{display:inline-block;padding:3px 11px;border-radius:999px;font-size:11.5px;
+        letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);background:#fff}
+  .pill.approved{color:var(--good);border-color:var(--good)}
+  .pill.skipped{color:var(--muted)}
+  .pill.posted{background:var(--charcoal);color:var(--cream);border-color:var(--charcoal)}
+  .pill.pending{color:var(--warn);border-color:var(--warn)}
+  .banner{border:1px solid var(--line);background:#fff;border-radius:14px;padding:14px 18px;margin-bottom:20px}
+  .banner.live{border-color:var(--good)}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+  .filters button.on{background:var(--charcoal);color:var(--cream);border-color:var(--charcoal)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;
+        display:flex;flex-direction:column}
+  .card.is-skipped{opacity:.5}
+  .card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:var(--line)}
+  .card .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;flex:1}
+  .meta{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);
+        letter-spacing:.05em;text-transform:uppercase}
+  textarea{width:100%;min-height:96px;font-family:inherit;font-size:13.5px;line-height:1.55;
+           border:1px solid var(--line);border-radius:10px;padding:10px 12px;resize:vertical;
+           background:var(--cream);color:var(--charcoal)}
+  textarea:focus{outline:1px solid var(--gold);border-color:var(--gold)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+  .actions button{flex:1;min-width:84px}
+  .saved{font-size:11.5px;color:var(--good)}
+  #login{max-width:340px;margin:16vh auto;text-align:center}
+  #login input{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:10px;
+               font-family:inherit;font-size:15px;background:#fff;margin:14px 0}
+  .err{color:#b3453a;font-size:13px;min-height:20px}
+  .empty{text-align:center;color:var(--muted);padding:60px 20px}
+  @media(max-width:600px){ .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h1>Studio</h1>
+  <p class="sub" style="margin-top:6px">Instagram post approvals</p>
+  <input id="pw" type="password" placeholder="Password" autocomplete="current-password">
+  <button class="primary" id="go" style="width:100%">Enter</button>
+  <p class="err" id="loginErr"></p>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <div class="bar">
+      <h1>Studio</h1>
+      <span class="sub" id="counts"></span>
+      <div class="spacer"></div>
+      <button id="approveAll">Approve all shown</button>
+      <button id="refresh">Refresh</button>
+    </div>
+  </header>
+  <main>
+    <div class="banner" id="statusBanner"></div>
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" hidden>Nothing here.</div>
+  </main>
+</div>
+
+<script>
+const API='/.netlify/functions/queue-api';
+let KEY=sessionStorage.getItem('studioKey')||'';
+let ITEMS=[], FILTER='pending';
+
+const api=(method,body)=>fetch(API,{method,
+  headers:{'x-studio-key':KEY,'content-type':'application/json'},
+  body:body?JSON.stringify(body):undefined}).then(async r=>{
+    if(r.status===401) throw new Error('unauthorised');
+    return r.json();
+  });
+
+function showLogin(msg){
+  document.getElementById('app').hidden=true;
+  document.getElementById('login').hidden=false;
+  document.getElementById('loginErr').textContent=msg||'';
+}
+
+async function load(){
+  try{
+    const d=await api('GET');
+    ITEMS=d.items||[];
+    document.getElementById('login').hidden=true;
+    document.getElementById('app').hidden=false;
+    const c=d.counts||{};
+    document.getElementById('counts').textContent=
+      `${c.posted||0} posted · ${c.approved||0} approved · ${c.pending||0} to review · ${c.skipped||0} skipped`;
+    const b=document.getElementById('statusBanner');
+    b.className='banner'+(d.postingEnabled?' live':'');
+    b.innerHTML=d.postingEnabled
+      ? '<b>Posting is live.</b> Approved posts go out Tuesdays and Fridays at 9am, one per slot.'
+      : '<b>Posting is paused.</b> Nothing will publish on schedule until <code>IG_POSTING_ENABLED</code> is set to <code>true</code> in Netlify. You can still approve here, and “Post now” still works.';
+    renderFilters(c); render();
+  }catch(e){
+    sessionStorage.removeItem('studioKey'); KEY='';
+    showLogin(e.message==='unauthorised'?'That password did not work.':'Could not load.');
+  }
+}
+
+function renderFilters(c){
+  const f=document.getElementById('filters');
+  const defs=[['pending','To review'],['approved','Approved'],['posted','Posted'],['skipped','Skipped'],['all','All']];
+  f.innerHTML='';
+  defs.forEach(([k,label])=>{
+    const n=k==='all'?ITEMS.length:(c[k]||0);
+    const b=document.createElement('button');
+    b.textContent=`${label} (${n})`;
+    if(k===FILTER)b.className='on';
+    b.onclick=()=>{FILTER=k;renderFilters(c);render();};
+    f.appendChild(b);
+  });
+}
+
+function visible(){ return FILTER==='all'?ITEMS:ITEMS.filter(i=>i.status===FILTER); }
+
+function render(){
+  const g=document.getElementById('grid'); g.innerHTML='';
+  const list=visible();
+  document.getElementById('empty').hidden=list.length>0;
+  list.forEach(item=>{
+    const card=document.createElement('div');
+    card.className='card'+(item.status==='skipped'?' is-skipped':'');
+
+    const img=document.createElement('img');
+    img.src=item.image; img.loading='lazy'; img.alt=item.wedding;
+    card.appendChild(img);
+
+    const body=document.createElement('div'); body.className='body';
+    const meta=document.createElement('div'); meta.className='meta';
+    meta.innerHTML=`<span class="pill ${item.status}">${item.status}</span><span>${item.wedding}</span>`;
+    body.appendChild(meta);
+
+    const ta=document.createElement('textarea');
+    ta.value=item.caption;
+    ta.disabled=item.status==='posted';
+    body.appendChild(ta);
+
+    const note=document.createElement('div'); note.className='saved'; note.style.minHeight='16px';
+    body.appendChild(note);
+
+    if(item.status!=='posted'){
+      const actions=document.createElement('div'); actions.className='actions';
+
+      const save=document.createElement('button');
+      save.textContent='Save caption';
+      save.onclick=async()=>{ save.disabled=true;
+        await api('POST',{action:'update',id:item.id,caption:ta.value});
+        item.caption=ta.value; note.textContent='Caption saved'; save.disabled=false;
+        setTimeout(()=>note.textContent='',2500); };
+      actions.appendChild(save);
+
+      const ok=document.createElement('button');
+      ok.className='primary'; ok.textContent=item.status==='approved'?'Approved ✓':'Approve';
+      ok.onclick=async()=>{ ok.disabled=true;
+        const next=item.status==='approved'?'pending':'approved';
+        if(ta.value!==item.caption){ await api('POST',{action:'update',id:item.id,caption:ta.value}); item.caption=ta.value; }
+        await api('POST',{action:'update',id:item.id,status:next});
+        item.status=next; await load(); };
+      actions.appendChild(ok);
+
+      const skip=document.createElement('button');
+      skip.textContent=item.status==='skipped'?'Unskip':'Skip';
+      skip.onclick=async()=>{ skip.disabled=true;
+        await api('POST',{action:'update',id:item.id,status:item.status==='skipped'?'pending':'skipped'});
+        await load(); };
+      actions.appendChild(skip);
+
+      const now=document.createElement('button');
+      now.textContent='Post now';
+      now.onclick=async()=>{
+        if(!confirm('Post this to Instagram right now?\n\nThis publishes immediately and cannot be undone from here.'))return;
+        now.disabled=true; now.textContent='Posting…';
+        if(ta.value!==item.caption){ await api('POST',{action:'update',id:item.id,caption:ta.value}); }
+        const r=await api('POST',{action:'postNow',id:item.id});
+        if(r.error){ alert('Instagram refused it: '+r.error); now.disabled=false; now.textContent='Post now'; }
+        else { await load(); }
+      };
+      actions.appendChild(now);
+
+      body.appendChild(actions);
+    } else if(item.postedAt){
+      const when=document.createElement('div'); when.className='sub';
+      when.textContent='Posted '+new Date(item.postedAt).toLocaleDateString();
+      body.appendChild(when);
+    }
+
+    card.appendChild(body); g.appendChild(card);
+  });
+}
+
+document.getElementById('go').onclick=async()=>{
+  KEY=document.getElementById('pw').value.trim();
+  if(!KEY)return;
+  sessionStorage.setItem('studioKey',KEY);
+  await load();
+};
+document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter')document.getElementById('go').click(); });
+document.getElementById('refresh').onclick=load;
+document.getElementById('approveAll').onclick=async()=>{
+  const ids=visible().filter(i=>i.status!=='posted').map(i=>i.id);
+  if(!ids.length)return;
+  if(!confirm(`Approve ${ids.length} post${ids.length===1?'':'s'}?`))return;
+  await api('POST',{action:'bulk',ids,status:'approved'});
+  await load();
+};
+
+if(KEY) load(); else showLogin();
+</script>
+</body>
+</html>

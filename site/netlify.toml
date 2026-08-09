@@ -406,3 +406,10 @@ force = false
   [redirects.conditions]
 
   [redirects.headers]
+
+[[headers]]
+for = "/studio/*"
+
+  [headers.values]
+  X-Robots-Tag = "noindex, nofollow"
+  Cache-Control = "no-store"

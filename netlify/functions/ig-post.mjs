@@ -21,17 +21,23 @@ export default async () => {
   const enabled = String(process.env.IG_POSTING_ENABLED).toLowerCase() === 'true';
 
   const state = (await store.get('post-state', { type: 'json' }).catch(() => null)) || { index: 0, history: [] };
+  const overrides = (await store.get('overrides', { type: 'json' }).catch(() => null)) || {};
   const queue = queueData.queue || [];
+  const postedIds = new Set((state.history || []).map((h) => h.id));
 
-  if (state.index >= queue.length) {
-    console.log('ig-post: queue finished — nothing left to post');
-    return new Response('queue empty', { status: 200 });
+  // Only publish what someone approved on the /studio page, in queue order.
+  // Nothing goes out on the strength of being next in line alone.
+  const item = queue
+    .filter((q) => !postedIds.has(q.id) && overrides[q.id]?.status === 'approved')
+    .map((q) => ({ ...q, caption: overrides[q.id]?.caption ?? q.caption }))[0];
+
+  if (!item) {
+    console.log('ig-post: nothing approved and waiting — approve posts at /studio');
+    return new Response('nothing approved', { status: 200 });
   }
 
-  const item = queue[state.index];
-
   if (!enabled) {
-    console.log(`ig-post DRY RUN (IG_POSTING_ENABLED not set): would post #${state.index + 1}/${queue.length} ` +
+    console.log(`ig-post DRY RUN (IG_POSTING_ENABLED not set): would post approved item ` +
       `${item.id} -> ${item.image}\ncaption: ${item.caption.split('\n')[0]}`);
     return new Response(`dry-run: would post ${item.id}`, { status: 200 });
   }
@@ -65,12 +71,12 @@ export default async () => {
       return new Response('publish failed', { status: 500 });
     }
 
-    // 3. only advance once publishing actually succeeded
-    state.history = [...(state.history || []), { id: item.id, postId: published.id, at: Date.now() }].slice(-100);
-    state.index += 1;
+    // 3. only record it once publishing actually succeeded, so a failure
+    //    leaves the item approved and it retries on the next run
+    state.history = [...(state.history || []), { id: item.id, postId: published.id, at: Date.now() }].slice(-200);
     await store.setJSON('post-state', state);
 
-    console.log(`ig-post: published ${item.id} as ${published.id} (${state.index}/${queue.length} done)`);
+    console.log(`ig-post: published ${item.id} as ${published.id}`);
     return new Response(`posted ${item.id}`, { status: 200 });
   } catch (e) {
     console.error('ig-post: error', e.message);
