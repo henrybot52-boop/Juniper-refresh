@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>The Look Book | Juniper Floral Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; }
+      body {
+        font-family: 'Manrope', system-ui, sans-serif;
+        background: #262220; color: #faf8f4;
+        display: flex; flex-direction: column; overflow: hidden;
+      }
+      header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 22px; flex: 0 0 auto;
+      }
+      header a.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: #faf8f4; }
+      header img { height: 40px; filter: brightness(0) invert(1); opacity: .9; }
+      header .title { font-family: 'Playfair Display', serif; font-size: 1.05rem; letter-spacing: .02em; }
+      header .tools { display: flex; gap: 10px; }
+      header .tools a, header .tools button {
+        background: none; border: 1px solid rgba(250,248,244,.35); color: #faf8f4;
+        border-radius: 999px; padding: 7px 16px; font-family: inherit; font-size: .72rem;
+        letter-spacing: .16em; text-transform: uppercase; cursor: pointer; text-decoration: none;
+        transition: border-color .2s, color .2s;
+      }
+      header .tools a:hover, header .tools button:hover { border-color: #c3a071; color: #c3a071; }
+
+      #stage { flex: 1 1 auto; position: relative; display: flex; align-items: center; justify-content: center; padding: 8px 64px 8px; min-height: 0; }
+      #book { touch-action: pan-y; }
+      #book img { user-select: none; -webkit-user-drag: none; }
+
+      .nav-arrow {
+        position: absolute; top: 50%; transform: translateY(-50%);
+        background: none; border: none; color: rgba(250,248,244,.65); cursor: pointer;
+        font-size: 2.4rem; line-height: 1; padding: 18px 14px; z-index: 5;
+        transition: color .2s;
+      }
+      .nav-arrow:hover { color: #c3a071; }
+      #prev { left: 8px; } #next { right: 8px; }
+
+      footer {
+        flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+        gap: 18px; padding: 12px; font-size: .78rem; color: rgba(250,248,244,.65);
+      }
+      footer .pageno { letter-spacing: .12em; }
+      footer a { color: rgba(250,248,244,.65); }
+      footer a:hover { color: #c3a071; }
+
+      #status {
+        position: absolute; inset: 0; display: flex; flex-direction: column; gap: 18px;
+        align-items: center; justify-content: center; text-align: center; padding: 24px;
+      }
+      #status .bar { width: min(320px, 70vw); height: 2px; background: rgba(250,248,244,.15); }
+      #status .bar i { display: block; height: 100%; width: 0; background: #c3a071; transition: width .3s; }
+      #status h1 { font-family: 'Playfair Display', serif; font-weight: 500; font-size: 1.5rem; }
+      #status p { color: rgba(250,248,244,.7); line-height: 1.7; max-width: 30rem; }
+      #status a { color: #c3a071; }
+      @media (max-width: 700px) {
+        #stage { padding: 4px 4px; }
+        .nav-arrow { display: none; }
+        header .tools a.dl { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">
+        <img src="/images/juniper-logo.png" alt="Juniper Floral Studio" />
+        <span class="title">The Look Book</span>
+      </a>
+      <div class="tools">
+        <a class="dl" href="/lookbook/juniper-look-book.pdf" download>Download</a>
+        <button id="fs">Fullscreen</button>
+      </div>
+    </header>
+
+    <div id="stage">
+      <button class="nav-arrow" id="prev" aria-label="Previous page">‹</button>
+      <div id="book"></div>
+      <button class="nav-arrow" id="next" aria-label="Next page">›</button>
+      <div id="status">
+        <h1>Opening the look book</h1>
+        <div class="bar"><i id="prog"></i></div>
+      </div>
+    </div>
+
+    <footer>
+      <span class="pageno" id="pageno"></span>
+      <a href="/inquire/">Start an enquiry</a>
+    </footer>
+
+    <script src="/assets/vendor/pdf.min.js"></script>
+    <script src="/assets/vendor/page-flip.browser.js"></script>
+    <script>
+      (async function () {
+        const PDF = '/lookbook/juniper-look-book.pdf';
+        const status = document.getElementById('status');
+        const prog = document.getElementById('prog');
+        const fail = (msg) => {
+          status.innerHTML = '<h1>Almost here</h1><p>' + msg + '</p>';
+        };
+
+        try {
+          const head = await fetch(PDF, { method: 'HEAD' });
+          if (!head.ok) throw new Error('missing');
+        } catch (e) {
+          return fail(
+            'The look book is being prepared — your copy will arrive by email shortly. ' +
+            'In the meantime, our <a href="/portfolio/">portfolio</a> has every wedding in full.'
+          );
+        }
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/vendor/pdf.worker.min.js';
+        const doc = await pdfjsLib.getDocument(PDF).promise.catch(() => null);
+        if (!doc) return fail('The look book could not be opened. <a href="' + PDF + '" download>Download it instead</a>.');
+
+        // Render each page once, at a size that stays crisp in fullscreen.
+        const pages = [];
+        let pw = 0, ph = 0;
+        for (let i = 1; i <= doc.numPages; i++) {
+          const page = await doc.getPage(i);
+          const base = page.getViewport({ scale: 1 });
+          const scale = 1400 / base.height;
+          const vp = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width = vp.width; canvas.height = vp.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+          pages.push(canvas.toDataURL('image/jpeg', 0.88));
+          if (i === 1) { pw = vp.width; ph = vp.height; }
+          prog.style.width = Math.round((i / doc.numPages) * 100) + '%';
+        }
+        status.remove();
+
+        // Fit the book inside the stage: two pages side by side on wide
+        // screens, one page on narrow ones. The container gets explicit
+        // dimensions — stretch mode fills whatever the parent allows, which
+        // otherwise overflows the header and footer.
+        const stage = document.getElementById('stage');
+        const bookEl = document.getElementById('book');
+        const portrait = () => stage.clientWidth < 700;
+        const fit = () => {
+          const fitH = stage.clientHeight - 12;
+          const across = portrait() ? 1 : 2;
+          const fitW = (stage.clientWidth - 16) / across;
+          const k = Math.min(fitH / ph, fitW / pw, 1);
+          bookEl.style.width = Math.round(pw * k * across) + 'px';
+          bookEl.style.height = Math.round(ph * k) + 'px';
+        };
+        fit();
+
+        const flip = new St.PageFlip(bookEl, {
+          width: pw, height: ph,
+          size: 'stretch',
+          minWidth: 150, maxWidth: 1400, minHeight: 200, maxHeight: 1866,
+          showCover: true, maxShadowOpacity: 0.35, usePortrait: true,
+          mobileScrollSupport: false,
+        });
+        flip.loadFromImages(pages);
+        window.addEventListener('resize', fit);
+
+        const pageno = document.getElementById('pageno');
+        const show = () => {
+          const p = flip.getCurrentPageIndex() + 1;
+          pageno.textContent = 'Page ' + p + ' of ' + pages.length;
+        };
+        show();
+        flip.on('flip', show);
+
+        document.getElementById('prev').onclick = () => flip.flipPrev();
+        document.getElementById('next').onclick = () => flip.flipNext();
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowLeft') flip.flipPrev();
+          if (e.key === 'ArrowRight') flip.flipNext();
+        });
+        document.getElementById('fs').onclick = () => {
+          if (document.fullscreenElement) document.exitFullscreen();
+          else document.documentElement.requestFullscreen().catch(() => {});
+        };
+      })();
+    </script>
+  </body>
+</html>

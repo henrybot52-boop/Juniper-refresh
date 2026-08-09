@@ -11,3 +11,6 @@
 
 /lookbook/thank-you/*
   X-Robots-Tag: noindex, nofollow
+
+/lookbook/view/*
+  X-Robots-Tag: noindex, nofollow
