@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Look Book | Juniper Floral Studio</title>
+    <meta name="description" content="Download the Juniper Floral Studio look book — garden-style wedding florals, palettes and installations for Austin and the Texas Hill Country." />
+    <meta property="og:title" content="The Look Book | Juniper Floral Studio" />
+    <meta property="og:description" content="Garden-style wedding florals, palettes and installations. Download the look book." />
+    <meta property="og:image" content="/images/kathrine-rizzi/kathrine-rizzi-5.jpg" />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/site.css" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .lb-hero { display: grid; gap: 3rem; align-items: center; }
+      @media (min-width: 900px) { .lb-hero { grid-template-columns: 1.05fr .95fr; gap: 4rem; } }
+      .lb-cover { position: relative; }
+      .lb-cover img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 2px;
+        box-shadow: 0 30px 60px -20px rgba(47,42,38,.35); }
+      .lb-form label { display: block; font-size: .72rem; letter-spacing: .2em; text-transform: uppercase;
+        color: #2f2a26; margin-bottom: .5rem; }
+      .lb-form input, .lb-form select { width: 100%; padding: .8rem 1rem; border: 1px solid #e8e2d8;
+        border-radius: 2px; background: #fff; font-family: 'Manrope', sans-serif; font-size: .95rem;
+        color: #2f2a26; margin-bottom: 1.25rem; }
+      .lb-form input:focus, .lb-form select:focus { outline: 1px solid #8b7d5e; border-color: #8b7d5e; }
+      .lb-form button { width: 100%; background: #2f2a26; color: #faf8f4; border: none; padding: 1rem;
+        font-family: 'Manrope', sans-serif; font-size: .75rem; letter-spacing: .2em; text-transform: uppercase;
+        cursor: pointer; transition: background .2s; }
+      .lb-form button:hover { background: #8b7d5e; }
+      .lb-list { list-style: none; padding: 0; margin: 1.5rem 0 0; }
+      .lb-list li { padding: .4rem 0 .4rem 1.4rem; position: relative; font-size: .95rem; line-height: 1.6; }
+      .lb-list li::before { content: '—'; position: absolute; left: 0; color: #8b7d5e; }
+      .lb-note { font-size: .8rem; color: #8a8177; line-height: 1.6; margin-top: 1rem; }
+    </style>
+  </head>
+  <body class="bg-cream">
+    <header class="fixed top-0 inset-x-0 z-50 nav-blur">
+      <nav class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="/"><img src="/images/juniper-logo.png" alt="Juniper Floral Studio" class="h-12" /></a>
+        <button class="md:hidden border border-deep/30 rounded-full px-4 py-2 text-sm" data-nav-toggle aria-label="Toggle navigation">Menu</button>
+        <div class="hidden md:flex md:items-center md:gap-8 text-sm uppercase tracking-[0.2em]">
+          <a href="/" class="text-deep hover:text-gold">Home</a>
+          <a href="/blog/" class="text-deep hover:text-gold">Journal</a>
+          <a href="/about/" class="text-deep hover:text-gold">About</a>
+          <a href="/portfolio/" class="text-deep hover:text-gold">Portfolio</a>
+          <a href="/services/" class="text-deep hover:text-gold">Services</a>
+          <a href="/inquire/" class="text-deep hover:text-gold">Inquire</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="pt-32 pb-20 px-6">
+      <div class="max-w-6xl mx-auto lb-hero">
+        <div class="lb-cover">
+          <img src="/images/kathrine-rizzi/kathrine-rizzi-5.jpg" alt="A Juniper Floral Studio reception installation" />
+        </div>
+
+        <div>
+          <p class="text-xs uppercase tracking-[0.25em] text-gold">The Look Book</p>
+          <h1 class="font-serif text-4xl md:text-5xl mt-4 leading-tight">
+            Our work, gathered in one place
+          </h1>
+          <p class="mt-5 text-lg" style="line-height:1.7">
+            A closer look at how we design — the palettes we return to, the installations we love building,
+            and the weddings that shaped them. Made for couples who are still deciding what their day should
+            feel like.
+          </p>
+
+          <ul class="lb-list">
+            <li>Full weddings, start to finish, with the thinking behind them</li>
+            <li>Palettes that hold up in Central Texas light</li>
+            <li>Ceremony installations, tablescapes and bouquets</li>
+            <li>What to expect on budget, timing and process</li>
+          </ul>
+
+          <form
+            class="lb-form mt-10"
+            name="lookbook"
+            method="POST"
+            action="/lookbook/thank-you/"
+            data-netlify="true"
+            data-netlify-honeypot="bot-field"
+          >
+            <input type="hidden" name="form-name" value="lookbook" />
+            <p class="hidden"><label>Leave this empty: <input name="bot-field" /></label></p>
+
+            <label for="lb-name">Name</label>
+            <input id="lb-name" name="name" type="text" required autocomplete="name" />
+
+            <label for="lb-email">Email</label>
+            <input id="lb-email" name="email" type="email" required autocomplete="email" />
+
+            <label for="lb-date">Event date <span style="text-transform:none;letter-spacing:0;color:#8a8177">(if you have one)</span></label>
+            <input id="lb-date" name="event-date" type="date" />
+
+            <button type="submit">Send me the look book</button>
+          </form>
+
+          <p class="lb-note">
+            We'll send the look book straight to your inbox. We'll only email you about your own enquiry —
+            no lists, no forwarding your details on. See our
+            <a href="/privacy/" style="color:#8b7d5e;text-decoration:underline">privacy policy</a>.
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="bg-cream border-t border-gold/30">
+      <div class="max-w-6xl mx-auto px-6 py-10 grid md:grid-cols-3 gap-6">
+        <div>
+          <p class="font-serif text-xl">Juniper Floral Studio</p>
+          <p class="mt-4 footer-text">Garden-style floral design for weddings and events.</p>
+        </div>
+        <div>
+          <p class="text-sm uppercase tracking-[0.2em] text-gold">Contact</p>
+          <p class="mt-3 footer-text"><a href="mailto:hello@juniperfloralstudio.com">hello@juniperfloralstudio.com</a></p>
+          <p class="footer-text"><a href="tel:+17373954520">(737) 395-4520</a></p>
+          <p class="footer-text">4800 Steiner Ranch Blvd #20104, Austin, TX</p>
+        </div>
+        <div>
+          <p class="text-sm uppercase tracking-[0.2em] text-gold">Social</p>
+          <div class="mt-3 flex flex-col gap-2 footer-text">
+            <a href="https://www.instagram.com/juniperfloralstudio" class="hover:text-gold">Instagram</a>
+            <a href="https://www.pinterest.com/Juniperfloralstudio" class="hover:text-gold">Pinterest</a>
+          </div>
+        </div>
+      </div>
+      <div class="max-w-6xl mx-auto px-6 pb-8">
+        <p class="footer-text"><a href="/privacy/" class="hover:text-gold">Privacy Policy</a></p>
+      </div>
+    </footer>
+
+    <script src="/scripts/site.js"></script>
+  </body>
+</html>

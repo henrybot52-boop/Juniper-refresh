@@ -9,3 +9,5 @@
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
 
+/lookbook/thank-you/*
+  X-Robots-Tag: noindex, nofollow
