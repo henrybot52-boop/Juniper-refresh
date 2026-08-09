@@ -124,14 +124,18 @@ export default async (req) => {
       const auth = { authorization: `Bearer ${sbToken}`, 'content-type': 'application/json' };
       const existing = await fetch(`${SB}/boards?page_size=100`, { headers: auth }).then((r) => r.json()).catch(() => ({}));
       let board = (existing.items || []).find((b) => /Austin/i.test(b.name));
-      if (!board) {
+      // Board names collide with the production account's namespace, so if the
+      // flagship name is taken there, fall back to a suffixed demo name.
+      const names = ['Austin & Hill Country Wedding Flowers', 'Austin and Hill Country Wedding Flowers — Juniper'];
+      for (const name of names) {
+        if (board) break;
         const made = await fetch(`${SB}/boards`, {
           method: 'POST', headers: auth,
-          body: JSON.stringify({ name: 'Austin & Hill Country Wedding Flowers', description: 'Garden-style wedding florals by Juniper Floral Studio, Austin TX.' }),
+          body: JSON.stringify({ name, description: 'Garden-style wedding florals by Juniper Floral Studio, Austin TX.' }),
         }).then((r) => r.json());
-        if (!made.id) return json({ error: 'sandbox board creation failed: ' + (made.message || 'unknown') }, 502);
-        board = made;
+        if (made.id) board = made;
       }
+      if (!board) return json({ error: 'sandbox board unavailable' }, 502);
       pinTarget = async () => ({ api: SB, boardId: board.id, tokenOverride: sbToken });
     }
 
