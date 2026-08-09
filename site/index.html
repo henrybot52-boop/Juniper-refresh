@@ -318,7 +318,7 @@
     <!-- Instagram row -->
     <div class="max-w-5xl mx-auto px-6 mb-16">
       <p class="text-center text-xs tracking-[0.2em] uppercase text-gold mb-8"><a href="https://www.instagram.com/juniperfloralstudio/" target="_blank" rel="noopener" class="hover:opacity-70 transition-opacity">Follow Along — @juniperfloralstudio</a></p>
-      <div class="flex justify-center gap-4 md:gap-6 flex-wrap">
+      <div class="flex justify-center gap-4 md:gap-6 flex-wrap" id="ig-feed" data-ig-fallback="1">
         <a href="https://www.instagram.com/juniperfloralstudio/" target="_blank" rel="noopener" aria-label="Follow @juniperfloralstudio on Instagram" class="block hover:opacity-80 transition-opacity"><img src="/images/shannon/shannon-1.jpg" alt="Juniper Floral Studio floral design" class="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover" loading="lazy"></a>
         <a href="https://www.instagram.com/juniperfloralstudio/" target="_blank" rel="noopener" aria-label="Follow @juniperfloralstudio on Instagram" class="block hover:opacity-80 transition-opacity"><img src="/images/felicia/felicia-1.jpg" alt="Juniper Floral Studio floral design" class="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover" loading="lazy"></a>
         <a href="https://www.instagram.com/juniperfloralstudio/" target="_blank" rel="noopener" aria-label="Follow @juniperfloralstudio on Instagram" class="block hover:opacity-80 transition-opacity"><img src="/images/susan/susan-4.jpg" alt="Juniper Floral Studio floral design" class="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover" loading="lazy"></a>
@@ -396,5 +396,39 @@
     });
   </script>
   <script src="/scripts/site.js" defer></script>
+
+  <!-- Instagram feed: replaces the fallback photos with live posts when available -->
+  <script>
+  (function(){
+    var row=document.getElementById('ig-feed');
+    if(!row) return;
+    var fallback=row.innerHTML;                      // keep the curated photos to fall back to
+    fetch('/.netlify/functions/instagram').then(function(r){return r.json();}).then(function(d){
+      if(!d || !d.posts || !d.posts.length) return;  // no posts -> keep fallback
+      var frag=document.createDocumentFragment(), total=d.posts.length, failed=0;
+      d.posts.forEach(function(p){
+        var a=document.createElement('a');
+        a.href=p.permalink; a.target='_blank'; a.rel='noopener';
+        a.className='block hover:opacity-80 transition-opacity';
+        a.setAttribute('aria-label', p.caption ? ('Instagram post: '+p.caption) : 'View post on Instagram');
+        if(p.caption) a.title=p.caption;
+        var img=document.createElement('img');
+        img.src=p.image; img.loading='lazy';
+        img.alt=p.caption||'Juniper Floral Studio on Instagram';
+        img.className='w-16 h-16 md:w-20 md:h-20 rounded-full object-cover';
+        // Instagram CDN links are signed and can expire. Drop a single broken
+        // circle, but if most of them fail, put the curated photos back rather
+        // than leaving a gap in the page.
+        img.onerror=function(){
+          failed++;
+          if(a.parentNode) a.parentNode.removeChild(a);
+          if(failed > total/2){ row.innerHTML=fallback; row.setAttribute('data-ig-fallback','1'); }
+        };
+        a.appendChild(img); frag.appendChild(a);
+      });
+      row.innerHTML=''; row.removeAttribute('data-ig-fallback'); row.appendChild(frag);
+    }).catch(function(){ /* leave the fallback photos in place */ });
+  })();
+  </script>
 </body>
 </html>
