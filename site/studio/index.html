@@ -107,8 +107,9 @@
 
 <script>
 const API='/.netlify/functions/queue-api';
+const PIN_API='/.netlify/functions/pinterest';
 let KEY=sessionStorage.getItem('studioKey')||'';
-let ITEMS=[], FILTER='pending', POOLS={};
+let ITEMS=[], FILTER='pending', POOLS={}, BOARDS=[], PINNED={}, PIN_READY=false;
 
 const api=(method,body)=>fetch(API,{method,
   headers:{'x-studio-key':KEY,'content-type':'application/json'},
@@ -137,6 +138,12 @@ async function load(){
     b.innerHTML=d.postingEnabled
       ? '<b>Posting is live.</b> One approved post goes out each morning at 9am (catch-up cadence — back to Tue/Fri after the first couple of weeks).'
       : '<b>Posting is paused.</b> Nothing will publish on schedule until <code>IG_POSTING_ENABLED</code> is set to <code>true</code> in Netlify. You can still approve here, and “Post now” still works.';
+    // Pinterest is optional — the panel only appears once a token is set
+    try{
+      const pr=await fetch(PIN_API,{headers:{'x-studio-key':KEY}}).then(r=>r.json());
+      if(pr.boards){ BOARDS=pr.boards; PINNED=pr.pinned||{}; PIN_READY=true; }
+      else { PIN_READY=false; }
+    }catch(_){ PIN_READY=false; }
     renderFilters(c); render();
   }catch(e){
     sessionStorage.removeItem('studioKey'); KEY='';
@@ -209,6 +216,69 @@ function render(){
         pools.appendChild(b);
       });
       body.appendChild(pools);
+
+      // ---- Pinterest: same photo, several boards, its own search-first text ----
+      if(PIN_READY && BOARDS.length){
+        const already=new Set(PINNED[item.id]||[]);
+        const box=document.createElement('details');
+        box.style.cssText='border-top:1px solid var(--line);padding-top:10px';
+        const sum=document.createElement('summary');
+        sum.style.cssText='cursor:pointer;font-size:12px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase';
+        sum.textContent=already.size?`Pinterest — pinned to ${already.size}`:'Pinterest — pin this';
+        box.appendChild(sum);
+
+        const picks=document.createElement('div');
+        picks.style.cssText='display:flex;flex-direction:column;gap:4px;margin:10px 0;max-height:150px;overflow:auto';
+        const checks=[];
+        BOARDS.forEach(b=>{
+          const l=document.createElement('label');
+          l.style.cssText='display:flex;gap:8px;align-items:center;font-size:12.5px;text-transform:none;letter-spacing:0';
+          const cb=document.createElement('input'); cb.type='checkbox'; cb.value=b.id;
+          if(already.has(b.id)){ cb.disabled=true; l.style.opacity='.45'; }
+          checks.push(cb);
+          l.appendChild(cb);
+          l.appendChild(document.createTextNode(b.name+(already.has(b.id)?' — pinned':'')));
+          picks.appendChild(l);
+        });
+        box.appendChild(picks);
+
+        const pTitle=document.createElement('input');
+        pTitle.placeholder='Pin title';
+        pTitle.style.cssText='width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:12.5px;background:var(--cream);margin-bottom:6px';
+        const P=(POOLS.pinterest||{});
+        const tl=(P.titles||{}).flowers||['Garden-style wedding florals'];
+        pTitle.value=tl[Math.floor(Math.random()*tl.length)];
+        box.appendChild(pTitle);
+
+        const pDesc=document.createElement('textarea');
+        pDesc.style.minHeight='70px'; pDesc.style.fontSize='12.5px';
+        const det=(P.details||['']);
+        pDesc.value=(P.description_template||'{subject} {detail}')
+          .replace('{subject}',(P.subjects||{}).flowers||'Wedding florals')
+          .replace('{detail}',det[Math.floor(Math.random()*det.length)]);
+        box.appendChild(pDesc);
+
+        const pBtn=document.createElement('button');
+        pBtn.textContent='Pin to selected boards';
+        pBtn.style.cssText='width:100%;margin-top:8px';
+        pBtn.onclick=async()=>{
+          const boardIds=checks.filter(c=>c.checked&&!c.disabled).map(c=>c.value);
+          if(!boardIds.length){ alert('Tick at least one board.'); return; }
+          pBtn.disabled=true; pBtn.textContent='Pinning…';
+          const r=await fetch(PIN_API,{method:'POST',
+            headers:{'x-studio-key':KEY,'content-type':'application/json'},
+            body:JSON.stringify({id:item.id,boardIds,title:pTitle.value,description:pDesc.value})
+          }).then(x=>x.json());
+          if(r.error){ alert('Pinterest: '+r.error); pBtn.disabled=false; pBtn.textContent='Pin to selected boards'; }
+          else {
+            const bad=(r.results||[]).filter(x=>!x.ok);
+            if(bad.length) alert('Some boards failed:\n'+bad.map(b=>b.error).join('\n'));
+            await load();
+          }
+        };
+        box.appendChild(pBtn);
+        body.appendChild(box);
+      }
     }
 
     if(item.status!=='posted'){

@@ -1,6 +1,5 @@
 {
   "_note": "Caption pools by what the photograph actually shows. The queue builder seeds every post from 'flowers', which is wrong for shots where no arrangement is visible — a bride alone, a first look, an empty room. The studio page lets you swap pools per photo. Voice throughout: short declaratives, sensory, sentence case, no emoji.",
-
   "flowers": [
     "Soft palettes, and just enough green to keep them honest.",
     "The kind of arrangement that looks gathered rather than arranged.",
@@ -23,7 +22,6 @@
     "Neutrals are never actually neutral. There are a dozen shades in here.",
     "A little asymmetry keeps things from feeling stiff."
   ],
-
   "portrait": [
     "The quiet minute before everything begins.",
     "Some moments you stay out of the way of.",
@@ -41,7 +39,6 @@
     "The best days look easy from the outside.",
     "Congratulations to two people who got it right."
   ],
-
   "venue": [
     "The room before anyone arrives.",
     "Long tables, low light, and room to linger.",
@@ -55,5 +52,41 @@
     "The details you notice on the second look.",
     "Hours of setup for a room nobody sees empty but us.",
     "Warm tones read beautifully once the sun drops."
-  ]
+  ],
+  "_pinterest_note": "Pinterest is a search engine, so this text is written to be FOUND, not to sound like the Instagram captions. Keywords a bride actually types: the element, the palette, the flowers, the market. Titles under 100 characters; descriptions carry the search terms.",
+  "pinterest": {
+    "titles": {
+      "flowers": [
+        "Blush and Ivory Garden-Style Bridal Bouquet",
+        "Garden-Style Wedding Bouquet with Roses and Eucalyptus",
+        "Romantic Wedding Florals in Soft Neutrals",
+        "Untamed Garden-Style Wedding Flowers"
+      ],
+      "portrait": [
+        "Bride with Garden-Style Bouquet",
+        "Wedding Day Florals — Bride and Bridal Party",
+        "Garden-Style Wedding Inspiration"
+      ],
+      "venue": [
+        "Wedding Reception Tablescape with Garden Florals",
+        "Floral Ceremony Arch and Installation",
+        "Wedding Centerpieces in Soft Neutrals"
+      ]
+    },
+    "description_template": "{subject} designed by Juniper Floral Studio. {detail} Garden-style wedding florals for Austin, the Texas Hill Country and Central Texas. See more of this wedding and enquire about your date at juniperfloralstudio.com.",
+    "subjects": {
+      "flowers": "Garden-style wedding bouquet in a soft, layered palette",
+      "portrait": "Wedding day florals photographed with the couple",
+      "venue": "Wedding ceremony and reception florals"
+    },
+    "details": [
+      "Blush, ivory and cream garden roses with lisianthus, ranunculus and eucalyptus.",
+      "Loose, organic arrangements built to look gathered rather than arranged.",
+      "White and green palette with textural foliage and seasonal blooms.",
+      "Moody burgundy and deep red blooms with trailing greenery.",
+      "Terracotta and rust tones with dried textures and soft foliage.",
+      "Soft neutrals layered for depth, with movement through the greenery."
+    ],
+    "hashtags": "#austinweddingflorist #hillcountrywedding #gardenstylewedding #weddingflowers"
+  }
 }
