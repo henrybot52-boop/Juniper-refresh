@@ -73,6 +73,48 @@
         .nav-arrow { display: none; }
         header .tools a.dl { display: none; }
       }
+
+      /* A phone held sideways has ~390px of height, and the header and footer
+         were eating a third of it. On short screens they float over the book
+         instead of pushing it, and fade away once you start reading. */
+      body.compact header, body.compact footer {
+        position: fixed; left: 0; right: 0; z-index: 20;
+        background: linear-gradient(to bottom, rgba(38,34,32,.85), rgba(38,34,32,0));
+        padding: 8px 14px; transition: opacity .35s;
+      }
+      body.compact header { top: 0; }
+      body.compact footer {
+        bottom: 0; background: linear-gradient(to top, rgba(38,34,32,.85), rgba(38,34,32,0));
+      }
+      body.compact header img { height: 28px; }
+      body.compact #stage { padding: 0; }
+      body.compact.reading header, body.compact.reading footer { opacity: 0; pointer-events: none; }
+
+      #hint {
+        position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%);
+        background: rgba(38,34,32,.92); border: 1px solid rgba(250,248,244,.25);
+        padding: 9px 16px; border-radius: 999px; font-size: .72rem; letter-spacing: .1em;
+        text-transform: uppercase; z-index: 30; transition: opacity .5s; white-space: nowrap;
+      }
+      #hint.gone { opacity: 0; pointer-events: none; }
+
+      /* Tap a page to read it close up — the printed book has type that a
+         phone-sized spread simply can't render legibly. */
+      #zoom {
+        position: fixed; inset: 0; z-index: 40; background: #17150f;
+        display: none; overflow: auto; -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y pinch-zoom;
+      }
+      #zoom.on { display: block; }
+      #zoom img { display: block; width: 180%; max-width: none; margin: 0 auto; }
+      @media (min-width: 700px) { #zoom img { width: 100%; max-width: 900px; } }
+      #zoomClose {
+        position: fixed; top: 12px; right: 12px; z-index: 41;
+        background: rgba(38,34,32,.9); border: 1px solid rgba(250,248,244,.35);
+        color: #faf8f4; border-radius: 999px; width: 40px; height: 40px;
+        font-size: 1.1rem; cursor: pointer; display: none;
+      }
+      #zoom.on ~ #zoomClose { display: block; }
     </style>
   </head>
   <body>
@@ -99,6 +141,9 @@
       <a href="/inquire/">Start an enquiry</a>
     </footer>
 
+    <div id="zoom"><img id="zoomImg" alt="" /></div>
+    <button id="zoomClose" aria-label="Close">✕</button>
+
     <script src="/assets/vendor/page-flip.browser.js"></script>
     <script>
       (async function () {
@@ -122,10 +167,14 @@
         const ratio = man.ratio;                       // width / height of a page
         const portrait = () => stage.clientWidth < 700;
 
-        let pageW = 0;
+        let pageW = 0, across = 2;
         const fit = () => {
-          const fitH = stage.clientHeight - 12;
-          const across = portrait() ? 1 : 2;
+          // Reclaim the chrome on short screens (a phone turned sideways) —
+          // otherwise the header and footer take a third of the height.
+          document.body.classList.toggle('compact', window.innerHeight < 560);
+          const pad = document.body.classList.contains('compact') ? 4 : 12;
+          const fitH = stage.clientHeight - pad;
+          across = portrait() ? 1 : 2;
           const fitW = (stage.clientWidth - 16) / across;
           const h = Math.min(fitH, fitW / ratio);
           pageW = Math.round(h * ratio);
@@ -198,7 +247,58 @@
         document.addEventListener('keydown', (e) => {
           if (e.key === 'ArrowLeft') flip.flipPrev();
           if (e.key === 'ArrowRight') flip.flipNext();
+          if (e.key === 'Escape') closeZoom();
         });
+
+        // ---- read a page close up -------------------------------------------
+        // Page-flip owns drag and pinch inside the book, so zooming happens in
+        // its own layer rather than fighting those gestures.
+        const zoom = document.getElementById('zoom');
+        const zoomImg = document.getElementById('zoomImg');
+        const big = (n) => BASE + 'p' + String(n).padStart(3, '0') + '@' + man.widths[man.widths.length - 1] + '.webp' + ver;
+        function openZoom(n) {
+          zoomImg.src = big(Math.min(man.count, Math.max(1, n)));
+          zoom.classList.add('on');
+          zoom.scrollTop = 0;
+          zoom.scrollLeft = (zoom.scrollWidth - zoom.clientWidth) / 2;
+        }
+        function closeZoom() { zoom.classList.remove('on'); zoomImg.removeAttribute('src'); }
+        document.getElementById('zoomClose').onclick = closeZoom;
+        zoom.onclick = closeZoom;
+
+        let lastTap = 0;
+        bookEl.addEventListener('pointerup', (e) => {
+          const now = Date.now();
+          if (now - lastTap < 320) {
+            const r = bookEl.getBoundingClientRect();
+            const right = across === 2 && (e.clientX - r.left) > r.width / 2;
+            openZoom(flip.getCurrentPageIndex() + 1 + (right ? 1 : 0));
+            lastTap = 0;
+          } else lastTap = now;
+        });
+
+        // ---- one-time nudges -------------------------------------------------
+        const hint = document.createElement('div');
+        hint.id = 'hint';
+        // Touch, not width — a phone held sideways is 850px wide and would
+        // otherwise be told to "double-click".
+        const touch = window.matchMedia('(pointer: coarse)').matches;
+        hint.textContent = !touch ? 'Double-click a page to read it close up'
+          : across === 1 ? 'Turn your phone for the full spread · double-tap to zoom'
+          : 'Double-tap a page to zoom';
+        document.body.appendChild(hint);
+        setTimeout(() => hint.classList.add('gone'), 5200);
+
+        // On a short screen, let the chrome fade once reading starts, and bring
+        // it back on a tap so the download and enquiry links stay reachable.
+        let readT;
+        const rest = () => {
+          document.body.classList.remove('reading');
+          clearTimeout(readT);
+          readT = setTimeout(() => document.body.classList.add('reading'), 2600);
+        };
+        rest();
+        ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, rest));
         document.getElementById('fs').onclick = () => {
           if (document.fullscreenElement) document.exitFullscreen();
           else document.documentElement.requestFullscreen().catch(() => {});
