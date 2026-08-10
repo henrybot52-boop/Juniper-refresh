@@ -75,6 +75,17 @@
   .card details>button{width:calc(100% - 24px);margin-bottom:12px}
   .card details.pinned>summary{color:var(--good)}
   .card details.pinned>summary::before{background:var(--good)}
+  /* Carousel builder */
+  .car-build{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+  .car-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin:12px 0;max-height:320px;overflow:auto}
+  .car-grid figure{position:relative;margin:0;cursor:pointer;border-radius:8px;overflow:hidden;aspect-ratio:3/4}
+  .car-grid img{width:100%;height:100%;object-fit:cover;display:block}
+  .car-grid figure.on{outline:3px solid var(--charcoal);outline-offset:-3px}
+  .car-grid .num{position:absolute;top:4px;left:4px;background:var(--charcoal);color:var(--cream);
+    width:20px;height:20px;border-radius:50%;font-size:11px;display:flex;align-items:center;justify-content:center}
+  .car-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+  .car-strip{display:flex;gap:6px;overflow:auto;padding-bottom:4px}
+  .car-strip img{height:96px;width:72px;object-fit:cover;border-radius:6px;flex:0 0 auto}
   /* Leads funnel */
   .lead{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:12px}
   .lead .who{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
@@ -131,6 +142,25 @@
     <div class="grid" id="grid"></div>
     <div class="empty" id="empty" hidden>Nothing here.</div>
 
+    <!-- Carousels: several photos from one wedding, posted as one swipeable set -->
+    <div id="carPanel" hidden>
+      <div class="car-build">
+        <b style="font-size:13px">New carousel</b>
+        <p class="sub" style="margin:6px 0 0">A set someone can swipe through earns saves, and saves are what Instagram ranks on. Two to ten photos, in the order you tap them.</p>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+          <select id="carWedding" class="note" style="width:auto"></select>
+          <span class="sub" id="carCount">none picked</span>
+        </div>
+        <div class="car-grid" id="carGrid"></div>
+        <textarea id="carCaption" placeholder="Caption for the set"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="primary" id="carSave">Create carousel</button>
+          <button id="carClear">Clear</button>
+        </div>
+      </div>
+      <div id="carList"></div>
+    </div>
+
     <!-- Leads funnel: look book downloads + inquiries, with stage + notes -->
     <div id="leadsPanel" hidden>
       <div class="filters" id="leadFilters"></div>
@@ -167,7 +197,8 @@ const PIN_API='/.netlify/functions/pinterest';
 // pinned-state is untouched. Normal use never sets this.
 const SANDBOX=new URLSearchParams(location.search).has('sandbox');
 let KEY=sessionStorage.getItem('studioKey')||'';
-let ITEMS=[], FILTER='pending', POOLS={}, BOARDS=[], PINNED={}, PIN_READY=false;
+let ITEMS=[], CAROUSELS=[], FILTER='pending', POOLS={}, BOARDS=[], PINNED={}, PIN_READY=false;
+let carPick=[];   // ids in the order they were tapped — carousel order matters
 // Approving moves an item out of the current filter, so the card used to vanish
 // with no confirmation — which looks exactly like a button that did nothing.
 // Items acted on stay visible until the filter changes or Refresh is pressed.
@@ -189,7 +220,7 @@ function showLogin(msg){
 async function load(){
   try{
     const d=await api('GET');
-    ITEMS=d.items||[]; POOLS=d.captionPools||{};
+    ITEMS=d.items||[]; CAROUSELS=d.carousels||[]; POOLS=d.captionPools||{};
     document.getElementById('login').hidden=true;
     document.getElementById('app').hidden=false;
     const c=d.counts||{};
@@ -228,9 +259,11 @@ function renderFilters(c){
   // before it's approved or after it's posted. "To pin" is the pinning queue:
   // everything (bar skipped) that isn't on any board yet.
   if(PIN_READY) defs.splice(3,0,['topin','To pin']);
+  defs.push(['carousels','Carousels']);
   f.innerHTML='';
   defs.forEach(([k,label])=>{
     const n=k==='all'?ITEMS.length
+      :k==='carousels'?CAROUSELS.length
       :k==='topin'?ITEMS.filter(i=>i.status!=='skipped'&&!(PINNED[i.id]||[]).length).length
       :(c[k]||0);
     const b=document.createElement('button');
@@ -248,6 +281,11 @@ function visible(){
 }
 
 function render(){
+  const carMode = FILTER==='carousels';
+  document.getElementById('carPanel').hidden=!carMode;
+  document.getElementById('grid').hidden=carMode;
+  document.getElementById('approveAll').hidden=carMode;
+  if(carMode){ document.getElementById('empty').hidden=true; renderCarousels(); return; }
   const g=document.getElementById('grid'); g.innerHTML='';
   const list=visible();
   document.getElementById('empty').hidden=list.length>0;
@@ -605,6 +643,117 @@ document.getElementById('alSave').onclick=async()=>{
   for(const id of ['alName','alEmail','alDate','alMsg']) document.getElementById(id).value='';
   document.getElementById('addLeadBox').style.display='none';
   await loadLeads();
+};
+
+
+// ---- Carousels ---------------------------------------------------------
+// Instagram ranks saves far above likes, and a swipeable set of one wedding is
+// what earns them. Photos put into a carousel are skipped as singles so the
+// same picture never goes out twice.
+function weddingsWithPhotos(){
+  const m={};
+  for(const i of ITEMS){ if(i.status==='posted')continue; (m[i.wedding]=m[i.wedding]||[]).push(i); }
+  return m;
+}
+
+function renderCarousels(){
+  const byWedding=weddingsWithPhotos();
+  const names=Object.keys(byWedding).sort();
+  const sel=document.getElementById('carWedding');
+  if(sel.dataset.filled!=='1'||!names.includes(sel.value)){
+    sel.innerHTML=''; 
+    for(const n of names){ const o=document.createElement('option'); o.value=n; o.textContent=n+' ('+byWedding[n].length+')'; sel.appendChild(o); }
+    sel.dataset.filled='1';
+  }
+  const pool=byWedding[sel.value]||[];
+  const grid=document.getElementById('carGrid'); grid.innerHTML='';
+  for(const it of pool){
+    const f=document.createElement('figure');
+    const pos=carPick.indexOf(it.id);
+    if(pos>-1) f.className='on';
+    const im=document.createElement('img'); im.src=it.image; im.loading='lazy'; im.alt='';
+    f.appendChild(im);
+    if(pos>-1){ const b=document.createElement('span'); b.className='num'; b.textContent=pos+1; f.appendChild(b); }
+    f.onclick=()=>{
+      const at=carPick.indexOf(it.id);
+      if(at>-1) carPick.splice(at,1);
+      else { if(carPick.length>=10){ alert('Ten photos is the Instagram maximum.'); return; } carPick.push(it.id); }
+      const cap=document.getElementById('carCaption');
+      if(carPick.length===1 && !cap.value.trim()){
+        const first=ITEMS.find(x=>x.id===carPick[0]);
+        if(first) cap.value=first.caption;
+      }
+      renderCarousels();
+    };
+    grid.appendChild(f);
+  }
+  document.getElementById('carCount').textContent =
+    carPick.length ? carPick.length+' picked — they post in this order' : 'none picked';
+
+  const list=document.getElementById('carList'); list.innerHTML='';
+  if(!CAROUSELS.length){
+    list.innerHTML='<div class="empty">No carousels yet. Pick photos above to build one.</div>';
+    return;
+  }
+  for(const c of CAROUSELS){
+    const card=document.createElement('div'); card.className='car-card';
+    const head=document.createElement('div'); head.className='meta';
+    head.innerHTML='<span class="pill '+c.status+'">'+c.status+'</span><span>'+c.wedding+'</span><span>'+c.images.length+' photos</span>';
+    card.appendChild(head);
+    const strip=document.createElement('div'); strip.className='car-strip'; strip.style.margin='10px 0';
+    for(const u of c.images){ const im=document.createElement('img'); im.src=u; im.loading='lazy'; im.alt=''; strip.appendChild(im); }
+    card.appendChild(strip);
+    const ta=document.createElement('textarea'); ta.value=c.caption; ta.disabled=c.status==='posted';
+    card.appendChild(ta);
+    const note=document.createElement('div'); note.className='saved'; note.style.minHeight='16px'; card.appendChild(note);
+
+    const acts=document.createElement('div'); acts.className='actions'; acts.style.marginTop='10px';
+    if(c.status!=='posted'){
+      const save=document.createElement('button'); save.textContent='Save caption';
+      save.onclick=async()=>{ save.disabled=true;
+        const r=await api('POST',{action:'update',id:c.id,caption:ta.value});
+        save.disabled=false; note.textContent=r&&!r.error?'Saved':'Could not save'; c.caption=ta.value; };
+      acts.appendChild(save);
+
+      const ok=document.createElement('button'); ok.className='primary';
+      ok.textContent=c.status==='approved'?'Approved ✓':'Approve';
+      ok.onclick=async()=>{ const next=c.status==='approved'?'pending':'approved';
+        const r=await api('POST',{action:'update',id:c.id,status:next});
+        if(r&&r.error){ alert(r.error); return; }
+        c.status=next; await load(); };
+      acts.appendChild(ok);
+
+      const now=document.createElement('button'); now.textContent='Post now';
+      now.onclick=async()=>{ if(!confirm('Post this carousel to Instagram now?'))return;
+        now.disabled=true; now.textContent='Posting…';
+        const r=await api('POST',{action:'postNow',id:c.id});
+        if(r&&r.error){ alert('Instagram refused it: '+r.error); now.disabled=false; now.textContent='Post now'; return; }
+        await load(); };
+      acts.appendChild(now);
+
+      const del=document.createElement('button'); del.textContent='Delete';
+      del.onclick=async()=>{ if(!confirm('Delete this carousel? The photos go back into the queue.'))return;
+        const r=await api('POST',{action:'deleteCarousel',id:c.id});
+        if(r&&r.error){ alert(r.error); return; }
+        await load(); };
+      acts.appendChild(del);
+    }
+    card.appendChild(acts);
+    list.appendChild(card);
+  }
+}
+
+document.getElementById('carWedding').onchange=()=>{ renderCarousels(); };
+document.getElementById('carClear').onclick=()=>{ carPick=[]; document.getElementById('carCaption').value=''; renderCarousels(); };
+document.getElementById('carSave').onclick=async()=>{
+  const cap=document.getElementById('carCaption');
+  if(carPick.length<2){ alert('Pick at least two photos.'); return; }
+  const btn=document.getElementById('carSave'); btn.disabled=true; btn.textContent='Creating…';
+  const r=await api('POST',{action:'createCarousel',ids:carPick,caption:cap.value});
+  btn.disabled=false; btn.textContent='Create carousel';
+  if(r&&r.error){ alert(r.error); return; }
+  carPick=[]; cap.value='';
+  await load();
 };
 
 if(KEY) load(); else showLogin();

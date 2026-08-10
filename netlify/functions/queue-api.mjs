@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import queueData from '../ig-queue.json' with { type: 'json' };
+import { publish, MAX_CAROUSEL, MIN_CAROUSEL } from '../lib/ig-publish.mjs';
 import captionPools from '../captions.json' with { type: 'json' };
 
 // Back end for the /studio approval page.
@@ -12,8 +13,6 @@ import captionPools from '../captions.json' with { type: 'json' };
 // compared here on the server — the browser never sees the Instagram token, and
 // a visitor who finds the URL can't read or change anything without the key.
 
-const IG_USER_ID = '28726583660262417';
-const GRAPH = 'https://graph.instagram.com/v21.0';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -32,47 +31,6 @@ function keyOk(supplied) {
   return diff === 0;
 }
 
-// A container is not publishable the instant it is created, even though the
-// create call returns an id. Publishing straight away fails with "Media ID is
-// not available", so wait for Instagram to report the image processed.
-async function waitForContainer(id, token, tries = 8) {
-  for (let i = 0; i < tries; i++) {
-    const r = await fetch(`${GRAPH}/${id}?fields=status_code&access_token=${token}`);
-    const d = await r.json();
-    if (d.status_code === 'FINISHED') return;
-    if (d.status_code === 'ERROR') throw new Error('Instagram could not process this image.');
-    await new Promise((res) => setTimeout(res, 1500));
-  }
-  throw new Error('Instagram is still processing the image. Try again in a moment.');
-}
-
-async function publish(item, token) {
-  // Instagram publishes JPEG and nothing else. Catch it here with a message a
-  // human can act on, rather than letting Meta return an opaque media error.
-  if (!/\.jpe?g$/i.test(new URL(item.image).pathname)) {
-    throw new Error('Instagram only accepts JPEG images, and this one is not a .jpg — swap the photo for a JPEG version.');
-  }
-
-  const createRes = await fetch(`${GRAPH}/${IG_USER_ID}/media`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ image_url: item.image, caption: item.caption, access_token: token }),
-  });
-  const created = await createRes.json();
-  if (created.error || !created.id) throw new Error(created.error?.message || 'could not stage the image');
-
-  await waitForContainer(created.id, token);
-
-  const pubRes = await fetch(`${GRAPH}/${IG_USER_ID}/media_publish`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ creation_id: created.id, access_token: token }),
-  });
-  const published = await pubRes.json();
-  if (published.error || !published.id) throw new Error(published.error?.message || 'could not publish');
-  return published.id;
-}
-
 export default async (req) => {
   if (!process.env.STUDIO_PASSWORD) return json({ error: 'not-configured' }, 500);
   if (!keyOk(req.headers.get('x-studio-key'))) return json({ error: 'unauthorised' }, 401);
@@ -86,7 +44,10 @@ export default async (req) => {
   // queue — freshly added work is what you want going out next, not something
   // from two years ago.
   const uploads = (await store.get('uploads', { type: 'json', consistency: 'strong' }).catch(() => null)) || [];
-  const base = [...uploads, ...(queueData.queue || [])];
+  const carousels = (await store.get('carousels', { type: 'json', consistency: 'strong' }).catch(() => null)) || [];
+  // Carousels sit in the same list as single photos so approving, captioning,
+  // posting and history all work on them without a parallel code path.
+  const base = [...carousels, ...uploads, ...(queueData.queue || [])];
   const postedIds = new Set((state.history || []).map((h) => h.id));
 
   const merge = () => base.map((q) => {
@@ -101,9 +62,11 @@ export default async (req) => {
   });
 
   if (req.method === 'GET') {
-    const items = merge();
+    const all = merge();
+    const items = all.filter((i) => !i.images);
     return json({
       items,
+      carousels: all.filter((i) => i.images),
       captionPools,
       postingEnabled: String(process.env.IG_POSTING_ENABLED).toLowerCase() === 'true',
       counts: ['posted', 'approved', 'pending', 'skipped'].reduce((a, s) => {
@@ -156,6 +119,51 @@ export default async (req) => {
       state.history = [...(state.history || []), { id, postId: body.postId || null, at: body.at || Date.now() }].slice(-200);
       await store.setJSON('post-state', state);
       return json({ ok: true, id });
+    }
+
+    // Group photos from one wedding into a swipeable carousel. Instagram ranks
+    // saves far above likes, and a set someone can swipe through is what earns
+    // them — a single image rarely does.
+    if (action === 'createCarousel') {
+      const ids = Array.isArray(body.ids) ? body.ids : [];
+      if (ids.length < MIN_CAROUSEL) return json({ error: `Pick at least ${MIN_CAROUSEL} photos.` }, 400);
+      if (ids.length > MAX_CAROUSEL) return json({ error: `Instagram allows at most ${MAX_CAROUSEL} photos.` }, 400);
+      const picked = ids.map((i) => base.find((q) => q.id === i && !q.images)).filter(Boolean);
+      if (picked.length !== ids.length) return json({ error: 'unknown-id' }, 404);
+      if (picked.some((p) => postedIds.has(p.id))) return json({ error: 'One of those has already posted on its own.' }, 409);
+
+      const car = {
+        id: 'car-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+        wedding: picked[0].wedding,
+        images: picked.map((p) => p.image),
+        memberIds: picked.map((p) => p.id),
+        caption: String(body.caption || picked[0].caption || '').slice(0, 2200),
+        at: new Date().toISOString(),
+      };
+      await store.setJSON('carousels', [car, ...carousels]);
+
+      // The members must not also go out on their own.
+      for (const p of picked) overrides[p.id] = { ...(overrides[p.id] || {}), status: 'skipped', inCarousel: car.id };
+      await store.setJSON('overrides', overrides);
+      return json({ ok: true, carousel: car });
+    }
+
+    if (action === 'deleteCarousel') {
+      const car = carousels.find((c) => c.id === id);
+      if (!car) return json({ error: 'unknown-id' }, 404);
+      if (postedIds.has(id)) return json({ error: 'already-posted' }, 409);
+      await store.setJSON('carousels', carousels.filter((c) => c.id !== id));
+      // Release the photos back into the queue.
+      for (const mid of car.memberIds || []) {
+        if (overrides[mid]?.inCarousel === car.id) {
+          const o = { ...overrides[mid] };
+          delete o.inCarousel;
+          o.status = 'pending';
+          overrides[mid] = o;
+        }
+      }
+      await store.setJSON('overrides', overrides);
+      return json({ ok: true });
     }
 
     // Store an uploaded photo and put it at the front of the queue. The browser
