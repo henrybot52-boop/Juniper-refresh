@@ -36,6 +36,7 @@
           <a href="/portfolio/" class="text-deep hover:text-gold">Portfolio</a>
           <a href="/services/" class="text-deep hover:text-gold">Services</a>
           <a href="/lookbook/" class="text-deep hover:text-gold">Look Book</a>
+          <a href="/pressed/" class="text-deep hover:text-gold">Pressed</a>
           <a href="/inquire/" class="text-deep hover:text-gold">Inquire</a>
         </div>
       </nav>
@@ -46,6 +47,7 @@
           <a href="/about/" class="text-deep hover:text-gold">About</a>
           <a href="/portfolio/" class="text-deep hover:text-gold">Portfolio</a>
           <a href="/services/" class="text-deep hover:text-gold">Services</a>
+          <a href="/pressed/" class="text-deep hover:text-gold">Pressed</a>
           <a href="/inquire/" class="text-deep hover:text-gold">Inquire</a>
         </div>
       </div>
@@ -148,6 +150,7 @@
                   <option>Private event</option>
                   <option>Corporate event</option>
                   <option>Styled shoot</option>
+                  <option>Pressed &amp; framed flowers</option>
                   <option>Other</option>
                 </select>
               </div>
@@ -233,5 +236,17 @@
     </footer>
 
     <script src="/scripts/site.js"></script>
-  </body>
+    <script>
+    // Arriving from /pressed?service=pressed — preselect it so the enquiry is
+    // already tagged and nobody has to explain what they came for.
+    (function () {
+      if (new URLSearchParams(location.search).get('service') !== 'pressed') return;
+      const sel = document.getElementById('event-type');
+      if (!sel) return;
+      for (const o of sel.options) if (/pressed/i.test(o.text)) { o.selected = true; break; }
+      const msg = document.querySelector('[name="message"]');
+      if (msg && !msg.value) msg.placeholder = 'Tell us about your day — and that you\'d like your flowers pressed and framed.';
+    })();
+  </script>
+</body>
 </html>
