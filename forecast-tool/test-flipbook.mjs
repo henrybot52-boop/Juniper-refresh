@@ -37,7 +37,12 @@ await page.screenshot({ path: SP + '/flip-cover.png' });
 await page.click('#next'); await page.waitForTimeout(1400);
 await page.click('#next'); await page.waitForTimeout(1400);
 await page.screenshot({ path: SP + '/flip-spread.png' });
-console.log('pageno:', await page.textContent('#pageno'));
+console.log('pageno after 2 flips:', await page.textContent('#pageno'));
+// wait for background rendering to finish, confirm position survived updates
+await page.waitForFunction(() => !document.getElementById('pageno').textContent.includes('loading'), null, { timeout: 120000 });
+console.log('pageno after full load:', await page.textContent('#pageno'));
+for (let i = 0; i < 3; i++) { await page.click('#next'); await page.waitForTimeout(900); }
+console.log('pageno after 3 more flips:', await page.textContent('#pageno'));
 
 // missing-PDF path: block the PDF and reload
 await page.route('**/juniper-look-book.pdf', (r) => r.fulfill({ status: 404, body: '' }));

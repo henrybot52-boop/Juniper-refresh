@@ -124,21 +124,24 @@
         const doc = await pdfjsLib.getDocument(PDF).promise.catch(() => null);
         if (!doc) return fail('The look book could not be opened. <a href="' + PDF + '" download>Download it instead</a>.');
 
-        // Render each page once, at a size that stays crisp in fullscreen.
+        // Render pages at a size that stays crisp in fullscreen. The book
+        // opens as soon as the first few pages are ready; the rest render in
+        // the background — nobody waits on page 60 to see the cover.
         const pages = [];
         let pw = 0, ph = 0;
-        for (let i = 1; i <= doc.numPages; i++) {
+        const HEAD = Math.min(6, doc.numPages);
+        const renderPage = async (i) => {
           const page = await doc.getPage(i);
           const base = page.getViewport({ scale: 1 });
-          const scale = 1400 / base.height;
-          const vp = page.getViewport({ scale });
+          const vp = page.getViewport({ scale: 1200 / base.height });
           const canvas = document.createElement('canvas');
           canvas.width = vp.width; canvas.height = vp.height;
           await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-          pages.push(canvas.toDataURL('image/jpeg', 0.88));
           if (i === 1) { pw = vp.width; ph = vp.height; }
+          pages[i - 1] = canvas.toDataURL('image/jpeg', 0.85);
           prog.style.width = Math.round((i / doc.numPages) * 100) + '%';
-        }
+        };
+        for (let i = 1; i <= HEAD; i++) await renderPage(i);
         status.remove();
 
         // Fit the book inside the stage: two pages side by side on wide
@@ -165,16 +168,29 @@
           showCover: true, maxShadowOpacity: 0.35, usePortrait: true,
           mobileScrollSupport: false,
         });
-        flip.loadFromImages(pages);
+        flip.loadFromImages(pages.slice(0, HEAD));
         window.addEventListener('resize', fit);
 
         const pageno = document.getElementById('pageno');
+        let total = doc.numPages;
         const show = () => {
           const p = flip.getCurrentPageIndex() + 1;
-          pageno.textContent = 'Page ' + p + ' of ' + pages.length;
+          const loaded = pages.filter(Boolean).length;
+          pageno.textContent = 'Page ' + p + ' of ' + total + (loaded < total ? ' · loading…' : '');
         };
         show();
         flip.on('flip', show);
+
+        // Background-render the remaining pages, feeding the book as they land.
+        (async () => {
+          for (let i = HEAD + 1; i <= doc.numPages; i++) {
+            await renderPage(i);
+            if (i % 6 === 0 || i === doc.numPages) {
+              flip.updateFromImages(pages.filter(Boolean));
+            }
+            show();
+          }
+        })();
 
         document.getElementById('prev').onclick = () => flip.flipPrev();
         document.getElementById('next').onclick = () => flip.flipNext();
