@@ -26,7 +26,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(8901, r));
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 });
 page.on('pageerror', (e) => console.log('PAGE ERROR:', e.message));
 await page.goto('http://localhost:8901/lookbook/view/', { waitUntil: 'domcontentloaded' });
 
@@ -41,6 +41,10 @@ console.log('pageno after 2 flips:', await page.textContent('#pageno'));
 // wait for background rendering to finish, confirm position survived updates
 await page.waitForFunction(() => !document.getElementById('pageno').textContent.includes('loading'), null, { timeout: 120000 });
 console.log('pageno after full load:', await page.textContent('#pageno'));
+const stats = await page.evaluate(() => ({
+  dpr: window.devicePixelRatio, screenH: screen.height,
+}));
+console.log('client:', JSON.stringify(stats));
 for (let i = 0; i < 3; i++) { await page.click('#next'); await page.waitForTimeout(900); }
 console.log('pageno after 3 more flips:', await page.textContent('#pageno'));
 

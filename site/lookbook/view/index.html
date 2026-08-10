@@ -37,7 +37,9 @@
 
       #stage { flex: 1 1 auto; position: relative; display: flex; align-items: center; justify-content: center; padding: 8px 64px 8px; min-height: 0; }
       #book { touch-action: pan-y; }
-      #book img { user-select: none; -webkit-user-drag: none; }
+      #book .page { background: #f4f1ec; overflow: hidden; }
+      #book .page img { width: 100%; height: 100%; object-fit: cover; display: block;
+        user-select: none; -webkit-user-drag: none; }
 
       .nav-arrow {
         position: absolute; top: 50%; transform: translateY(-50%);
@@ -129,20 +131,28 @@
         // the background — nobody waits on page 60 to see the cover.
         const pages = [];
         let pw = 0, ph = 0;
-        const HEAD = Math.min(6, doc.numPages);
+
+        // Render for the physical pixels the screen actually has, not the CSS
+        // size — on a Retina display a page shown at 800 CSS px needs 1600 real
+        // pixels or it looks soft. Base it on the full screen height so
+        // fullscreen stays sharp without re-rendering, and cap it so 50+ pages
+        // of decoded JPEG don't swamp memory on a phone.
+        const dpr = window.devicePixelRatio || 1;
+        const small = Math.min(screen.width, screen.height) < 700;
+        const TARGET_H = Math.max(1600, Math.min(small ? 2000 : 2600, Math.round(screen.height * dpr)));
+
         const renderPage = async (i) => {
           const page = await doc.getPage(i);
           const base = page.getViewport({ scale: 1 });
-          const vp = page.getViewport({ scale: 1200 / base.height });
+          const vp = page.getViewport({ scale: TARGET_H / base.height });
           const canvas = document.createElement('canvas');
           canvas.width = vp.width; canvas.height = vp.height;
           await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
           if (i === 1) { pw = vp.width; ph = vp.height; }
-          pages[i - 1] = canvas.toDataURL('image/jpeg', 0.85);
+          pages[i - 1] = canvas.toDataURL('image/jpeg', 0.92);
           prog.style.width = Math.round((i / doc.numPages) * 100) + '%';
         };
-        for (let i = 1; i <= HEAD; i++) await renderPage(i);
-        status.remove();
+        await renderPage(1);
 
         // Fit the book inside the stage: two pages side by side on wide
         // screens, one page on narrow ones. The container gets explicit
@@ -161,14 +171,33 @@
         };
         fit();
 
+        // Build a shell for every page up front and let the images drop in as
+        // they render. HTML mode (not loadFromImages) is deliberate: the canvas
+        // renderer sizes its backing store in CSS pixels with no
+        // devicePixelRatio scaling, so every page came out upscaled and soft on
+        // a Retina screen. Real <img> elements are drawn by the browser at the
+        // display's native resolution.
+        const shells = [];
+        for (let i = 1; i <= doc.numPages; i++) {
+          const d = document.createElement('div');
+          d.className = 'page';
+          const im = document.createElement('img');
+          im.alt = 'Page ' + i;
+          if (pages[i - 1]) im.src = pages[i - 1];
+          d.appendChild(im);
+          bookEl.appendChild(d);
+          shells.push(im);
+        }
+
         const flip = new St.PageFlip(bookEl, {
           width: pw, height: ph,
           size: 'stretch',
-          minWidth: 150, maxWidth: 1400, minHeight: 200, maxHeight: 1866,
+          minWidth: 150, maxWidth: 3000, minHeight: 200, maxHeight: 3000,
           showCover: true, maxShadowOpacity: 0.35, usePortrait: true,
           mobileScrollSupport: false,
         });
-        flip.loadFromImages(pages.slice(0, HEAD));
+        flip.loadFromHTML(bookEl.querySelectorAll('.page'));
+        status.remove();
         window.addEventListener('resize', fit);
 
         const pageno = document.getElementById('pageno');
@@ -181,13 +210,13 @@
         show();
         flip.on('flip', show);
 
-        // Background-render the remaining pages, feeding the book as they land.
+        // Render the rest in the background, dropping each image into its
+        // waiting shell. Page count and layout are correct from the first
+        // frame, so nothing jumps as the book fills in.
         (async () => {
-          for (let i = HEAD + 1; i <= doc.numPages; i++) {
+          for (let i = 2; i <= doc.numPages; i++) {
             await renderPage(i);
-            if (i % 6 === 0 || i === doc.numPages) {
-              flip.updateFromImages(pages.filter(Boolean));
-            }
+            shells[i - 1].src = pages[i - 1];
             show();
           }
         })();
