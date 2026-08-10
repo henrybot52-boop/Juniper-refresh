@@ -14,3 +14,6 @@
 
 /lookbook/view/*
   X-Robots-Tag: noindex, nofollow
+
+/showcase/*
+  X-Robots-Tag: noindex, nofollow

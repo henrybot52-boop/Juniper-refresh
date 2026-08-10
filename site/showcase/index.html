@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Juniper Floral Studio — Showcase</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#17150f;overflow:hidden}
+  body{font-family:system-ui,sans-serif;color:#faf8f4}
+  #stage{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;opacity:0;transition:opacity 1.6s ease-in-out}
+  .slide.on{opacity:1}
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;
+      filter:blur(42px) saturate(.7) brightness(.42);transform:scale(1.15)}
+  .frame{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:1.4vw;padding:2.2vh 2.2vw}
+  .frame img{max-width:100%;max-height:100%;object-fit:contain;display:block;
+      box-shadow:0 3vh 6vh -2vh rgba(0,0,0,.65)}
+  .full img{width:100%;height:100%;object-fit:cover;box-shadow:none;
+      animation:drift 16s ease-in-out infinite alternate}
+  @keyframes drift{from{transform:scale(1.02)}to{transform:scale(1.09)}}
+  #mark{position:fixed;right:2.4vw;bottom:2.6vh;height:5.2vh;opacity:.72;
+        filter:brightness(0) invert(1);transition:opacity .4s;pointer-events:none;z-index:5}
+  #hint{position:fixed;left:0;right:0;bottom:1.4vh;text-align:center;font-size:12px;
+        letter-spacing:.18em;text-transform:uppercase;color:rgba(250,248,244,.45);
+        transition:opacity .6s;z-index:6}
+  body.idle #hint{opacity:0}
+  body.idle{cursor:none}
+  #paused{position:fixed;top:2.4vh;left:2.4vw;font-size:11px;letter-spacing:.2em;
+          text-transform:uppercase;color:rgba(250,248,244,.7);display:none;z-index:6}
+  body.paused #paused{display:block}
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <img id="mark" src="/images/juniper-logo.png" alt="" />
+  <div id="paused">Paused</div>
+  <div id="hint">Space pause · ← → change · F fullscreen · L hide logo</div>
+
+<script>
+// Photos, interleaved across weddings so no two neighbours share a wedding.
+const PHOTOS = [["/images/allison/allison-1.jpg",962,1442],["/images/brittney/brittney-2.jpg",1066,1600],["/images/danielle/danielle-2.jpg",1024,1535],["/images/drew-kaila/drew-kaila-2.jpg",1066,1600],["/images/felicia/felicia-2.jpg",1043,1600],["/images/gabby-matthew/gabby-matthew-2.jpg",1065,1600],["/images/hannah/hannah-10.jpg",1066,1600],["/images/inna/inna-1.jpg",2048,1367],["/images/jeanna/jeanna-10.jpg",1600,1065],["/images/jess-rich/jess-rich-2.jpg",1600,1068],["/images/jessica-bailey/jessica-bailey-2.jpg",1064,1600],["/images/kathrine-rizzi/kathrine-rizzi-10.jpg",1600,1066],["/images/krystin/krystin-1.jpg",2163,1442],["/images/lookbook/cover.jpg",980,1268],["/images/madeline/madeline-1.jpg",1157,1442],["/images/mikeera/mikeera-1.jpg",2157,1442],["/images/nadine/nadine-1.jpg",962,1442],["/images/nenna/nenna-1.jpg",1355,1442],["/images/nicole/nicole-10.jpg",1600,1066],["/images/rose-will/rose-will-2.jpg",1024,1536],["/images/sabrina/sabrina-2.jpg",1067,1600],["/images/samantha/samantha-1.jpg",2167,1442],["/images/shannon/shannon-2.jpg",1600,1066],["/images/susan/susan-1.jpg",961,1442],["/images/teena/teena-1.jpg",962,1442],["/images/allison/allison-2.jpg",962,1442],["/images/danielle/danielle-3.jpg",1024,1536],["/images/drew-kaila/drew-kaila-3.jpg",1066,1600],["/images/felicia/felicia-3.jpg",1043,1600],["/images/gabby-matthew/gabby-matthew-3.jpg",1065,1600],["/images/hannah/hannah-11.jpg",1066,1600],["/images/inna/inna-2.jpg",2048,1367],["/images/jeanna/jeanna-11.jpg",1600,1065],["/images/jess-rich/jess-rich-3.jpg",1600,1068],["/images/jessica-bailey/jessica-bailey-3.jpg",1600,1064],["/images/kathrine-rizzi/kathrine-rizzi-11.jpg",1066,1600],["/images/madeline/madeline-2.jpg",1157,1442],["/images/mikeera/mikeera-2.jpg",2163,1442],["/images/nadine/nadine-2.jpg",2163,1442],["/images/nenna/nenna-2.jpg",963,1442],["/images/nicole/nicole-11.jpg",1066,1600],["/images/rose-will/rose-will-3.jpg",1024,1536],["/images/sabrina/sabrina-3.jpg",1067,1600],["/images/samantha/samantha-2.jpg",959,1442],["/images/shannon/shannon-3.jpg",1066,1600],["/images/susan/susan-4.jpg",961,1442],["/images/teena/teena-2.jpg",1010,1442],["/images/allison/allison-3.jpg",962,1442],["/images/danielle/danielle-4.jpg",1024,1536],["/images/felicia/felicia-4.jpg",1043,1600],["/images/gabby-matthew/gabby-matthew-4.jpg",1064,1600],["/images/hannah/hannah-12.jpg",1066,1600],["/images/inna/inna-3.jpg",2048,1367],["/images/jeanna/jeanna-12.jpg",1064,1600],["/images/jess-rich/jess-rich-4.jpg",1600,1068],["/images/kathrine-rizzi/kathrine-rizzi-12.jpg",1066,1600],["/images/nadine/nadine-3.jpg",962,1442],["/images/nenna/nenna-3.jpg",2067,1442],["/images/nicole/nicole-12.jpg",1600,1066],["/images/rose-will/rose-will-4.jpg",1024,1536],["/images/sabrina/sabrina-4.jpg",1600,1067],["/images/samantha/samantha-3.jpg",962,1442],["/images/shannon/shannon-4.jpg",1066,1600],["/images/susan/susan-5.jpg",961,1442],["/images/allison/allison-4.jpg",2163,1442],["/images/danielle/danielle-6.jpg",1024,1535],["/images/felicia/felicia-5.jpg",1600,1086],["/images/hannah/hannah-2.jpg",1066,1600],["/images/inna/inna-4.jpg",963,1442],["/images/jeanna/jeanna-13.jpg",1600,1064],["/images/jess-rich/jess-rich-5.jpg",1600,1068],["/images/kathrine-rizzi/kathrine-rizzi-13.jpg",1600,1066],["/images/nadine/nadine-4.jpg",2163,1442],["/images/nenna/nenna-4.jpg",2160,1442],["/images/nicole/nicole-13.jpg",1600,1066],["/images/sabrina/sabrina-5.jpg",1067,1600],["/images/samantha/samantha-4.jpg",963,1442],["/images/shannon/shannon-5.jpg",1600,1066],["/images/susan/susan-6.jpg",961,1442],["/images/allison/allison-6.jpg",962,1442],["/images/danielle/danielle-7.jpg",1024,1535],["/images/hannah/hannah-3.jpg",1066,1600],["/images/jeanna/jeanna-2.jpg",1064,1600],["/images/jess-rich/jess-rich-6.jpg",1600,1068],["/images/kathrine-rizzi/kathrine-rizzi-14.jpg",1066,1600],["/images/nadine/nadine-5.jpg",962,1442],["/images/nenna/nenna-5.jpg",2160,1442],["/images/nicole/nicole-14.jpg",1066,1600],["/images/shannon/shannon-6.jpg",1600,1066],["/images/susan/susan-7.jpg",961,1442],["/images/allison/allison-7.jpg",962,1442],["/images/hannah/hannah-4.jpg",1143,1600],["/images/jeanna/jeanna-3.jpg",1064,1600],["/images/jess-rich/jess-rich-7.jpg",1600,1068],["/images/kathrine-rizzi/kathrine-rizzi-15.jpg",1066,1600],["/images/nadine/nadine-6.jpg",962,1442],["/images/nicole/nicole-15.jpg",1066,1600],["/images/shannon/shannon-7.jpg",1600,1066],["/images/allison/allison-8.jpg",962,1442],["/images/hannah/hannah-5.jpg",1066,1600],["/images/jeanna/jeanna-4.jpg",1600,1065],["/images/jess-rich/jess-rich-8.jpg",1600,1068],["/images/kathrine-rizzi/kathrine-rizzi-16.jpg",1066,1600],["/images/nadine/nadine-7.jpg",962,1442],["/images/nicole/nicole-16.jpg",1066,1600],["/images/shannon/shannon-8.jpg",1600,1066],["/images/hannah/hannah-6.jpg",1200,1600],["/images/jeanna/jeanna-5.jpg",1600,1065],["/images/jess-rich/jess-rich-9.jpg",964,1444],["/images/kathrine-rizzi/kathrine-rizzi-17.jpg",1066,1600],["/images/nicole/nicole-2.jpg",1068,1600],["/images/hannah/hannah-7.jpg",1066,1600],["/images/jeanna/jeanna-6.jpg",1064,1600],["/images/kathrine-rizzi/kathrine-rizzi-18.jpg",1066,1600],["/images/nicole/nicole-3.jpg",1600,1068],["/images/hannah/hannah-8.jpg",1066,1600],["/images/jeanna/jeanna-7.jpg",1064,1600],["/images/kathrine-rizzi/kathrine-rizzi-19.jpg",1066,1600],["/images/nicole/nicole-4.jpg",1600,1066],["/images/hannah/hannah-9.jpg",1066,1600],["/images/jeanna/jeanna-8.jpg",1064,1600],["/images/kathrine-rizzi/kathrine-rizzi-2.jpg",1066,1600],["/images/nicole/nicole-5.jpg",1066,1600],["/images/jeanna/jeanna-9.jpg",1064,1600],["/images/kathrine-rizzi/kathrine-rizzi-20.jpg",1066,1600],["/images/nicole/nicole-6.jpg",1066,1600],["/images/kathrine-rizzi/kathrine-rizzi-3.jpg",1066,1600],["/images/nicole/nicole-7.jpg",1600,1066],["/images/kathrine-rizzi/kathrine-rizzi-4.jpg",1066,1600],["/images/nicole/nicole-8.jpg",1600,1068],["/images/kathrine-rizzi/kathrine-rizzi-5.jpg",1066,1600],["/images/nicole/nicole-9.jpg",1066,1600],["/images/kathrine-rizzi/kathrine-rizzi-6.jpg",1066,1600],["/images/kathrine-rizzi/kathrine-rizzi-7.jpg",1066,1600],["/images/kathrine-rizzi/kathrine-rizzi-8.jpg",1066,1600],["/images/kathrine-rizzi/kathrine-rizzi-9.jpg",1600,1066]].map(function(a){ return {src:a[0], w:a[1], h:a[2]}; });
+
+// Build the running order: landscapes run full-bleed, portraits pair up into
+// spreads so a 16:9 screen is filled rather than letterboxed.
+function buildSlides(list){
+  const out=[], port=[];
+  for(const p of list){
+    if(p.w >= p.h){ out.push({kind:"full", a:p}); }
+    else {
+      port.push(p);
+      if(port.length===2){ out.push({kind:"pair", a:port[0], b:port[1]}); port.length=0; }
+    }
+  }
+  if(port.length) out.push({kind:"solo", a:port[0]});
+  return out;
+}
+const SLIDES = buildSlides(PHOTOS);
+
+// Two screens side by side should never show the same photo. ?screen=2 offsets
+// deterministically; with no parameter each screen picks its own random start.
+const params = new URLSearchParams(location.search);
+const screenNo = parseInt(params.get("screen")||"0",10);
+const HOLD = Math.max(3000, (parseInt(params.get("hold")||"7",10))*1000);
+let idx = screenNo ? Math.floor(SLIDES.length*((screenNo-1)/Math.max(screenNo,2)))
+                   : Math.floor(Math.random()*SLIDES.length);
+
+const stage=document.getElementById("stage");
+let current=null, timer=null, paused=false;
+
+function el(slide){
+  const d=document.createElement("div"); d.className="slide"+(slide.kind==="full"?" full":"");
+  if(slide.kind!=="full"){
+    const bg=document.createElement("div"); bg.className="bg";
+    bg.style.backgroundImage="url(\""+slide.a.src+"\")";
+    d.appendChild(bg);
+  }
+  const f=document.createElement("div"); f.className="frame";
+  for(const p of [slide.a, slide.b]){
+    if(!p) continue;
+    const im=document.createElement("img"); im.src=p.src; im.alt="";
+    f.appendChild(im);
+  }
+  d.appendChild(f);
+  return d;
+}
+
+function show(n){
+  idx=(n+SLIDES.length)%SLIDES.length;
+  const next=el(SLIDES[idx]);
+  stage.appendChild(next);
+  // let the browser paint at opacity 0 before fading in
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ next.classList.add("on"); }); });
+  const old=current; current=next;
+  if(old){ old.classList.remove("on"); setTimeout(function(){ old.remove(); }, 1800); }
+  preload(idx+1); preload(idx+2);
+}
+
+const cache={};
+function preload(n){
+  const s=SLIDES[(n+SLIDES.length)%SLIDES.length];
+  for(const p of [s.a,s.b]){ if(p && !cache[p.src]){ cache[p.src]=new Image(); cache[p.src].src=p.src; } }
+}
+
+function tick(){ if(!paused) show(idx+1); timer=setTimeout(tick, HOLD); }
+
+show(idx);
+timer=setTimeout(tick, HOLD);
+
+// Quietly pull the whole set into cache so a dropped wifi connection mid-party
+// doesn't leave a screen showing nothing.
+setTimeout(function(){
+  let i=0;
+  (function warm(){
+    if(i>=PHOTOS.length) return;
+    const im=new Image(); im.src=PHOTOS[i++].src;
+    im.onload=im.onerror=function(){ setTimeout(warm, 120); };
+  })();
+}, 8000);
+
+function jump(d){ clearTimeout(timer); show(idx+d); timer=setTimeout(tick, HOLD); }
+document.addEventListener("keydown", function(e){
+  if(e.key===" "){ e.preventDefault(); paused=!paused; document.body.classList.toggle("paused",paused); }
+  if(e.key==="ArrowRight") jump(1);
+  if(e.key==="ArrowLeft") jump(-1);
+  if(e.key==="f"||e.key==="F"){ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(function(){}); }
+  if(e.key==="l"||e.key==="L"){ const m=document.getElementById("mark"); m.style.opacity = m.style.opacity==="0"?".72":"0"; }
+});
+
+// Hide the cursor and the key hints once nobody has touched anything.
+let idleT;
+function stir(){ document.body.classList.remove("idle"); clearTimeout(idleT);
+  idleT=setTimeout(function(){ document.body.classList.add("idle"); }, 4000); }
+["mousemove","keydown","touchstart"].forEach(function(ev){ document.addEventListener(ev, stir); });
+stir();
+</script>
+</body>
+</html>
