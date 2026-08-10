@@ -7,7 +7,7 @@
     <meta name="description" content="Download the Juniper Floral Studio look book — garden-style wedding florals, palettes and installations for Austin and the Texas Hill Country." />
     <meta property="og:title" content="The Look Book | Juniper Floral Studio" />
     <meta property="og:description" content="Garden-style wedding florals, palettes and installations. Download the look book." />
-    <meta property="og:image" content="/images/kathrine-rizzi/kathrine-rizzi-5.jpg" />
+    <meta property="og:image" content="/images/lookbook/cover.jpg" />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,9 +20,15 @@
     <style>
       .lb-hero { display: grid; gap: 3rem; align-items: center; }
       @media (min-width: 900px) { .lb-hero { grid-template-columns: 1.05fr .95fr; gap: 4rem; } }
-      .lb-cover { position: relative; }
-      .lb-cover img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 2px;
-        box-shadow: 0 30px 60px -20px rgba(47,42,38,.35); }
+      .lb-cover { position: relative; perspective: 1200px; }
+      .lb-cover img.cover { width: 100%; aspect-ratio: 612/792; object-fit: cover; border-radius: 2px 6px 6px 2px;
+        transform: rotateY(6deg); transform-origin: left center;
+        box-shadow: -6px 0 0 -2px #e8e2d8, 0 30px 60px -20px rgba(47,42,38,.45); }
+      .lb-peek { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+      .lb-peek img { width: 100%; aspect-ratio: 612/792; object-fit: cover; border-radius: 2px;
+        box-shadow: 0 10px 24px -12px rgba(47,42,38,.35); }
+      .lb-peek-note { font-size: .72rem; letter-spacing: .18em; text-transform: uppercase;
+        color: #8a8177; margin-top: .8rem; text-align: center; }
       .lb-form label { display: block; font-size: .72rem; letter-spacing: .2em; text-transform: uppercase;
         color: #2f2a26; margin-bottom: .5rem; }
       .lb-form input, .lb-form select { width: 100%; padding: .8rem 1rem; border: 1px solid #e8e2d8;
@@ -58,7 +64,13 @@
     <main class="pt-32 pb-20 px-6">
       <div class="max-w-6xl mx-auto lb-hero">
         <div class="lb-cover">
-          <img src="/images/kathrine-rizzi/kathrine-rizzi-5.jpg" alt="A Juniper Floral Studio reception installation" />
+          <img class="cover" src="/images/lookbook/cover.jpg" alt="The Juniper Floral Studio look book cover — a couple beneath a garden-style ceremony arch" />
+          <div class="lb-peek">
+            <img src="/images/lookbook/peek-1.jpg" alt="A look inside: bridal bouquet page" loading="lazy" />
+            <img src="/images/lookbook/peek-2.jpg" alt="A look inside: ceremony florals page" loading="lazy" />
+            <img src="/images/lookbook/peek-3.jpg" alt="A look inside: reception tablescape page" loading="lazy" />
+          </div>
+          <p class="lb-peek-note">53 pages · read it online, it flips</p>
         </div>
 
         <div>
@@ -99,12 +111,12 @@
             <label for="lb-date">Event date <span style="text-transform:none;letter-spacing:0;color:#8a8177">(if you have one)</span></label>
             <input id="lb-date" name="event-date" type="date" />
 
-            <button type="submit">Send me the look book</button>
+            <button type="submit">Read the look book</button>
           </form>
 
           <p class="lb-note">
-            We'll send the look book straight to your inbox. We'll only email you about your own enquiry —
-            no lists, no forwarding your details on. See our
+            The book opens the moment you press the button — it flips like the printed one.
+            We'll only email you about your own enquiry — no lists, no forwarding your details on. See our
             <a href="/privacy/" style="color:#8b7d5e;text-decoration:underline">privacy policy</a>.
           </p>
         </div>
