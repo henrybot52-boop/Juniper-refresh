@@ -35,7 +35,7 @@
       }
       header .tools a:hover, header .tools button:hover { border-color: #c3a071; color: #c3a071; }
 
-      #stage { flex: 1 1 auto; position: relative; display: flex; align-items: center; justify-content: center; padding: 8px 64px 8px; min-height: 0; }
+      #stage { flex: 1 1 auto; position: relative; display: flex; align-items: center; justify-content: center; padding: 8px 64px; min-height: 0; }
       #book { touch-action: pan-y; }
       #book .page { background: #f4f1ec; overflow: hidden; }
       #book .page img { width: 100%; height: 100%; object-fit: cover; display: block;
@@ -62,13 +62,14 @@
         position: absolute; inset: 0; display: flex; flex-direction: column; gap: 18px;
         align-items: center; justify-content: center; text-align: center; padding: 24px;
       }
-      #status .bar { width: min(320px, 70vw); height: 2px; background: rgba(250,248,244,.15); }
-      #status .bar i { display: block; height: 100%; width: 0; background: #c3a071; transition: width .3s; }
       #status h1 { font-family: 'Playfair Display', serif; font-weight: 500; font-size: 1.5rem; }
       #status p { color: rgba(250,248,244,.7); line-height: 1.7; max-width: 30rem; }
       #status a { color: #c3a071; }
+      .spin { width: 26px; height: 26px; border: 2px solid rgba(250,248,244,.2);
+        border-top-color: #c3a071; border-radius: 50%; animation: sp .9s linear infinite; }
+      @keyframes sp { to { transform: rotate(360deg); } }
       @media (max-width: 700px) {
-        #stage { padding: 4px 4px; }
+        #stage { padding: 4px; }
         .nav-arrow { display: none; }
         header .tools a.dl { display: none; }
       }
@@ -90,10 +91,7 @@
       <button class="nav-arrow" id="prev" aria-label="Previous page">‹</button>
       <div id="book"></div>
       <button class="nav-arrow" id="next" aria-label="Next page">›</button>
-      <div id="status">
-        <h1>Opening the look book</h1>
-        <div class="bar"><i id="prog"></i></div>
-      </div>
+      <div id="status"><div class="spin"></div></div>
     </div>
 
     <footer>
@@ -101,125 +99,99 @@
       <a href="/inquire/">Start an enquiry</a>
     </footer>
 
-    <script src="/assets/vendor/pdf.min.js"></script>
     <script src="/assets/vendor/page-flip.browser.js"></script>
     <script>
       (async function () {
-        const PDF = '/lookbook/juniper-look-book.pdf';
+        const BASE = '/lookbook/pages/';
         const status = document.getElementById('status');
-        const prog = document.getElementById('prog');
-        const fail = (msg) => {
-          status.innerHTML = '<h1>Almost here</h1><p>' + msg + '</p>';
-        };
+        const fail = (msg) => { status.innerHTML = '<h1>Almost here</h1><p>' + msg + '</p>'; };
 
-        try {
-          const head = await fetch(PDF, { method: 'HEAD' });
-          if (!head.ok) throw new Error('missing');
-        } catch (e) {
+        // Pages are pre-rendered to WebP at build time (netlify/build-lookbook.mjs).
+        // The browser fetches only the spreads someone actually opens, at the size
+        // their screen can show — no PDF download, no client-side rasterising.
+        const man = await fetch(BASE + 'pages.json').then((r) => r.ok ? r.json() : null).catch(() => null);
+        if (!man) {
           return fail(
             'The look book is being prepared — your copy will arrive by email shortly. ' +
             'In the meantime, our <a href="/portfolio/">portfolio</a> has every wedding in full.'
           );
         }
 
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/vendor/pdf.worker.min.js';
-        const doc = await pdfjsLib.getDocument(PDF).promise.catch(() => null);
-        if (!doc) return fail('The look book could not be opened. <a href="' + PDF + '" download>Download it instead</a>.');
-
-        // Render pages at a size that stays crisp in fullscreen. The book
-        // opens as soon as the first few pages are ready; the rest render in
-        // the background — nobody waits on page 60 to see the cover.
-        const pages = [];
-        let pw = 0, ph = 0;
-
-        // Render for the physical pixels the screen actually has, not the CSS
-        // size — on a Retina display a page shown at 800 CSS px needs 1600 real
-        // pixels or it looks soft. Base it on the full screen height so
-        // fullscreen stays sharp without re-rendering, and cap it so 50+ pages
-        // of decoded JPEG don't swamp memory on a phone.
-        const dpr = window.devicePixelRatio || 1;
-        const small = Math.min(screen.width, screen.height) < 700;
-        const TARGET_H = Math.max(1600, Math.min(small ? 2000 : 2600, Math.round(screen.height * dpr)));
-
-        const renderPage = async (i) => {
-          const page = await doc.getPage(i);
-          const base = page.getViewport({ scale: 1 });
-          const vp = page.getViewport({ scale: TARGET_H / base.height });
-          const canvas = document.createElement('canvas');
-          canvas.width = vp.width; canvas.height = vp.height;
-          await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-          if (i === 1) { pw = vp.width; ph = vp.height; }
-          pages[i - 1] = canvas.toDataURL('image/jpeg', 0.92);
-          prog.style.width = Math.round((i / doc.numPages) * 100) + '%';
-        };
-        await renderPage(1);
-
-        // Fit the book inside the stage: two pages side by side on wide
-        // screens, one page on narrow ones. The container gets explicit
-        // dimensions — stretch mode fills whatever the parent allows, which
-        // otherwise overflows the header and footer.
         const stage = document.getElementById('stage');
         const bookEl = document.getElementById('book');
+        const ratio = man.ratio;                       // width / height of a page
         const portrait = () => stage.clientWidth < 700;
+
+        let pageW = 0;
         const fit = () => {
           const fitH = stage.clientHeight - 12;
           const across = portrait() ? 1 : 2;
           const fitW = (stage.clientWidth - 16) / across;
-          const k = Math.min(fitH / ph, fitW / pw, 1);
-          bookEl.style.width = Math.round(pw * k * across) + 'px';
-          bookEl.style.height = Math.round(ph * k) + 'px';
+          const h = Math.min(fitH, fitW / ratio);
+          pageW = Math.round(h * ratio);
+          bookEl.style.width = (pageW * across) + 'px';
+          bookEl.style.height = Math.round(h) + 'px';
         };
         fit();
 
-        // Build a shell for every page up front and let the images drop in as
-        // they render. HTML mode (not loadFromImages) is deliberate: the canvas
-        // renderer sizes its backing store in CSS pixels with no
-        // devicePixelRatio scaling, so every page came out upscaled and soft on
-        // a Retina screen. Real <img> elements are drawn by the browser at the
-        // display's native resolution.
+        // Pick the variant that matches the display's real pixels, so the page is
+        // sharp on a Retina screen without sending a phone a laptop-sized file.
+        const dpr = window.devicePixelRatio || 1;
+        const need = pageW * dpr;
+        const width = man.widths.filter((w) => w >= need)[0] || man.widths[man.widths.length - 1];
+        const ver = man.v ? '?v=' + man.v : '';
+        const url = (n) => BASE + 'p' + String(n).padStart(3, '0') + '@' + width + '.webp' + ver;
+
         const shells = [];
-        for (let i = 1; i <= doc.numPages; i++) {
+        for (let i = 1; i <= man.count; i++) {
           const d = document.createElement('div');
           d.className = 'page';
           const im = document.createElement('img');
           im.alt = 'Page ' + i;
-          if (pages[i - 1]) im.src = pages[i - 1];
           d.appendChild(im);
           bookEl.appendChild(d);
           shells.push(im);
         }
 
+        // Only load what's near the reader; widen the window as they move, so a
+        // browse of six pages costs six pages of bandwidth, not fifty-three.
+        const AHEAD = 5, BEHIND = 2;
+        function loadAround(i) {
+          for (let n = Math.max(1, i - BEHIND); n <= Math.min(man.count, i + AHEAD); n++) {
+            const im = shells[n - 1];
+            if (!im.src) im.src = url(n);
+          }
+        }
+
+        // Nothing competes with the cover for bandwidth: fetch it alone, show
+        // the book, and only then start pulling the pages behind it.
+        shells[0].src = url(1);
+        await new Promise((res) => {
+          if (shells[0].complete) return res();
+          shells[0].onload = shells[0].onerror = res;
+          setTimeout(res, 4000);
+        });
+        status.remove();
+        loadAround(1);
+
         const flip = new St.PageFlip(bookEl, {
-          width: pw, height: ph,
+          width: 1000, height: Math.round(1000 / ratio),
           size: 'stretch',
           minWidth: 150, maxWidth: 3000, minHeight: 200, maxHeight: 3000,
           showCover: true, maxShadowOpacity: 0.35, usePortrait: true,
           mobileScrollSupport: false,
         });
         flip.loadFromHTML(bookEl.querySelectorAll('.page'));
-        status.remove();
         window.addEventListener('resize', fit);
 
         const pageno = document.getElementById('pageno');
-        let total = doc.numPages;
         const show = () => {
           const p = flip.getCurrentPageIndex() + 1;
-          const loaded = pages.filter(Boolean).length;
-          pageno.textContent = 'Page ' + p + ' of ' + total + (loaded < total ? ' · loading…' : '');
+          pageno.textContent = 'Page ' + p + ' of ' + man.count;
+          loadAround(p);
         };
         show();
         flip.on('flip', show);
-
-        // Render the rest in the background, dropping each image into its
-        // waiting shell. Page count and layout are correct from the first
-        // frame, so nothing jumps as the book fills in.
-        (async () => {
-          for (let i = 2; i <= doc.numPages; i++) {
-            await renderPage(i);
-            shells[i - 1].src = pages[i - 1];
-            show();
-          }
-        })();
 
         document.getElementById('prev').onclick = () => flip.flipPrev();
         document.getElementById('next').onclick = () => flip.flipNext();
