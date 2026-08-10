@@ -64,6 +64,31 @@ export default async (req) => {
   if (req.method === 'POST') {
     let body;
     try { body = await req.json(); } catch { return json({ error: 'bad-json' }, 400); }
+
+    // Manually logged leads — WeddingWire, The Knot, Instagram DMs, referrals.
+    // They live in Blobs (Netlify Forms only holds real form submissions) and
+    // flow through the same pipeline, stages, and CSV as everything else.
+    if (body.action === 'add') {
+      const { name, email, source, eventDate, message } = body;
+      if (!name && !email) return json({ error: 'need at least a name or email' }, 400);
+      const manual = (await store.get('manual', { type: 'json', consistency: 'strong' }).catch(() => null)) || [];
+      const lead = {
+        id: 'man-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        form: String(source || 'other').toLowerCase(),
+        name: String(name || ''), email: String(email || ''),
+        eventDate: String(eventDate || ''), message: String(message || ''),
+        at: new Date().toISOString(),
+      };
+      manual.unshift(lead);
+      await store.setJSON('manual', manual);
+      return json({ ok: true, lead });
+    }
+    if (body.action === 'removeManual') {
+      const manual = (await store.get('manual', { type: 'json', consistency: 'strong' }).catch(() => null)) || [];
+      await store.setJSON('manual', manual.filter((l) => l.id !== body.id));
+      return json({ ok: true });
+    }
+
     const { id, stage, note } = body || {};
     if (!id) return json({ error: 'missing id' }, 400);
     if (stage && !STAGES.includes(stage)) return json({ error: 'unknown stage' }, 400);
@@ -76,14 +101,18 @@ export default async (req) => {
     return json({ ok: true, meta: meta[id] });
   }
 
-  const [leads, meta] = await Promise.all([
+  const [formLeads, manual, meta] = await Promise.all([
     fetchSubmissions(token),
+    store.get('manual', { type: 'json', consistency: 'strong' }).catch(() => null),
     store.get('meta', { type: 'json', consistency: 'strong' }).catch(() => null),
   ]);
+  const leads = [...(manual || []), ...formLeads]
+    .sort((a, b) => new Date(b.at) - new Date(a.at));
   const m = meta || {};
   for (const l of leads) {
     l.stage = m[l.id]?.stage || 'new';
     l.note = m[l.id]?.note || '';
+    l.manual = l.id.startsWith('man-');
   }
 
   const url = new URL(req.url);

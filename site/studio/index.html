@@ -134,6 +134,26 @@
     <!-- Leads funnel: look book downloads + inquiries, with stage + notes -->
     <div id="leadsPanel" hidden>
       <div class="filters" id="leadFilters"></div>
+      <div class="banner" id="addLeadBox" style="display:none">
+        <b style="font-size:13px">Log a lead from somewhere else</b>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <input id="alName" placeholder="Name" style="flex:1;min-width:130px" class="note">
+          <input id="alEmail" placeholder="Email" style="flex:1;min-width:170px" class="note">
+          <select id="alSource" class="note" style="flex:0 0 auto;width:auto">
+            <option value="weddingwire">WeddingWire</option>
+            <option value="theknot">The Knot</option>
+            <option value="instagram">Instagram DM</option>
+            <option value="referral">Referral</option>
+            <option value="other">Other</option>
+          </select>
+          <input id="alDate" type="date" class="note" style="flex:0 0 auto;width:auto">
+        </div>
+        <input id="alMsg" placeholder="What they asked for (paste their message)" class="note" style="margin-top:8px">
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="primary" id="alSave">Save lead</button>
+          <button id="alCancel">Cancel</button>
+        </div>
+      </div>
       <div id="leadList"></div>
     </div>
   </main>
@@ -513,6 +533,10 @@ function renderLeads(){
     b.onclick=()=>{LFILTER=k;renderLeads();};
     f.appendChild(b);
   });
+  const add=document.createElement('button');
+  add.textContent='+ Add lead';
+  add.onclick=()=>{document.getElementById('addLeadBox').style.display='block';};
+  f.appendChild(add);
   const csv=document.createElement('button');
   csv.textContent='Export CSV';
   csv.onclick=async()=>{
@@ -533,14 +557,22 @@ function renderLeads(){
     card.innerHTML=`
       <div class="who">
         <b>${l.name||'(no name)'}</b>
-        <a href="mailto:${l.email}?subject=${subject}">${l.email}</a>
-        <span class="src">${l.form==='lookbook'?'look book':'inquiry'}</span>
+        ${l.email?`<a href="mailto:${l.email}?subject=${subject}">${l.email}</a>`:''}
+        <span class="src">${{lookbook:'look book',inquiry:'inquiry',weddingwire:'WeddingWire',theknot:'The Knot',instagram:'Instagram',referral:'referral'}[l.form]||l.form}</span>
+        ${l.manual?'<button class="rmLead" style="margin-left:auto;padding:3px 10px;font-size:11px">Remove</button>':''}
       </div>
       <div class="meta2">${days===0?'today':days+' day'+(days===1?'':'s')+' ago'}${l.eventDate?' · event: '+l.eventDate:''}</div>
       ${l.message?`<p class="msg"></p>`:''}
       <div class="stages"></div>
       <input class="note" placeholder="Notes — what happened, what's next" value="">`;
     if(l.message) card.querySelector('.msg').textContent=l.message;
+    const rm=card.querySelector('.rmLead');
+    if(rm) rm.onclick=async()=>{
+      if(!confirm('Remove this lead? (Only manually added leads can be removed.)'))return;
+      await fetch(LEADS_API,{method:'POST',headers:{'x-studio-key':KEY,'content-type':'application/json'},
+        body:JSON.stringify({action:'removeManual',id:l.id})});
+      LEADS=LEADS.filter(x=>x.id!==l.id); renderLeads();
+    };
     const st=card.querySelector('.stages');
     for(const s of LSTAGES){
       const b=document.createElement('button');
@@ -562,6 +594,18 @@ function renderLeads(){
     list.appendChild(card);
   }
 }
+
+document.getElementById('alCancel').onclick=()=>{document.getElementById('addLeadBox').style.display='none';};
+document.getElementById('alSave').onclick=async()=>{
+  const v=id=>document.getElementById(id).value.trim();
+  const r=await fetch(LEADS_API,{method:'POST',headers:{'x-studio-key':KEY,'content-type':'application/json'},
+    body:JSON.stringify({action:'add',name:v('alName'),email:v('alEmail'),source:v('alSource'),eventDate:v('alDate'),message:v('alMsg')})
+  }).then(x=>x.json());
+  if(r.error){alert(r.error);return}
+  for(const id of ['alName','alEmail','alDate','alMsg']) document.getElementById(id).value='';
+  document.getElementById('addLeadBox').style.display='none';
+  await loadLeads();
+};
 
 if(KEY) load(); else showLogin();
 </script>
