@@ -75,6 +75,17 @@
   .card details>button{width:calc(100% - 24px);margin-bottom:12px}
   .card details.pinned>summary{color:var(--good)}
   .card details.pinned>summary::before{background:var(--good)}
+  /* Leads funnel */
+  .lead{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:12px}
+  .lead .who{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .lead .who b{font-size:15px}
+  .lead .src{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:999px;background:var(--cream);border:1px solid var(--line)}
+  .lead .msg{font-size:13px;color:#555;margin:8px 0 0;line-height:1.55;white-space:pre-wrap}
+  .lead .stages{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+  .lead .stages button{padding:5px 12px;font-size:11.5px}
+  .lead .stages button.on{background:var(--charcoal);color:var(--cream);border-color:var(--charcoal)}
+  .lead .note{width:100%;margin-top:10px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:12.5px;background:var(--cream)}
+  .lead .meta2{font-size:12px;color:#8a8177;margin-top:4px}
   @media(max-width:600px){ .grid{grid-template-columns:1fr} }
 </style>
 </head>
@@ -94,6 +105,7 @@
       <h1>Studio</h1>
       <span class="sub" id="counts"></span>
       <div class="spacer"></div>
+      <button id="secToggle" title="Switch between the photo queue and the enquiry funnel">Leads</button>
       <button id="approveAll">Approve all shown</button>
       <button id="refresh">Refresh</button>
     </div>
@@ -118,6 +130,12 @@
     <div class="filters" id="filters"></div>
     <div class="grid" id="grid"></div>
     <div class="empty" id="empty" hidden>Nothing here.</div>
+
+    <!-- Leads funnel: look book downloads + inquiries, with stage + notes -->
+    <div id="leadsPanel" hidden>
+      <div class="filters" id="leadFilters"></div>
+      <div id="leadList"></div>
+    </div>
   </main>
 </div>
 
@@ -463,6 +481,87 @@ document.getElementById('photoInput').addEventListener('change', async e=>{
     '\n\nHEIC photos from an iPhone only convert in Safari — on other browsers, export them as JPEG first.');
   FILTER='pending'; await load();
 });
+
+// ---- Leads funnel -----------------------------------------------------------
+const LEADS_API='/.netlify/functions/leads-api';
+let LEADS=[], LSTAGES=[], LFILTER='all', leadsMode=false;
+const STAGE_LABEL={new:'New',replied:'Replied',talking:'In conversation',booked:'Booked',passed:'Passed'};
+
+document.getElementById('secToggle').onclick=async()=>{
+  leadsMode=!leadsMode;
+  document.getElementById('secToggle').textContent=leadsMode?'Photos':'Leads';
+  for(const id of ['uploadPanel','filters','grid','empty']) document.getElementById(id).hidden=leadsMode;
+  document.getElementById('approveAll').hidden=leadsMode;
+  document.getElementById('leadsPanel').hidden=!leadsMode;
+  if(leadsMode) await loadLeads();
+};
+
+async function loadLeads(){
+  const r=await fetch(LEADS_API,{headers:{'x-studio-key':KEY}}).then(x=>x.json()).catch(()=>({}));
+  if(!r.leads){document.getElementById('leadList').innerHTML='<div class="empty">Could not load leads.</div>';return}
+  LEADS=r.leads; LSTAGES=r.stages; renderLeads();
+}
+
+function renderLeads(){
+  const f=document.getElementById('leadFilters'); f.innerHTML='';
+  const counts={all:LEADS.length};
+  for(const s of LSTAGES) counts[s]=LEADS.filter(l=>l.stage===s).length;
+  [['all','All'],...LSTAGES.map(s=>[s,STAGE_LABEL[s]])].forEach(([k,label])=>{
+    const b=document.createElement('button');
+    b.textContent=`${label} (${counts[k]||0})`;
+    if(k===LFILTER)b.className='on';
+    b.onclick=()=>{LFILTER=k;renderLeads();};
+    f.appendChild(b);
+  });
+  const csv=document.createElement('button');
+  csv.textContent='Export CSV';
+  csv.onclick=async()=>{
+    const res=await fetch(LEADS_API+'?csv=1',{headers:{'x-studio-key':KEY}});
+    const blob=await res.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='juniper-leads.csv'; a.click();
+  };
+  f.appendChild(csv);
+
+  const list=document.getElementById('leadList'); list.innerHTML='';
+  const shown=LFILTER==='all'?LEADS:LEADS.filter(l=>l.stage===LFILTER);
+  if(!shown.length){list.innerHTML='<div class="empty">No leads here yet.</div>';return}
+  for(const l of shown){
+    const days=Math.floor((Date.now()-new Date(l.at))/864e5);
+    const card=document.createElement('div'); card.className='lead';
+    const subject=encodeURIComponent(l.form==='lookbook'?'Your Juniper look book':'Your wedding flowers enquiry');
+    card.innerHTML=`
+      <div class="who">
+        <b>${l.name||'(no name)'}</b>
+        <a href="mailto:${l.email}?subject=${subject}">${l.email}</a>
+        <span class="src">${l.form==='lookbook'?'look book':'inquiry'}</span>
+      </div>
+      <div class="meta2">${days===0?'today':days+' day'+(days===1?'':'s')+' ago'}${l.eventDate?' · event: '+l.eventDate:''}</div>
+      ${l.message?`<p class="msg"></p>`:''}
+      <div class="stages"></div>
+      <input class="note" placeholder="Notes — what happened, what's next" value="">`;
+    if(l.message) card.querySelector('.msg').textContent=l.message;
+    const st=card.querySelector('.stages');
+    for(const s of LSTAGES){
+      const b=document.createElement('button');
+      b.textContent=STAGE_LABEL[s];
+      if(l.stage===s)b.className='on';
+      b.onclick=async()=>{
+        await fetch(LEADS_API,{method:'POST',headers:{'x-studio-key':KEY,'content-type':'application/json'},
+          body:JSON.stringify({id:l.id,stage:s})});
+        l.stage=s; renderLeads();
+      };
+      st.appendChild(b);
+    }
+    const note=card.querySelector('.note'); note.value=l.note||'';
+    note.onchange=async()=>{
+      await fetch(LEADS_API,{method:'POST',headers:{'x-studio-key':KEY,'content-type':'application/json'},
+        body:JSON.stringify({id:l.id,note:note.value})});
+      l.note=note.value;
+    };
+    list.appendChild(card);
+  }
+}
 
 if(KEY) load(); else showLogin();
 </script>
