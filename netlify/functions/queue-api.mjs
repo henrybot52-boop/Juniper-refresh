@@ -125,6 +125,32 @@ export default async (req) => {
     // saves far above likes, and a set someone can swipe through is what earns
     // them — a single image rarely does.
     if (action === 'createCarousel') {
+      // Slides given directly as URLs — announcement cards and other artwork
+      // that was never a queue photo. Restricted to our own domain so the
+      // studio can't be used to publish arbitrary images to the account.
+      if (Array.isArray(body.images) && body.images.length) {
+        const urls = body.images.map(String);
+        if (urls.length < MIN_CAROUSEL || urls.length > MAX_CAROUSEL) {
+          return json({ error: `A carousel takes ${MIN_CAROUSEL}-${MAX_CAROUSEL} images.` }, 400);
+        }
+        for (const u of urls) {
+          let parsed;
+          try { parsed = new URL(u); } catch { return json({ error: 'bad url: ' + u }, 400); }
+          if (parsed.hostname !== 'juniperfloralstudio.com') return json({ error: 'images must be hosted on juniperfloralstudio.com' }, 400);
+          if (!/\.jpe?g$/i.test(parsed.pathname)) return json({ error: 'Instagram only accepts JPEG: ' + u }, 400);
+        }
+        const car = {
+          id: 'car-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+          wedding: String(body.label || 'announcement'),
+          images: urls,
+          memberIds: [],
+          caption: String(body.caption || '').slice(0, 2200),
+          at: new Date().toISOString(),
+        };
+        await store.setJSON('carousels', [car, ...carousels]);
+        return json({ ok: true, carousel: car });
+      }
+
       const ids = Array.isArray(body.ids) ? body.ids : [];
       if (ids.length < MIN_CAROUSEL) return json({ error: `Pick at least ${MIN_CAROUSEL} photos.` }, 400);
       if (ids.length > MAX_CAROUSEL) return json({ error: `Instagram allows at most ${MAX_CAROUSEL} photos.` }, 400);
