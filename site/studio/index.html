@@ -12,6 +12,9 @@
   :root{ --cream:#faf8f4; --charcoal:#2f2a26; --line:#e8e2d8; --gold:#8b7d5e;
          --good:#4a7c59; --warn:#a8622a; --muted:#8a8177; }
   *{box-sizing:border-box}
+  /* A class that sets display beats the browser's [hidden] rule, so hiding the
+     photo grid by attribute silently failed and left panels stranded below it. */
+  [hidden]{display:none !important}
   body{margin:0;background:var(--cream);color:var(--charcoal);
        font-family:'Manrope',system-ui,sans-serif;font-size:15px;line-height:1.6}
   h1,h2{font-family:'Playfair Display',serif;font-weight:500;margin:0}
@@ -145,9 +148,13 @@
 
     <!-- Carousels: several photos from one wedding, posted as one swipeable set -->
     <div id="carPanel" hidden>
-      <div class="car-build">
-        <b style="font-size:13px">New carousel</b>
-        <p class="sub" style="margin:6px 0 0">A set someone can swipe through earns saves, and saves are what Instagram ranks on. Two to ten photos, in the order you tap them.</p>
+      <h2 style="font-size:18px;margin-bottom:4px">Carousels</h2>
+      <p class="sub" style="margin-bottom:14px">Several photos posted as one swipeable set. Instagram counts saves far above likes, and a set people can swipe is what earns them.</p>
+      <div id="carList"></div>
+
+      <details class="car-build" id="carBuild" style="margin-top:18px">
+        <summary style="cursor:pointer;font-weight:600;font-size:13.5px;list-style:none">+ Build a new carousel from a wedding</summary>
+        <p class="sub" style="margin:8px 0 0">Pick a wedding, then tap photos in the order you want them to appear. Two to ten.</p>
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
           <select id="carWedding" class="note" style="width:auto"></select>
           <span class="sub" id="carCount">none picked</span>
@@ -158,8 +165,7 @@
           <button class="primary" id="carSave">Create carousel</button>
           <button id="carClear">Clear</button>
         </div>
-      </div>
-      <div id="carList"></div>
+      </details>
     </div>
 
     <!-- Leads funnel: look book downloads + inquiries, with stage + notes -->
@@ -292,6 +298,7 @@ function render(){
   document.getElementById('carPanel').hidden=!carMode;
   document.getElementById('grid').hidden=carMode;
   document.getElementById('filters').hidden=carMode;
+  document.getElementById('uploadPanel').hidden=carMode;
   document.getElementById('approveAll').hidden=carMode;
   if(carMode){ document.getElementById('empty').hidden=true; renderCarousels(); return; }
   const g=document.getElementById('grid'); g.innerHTML='';
@@ -700,13 +707,13 @@ function renderCarousels(){
 
   const list=document.getElementById('carList'); list.innerHTML='';
   if(!CAROUSELS.length){
-    list.innerHTML='<div class="empty">No carousels yet. Pick photos above to build one.</div>';
+    list.innerHTML='<div class="empty">No carousels yet — open <b>Build a new carousel</b> below to make one.</div>';
     return;
   }
   for(const c of CAROUSELS){
     const card=document.createElement('div'); card.className='car-card';
     const head=document.createElement('div'); head.className='meta';
-    head.innerHTML='<span class="pill '+c.status+'">'+c.status+'</span><span>'+c.wedding+'</span><span>'+c.images.length+' photos</span>';
+    head.innerHTML='<span class="pill '+c.status+'">'+c.status+'</span><span><b>'+c.wedding+'</b></span><span>'+c.images.length+' photos</span>';
     card.appendChild(head);
     const strip=document.createElement('div'); strip.className='car-strip'; strip.style.margin='10px 0';
     for(const u of c.images){ const im=document.createElement('img'); im.src=u; im.loading='lazy'; im.alt=''; strip.appendChild(im); }
