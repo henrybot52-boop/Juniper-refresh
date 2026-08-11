@@ -2646,6 +2646,7 @@ function renderActualsPage(){
     ['Act cost','Actual Total Cost charged to date, from the extract'],
     ['EAC cost','Actual cost to date + plan-to-go hours × cost rate (cost rows: + plan-to-go dollars)'],
     ['EAC rev','EAC hours × bill rate, plus non-labor at cost + markup. $0 for rows marked no-bill'],
+    ['Rev Δ','Revenue delta: EAC revenue − planned (baseline) revenue. Red = earning less than planned'],
     ['Orig EAC','The original baseline total for this row (hours, or dollars for cost rows)'],
     ['Overrun','EAC − original baseline. Red = more than originally planned'],
   ];
@@ -2677,7 +2678,7 @@ function renderActualsPage(){
     if(hiddenWeeks.length)trT.append(el('td'));
     const wkTds=visWeeks.map(()=>{ const td=el('td',{class:'wk num'}); trT.append(td); return td; });
     const sum={};
-    ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','origEac','over'].forEach((k,i)=>{
+    ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','revDelta','origEac','over'].forEach((k,i)=>{
       const td=el('td',{class:'num'+(i===0?' sumcol':'')}); sum[k]=td; trT.append(td); });
     tb.append(trT);
     ppCtx._apTaskRows.push({kids,wkTds,sum,weeks:visWeeks});
@@ -2742,7 +2743,7 @@ function renderActualsPage(){
       });
       rateTd.append(rin);
     } else rateTd.textContent='—';
-    tr.append(rateTd, mk('actC'), mk('eacC'), mk('eacRev'), mk('origEac'), mk('over'));
+    tr.append(rateTd, mk('actC'), mk('eacC'), mk('eacRev'), mk('revDelta'), mk('origEac'), mk('over'));
     tb.append(tr);
     updateItemSummary(it);
   }
@@ -2752,7 +2753,7 @@ function renderActualsPage(){
   ppCtx._totWeekTds=[];
   for(const wk of visWeeks){ const td=el('td',{class:'wk num'}); ppCtx._totWeekTds.push(td); trTot.append(td); }
   ppCtx._totSum={};
-  ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','origEac','over'].forEach((k,i)=>{
+  ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','revDelta','origEac','over'].forEach((k,i)=>{
     const td=el('td',{class:'num'+(i===0?' sumcol':'')}); ppCtx._totSum[k]=td; trTot.append(td);
   });
   tb.append(trTot);
@@ -2763,7 +2764,7 @@ function renderActualsPage(){
     if(hiddenWeeks.length)tr.append(el('td'));
     const tds=visWeeks.map(()=>{ const td=el('td',{class:'wk num'+(cls||'')}); tr.append(td); return td; });
     const tot=el('td',{class:'num sumcol'+(cls||'')}); tr.append(tot);
-    for(let i=0;i<10;i++)tr.append(el('td'));
+    for(let i=0;i<11;i++)tr.append(el('td'));
     tb.append(tr); return {tds,tot};
   };
   ppCtx._revPlanRow=mkRevRow('Revenue — planned','Baseline hours × bill rate (subs/expenses at cost + markup), per week');
@@ -2830,6 +2831,13 @@ function updateItemSummary(it){
   S.eacC.textContent=fmtMoney(c.eacCost);
   S.eacRev.textContent=c.nb?'$0 NB':(c.eacRev?fmtMoney(c.eacRev):'');
   S.eacRev.className=c.nb?'num neg':'num';
+  if(S.revDelta){
+    const rd = c.baseRev!=null ? (c.eacRev||0)-c.baseRev : null;
+    S.revDelta.textContent = rd==null? '' : ((rd>0?'+':'')+fmtMoney(rd));
+    S.revDelta.className='num '+(rd==null?'':(rd<-0.5?'neg':'pos'));
+    S.revDelta.title = rd==null? 'No baseline yet — set one on the Baseline plan view'
+      : 'EAC revenue '+fmtMoney(c.eacRev||0)+' − planned '+fmtMoney(c.baseRev);
+  }
   S.eacRev.title=c.nb?'Marked non-billable':(it.isLabor&&!c.bill?'No bill rate set for this person in the rate table':'');
   S.origEac.textContent=c.baseTot? f(c.baseTot):'';
   S.over.innerHTML='';
@@ -2872,9 +2880,11 @@ function updatePlanTotals(){
       R.wkTds[i].append(el('span',{class:'wk-act'},wk<=ppCtx.lastActualWeek&&a?fmtNum(a,1):''),
         el('span',null,p?fmtNum(p,1):''));
     });
+    let tBaseRev=0, anyBaseRev=false;
     for(const it of R.kids){ const c=itemCalc(it);
       if(it.isLabor){ tH+=c.act; tPlan+=c.planTD; tGo+=c.toGo; tEac+=c.eac; tBase+=c.baseTot; if(c.over!=null){tOver+=c.over;anyOver=true;} }
-      tActC+=it.cost; tEacC+=c.eacCost; tRev+=c.eacRev||0; }
+      tActC+=it.cost; tEacC+=c.eacCost; tRev+=c.eacRev||0;
+      if(c.baseRev!=null){ tBaseRev+=c.baseRev; anyBaseRev=true; } }
     R.sum.act.textContent=tH?fmtNum(tH,1):'';
     R.sum.planTD.textContent=tPlan?fmtNum(tPlan,1):'';
     R.sum.varTD.textContent=tPlan?fmtNum(tH-tPlan,1):'';
@@ -2885,6 +2895,12 @@ function updatePlanTotals(){
     R.sum.actC.textContent=tActC?fmtMoney(tActC):'';
     R.sum.eacC.textContent=tEacC?fmtMoney(tEacC):'';
     R.sum.eacRev.textContent=tRev?fmtMoney(tRev):'';
+    if(R.sum.revDelta){
+      const rd=anyBaseRev? tRev-tBaseRev : null;
+      R.sum.revDelta.textContent = rd==null? '' : ((rd>0?'+':'')+fmtMoney(rd));
+      R.sum.revDelta.className='num '+(rd==null?'':(rd<-0.5?'neg':'pos'));
+      R.sum.revDelta.title = rd==null? '' : 'Task EAC revenue '+fmtMoney(tRev)+' − planned '+fmtMoney(tBaseRev);
+    }
     R.sum.origEac.textContent=tBase?fmtNum(tBase,1):'';
     R.sum.over.textContent=anyOver?((tOver>0?'+':'')+fmtNum(tOver,1)):'';
     R.sum.over.className='num '+(anyOver&&tOver>0.5?'neg':anyOver?'pos':'');
@@ -2929,6 +2945,14 @@ function updatePlanTotals(){
   T.actC.textContent=fmtMoney(actC);
   T.eacC.textContent=fmtMoney(eacC);
   T.eacRev.textContent=eacR?fmtMoney(eacR):'';
+  if(T.revDelta){
+    let baseR=0,anyB=false;
+    for(const it of ppCtx.items){ const c=itemCalc(it); if(c.baseRev!=null){baseR+=c.baseRev;anyB=true;} }
+    const rd=anyB? eacR-baseR : null;
+    T.revDelta.textContent = rd==null? '' : ((rd>0?'+':'')+fmtMoney(rd));
+    T.revDelta.className='num '+(rd==null?'':(rd<-0.5?'neg':'pos'));
+    T.revDelta.title = rd==null? '' : 'Project EAC revenue '+fmtMoney(eacR)+' − planned '+fmtMoney(baseR);
+  }
   T.origEac.textContent=baseH?fmtNum(baseH,1)+' h':'';
   T.over.textContent=hasBase?(overSum>0?'+':'')+fmtNum(overSum,1)+' h':'';
   T.over.className='num '+(hasBase&&overSum>0.5?'neg':hasBase?'pos':'');
