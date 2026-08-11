@@ -1824,6 +1824,30 @@ function ppItemLabel(r,level){
   if(level==='taskEmployee')return (tk||'(no task)')+' · '+emp;
   return (tt||'(no task)')+' · '+emp;
 }
+// Ensure a person is in this project's rate table, seeding rates from what we already know:
+// 1) their derived cost rate from this project's actuals, 2) rates they already have on another
+// project, 3) otherwise left blank and flagged so they can't silently cost/earn $0.
+function ensureRatedPerson(emp,meta){
+  emp=String(emp||'').trim(); if(!emp)return null;
+  meta=meta||(ppCtx&&ppCtx.meta); if(!meta)return null;
+  meta._rateTable=meta._rateTable||{};
+  const rt=meta._rateTable, e=rt[emp]||(rt[emp]={});
+  const src={cost:null,bill:null};
+  if(!(e.cost>0)){
+    const es=ppCtx&&ppCtx.empStats&&ppCtx.empStats[emp];
+    if(es&&es.rate>0){ e.cost=Math.round(es.rate*100)/100; src.cost='this project\'s actuals'; }
+  }
+  if(!(e.cost>0)||!(e.bill>0)){
+    for(const [pj,p] of Object.entries(state.plans)){
+      if(p===meta)continue;
+      const o=(p._rateTable||{})[emp]; if(!o)continue;
+      if(!(e.cost>0)&&o.cost>0){ e.cost=o.cost; src.cost='project '+pj; }
+      if(!(e.bill>0)&&o.bill>0){ e.bill=o.bill; src.bill='project '+pj; }
+      if(e.cost>0&&e.bill>0)break;
+    }
+  }
+  return {emp,cost:e.cost,bill:e.bill,src,needs:(!(e.cost>0)?'cost':'')+((!(e.cost>0)&&!(e.bill>0))?' and ':'')+(!(e.bill>0)?'bill':'')};
+}
 function rateTableEmps(){
   const set=new Set(Object.keys(ppCtx.empStats));
   for(const k of Object.keys(ppCtx.meta._rateTable))set.add(k);
@@ -1921,9 +1945,17 @@ function setupProjectPages(){
     if(ppCtx.items.some(it=>it.label===label)){alert('That row already exists in the grid.');return;}
     ppCtx.node.manual=ppCtx.node.manual||[];
     ppCtx.node.manual.push({label,emp:needsEmp?emp:null,isLabor:unit==='hours'});
-    if(needsEmp&&emp){ const rt=ppCtx.meta._rateTable; if(!rt[emp])rt[emp]={}; }
+    let note='';
+    if(needsEmp&&emp){
+      const r=ensureRatedPerson(emp);
+      if(r){
+        if(r.needs) note='\n\n'+emp+' was added to the Rate Table but still needs a '+r.needs+' rate — until then their hours '+(r.needs.indexOf('cost')>=0?'cost ':'')+(r.needs.indexOf('bill')>=0?(r.needs.indexOf('cost')>=0?'and earn ':'earn '):'')+'$0. Open the Rate Table tab to set it.';
+        else if(r.src.cost||r.src.bill) note='\n\nRates for '+emp+' were carried over from '+(r.src.cost||r.src.bill)+'.';
+      }
+    }
     $('#fpNewTask').value='';$('#fpNewEmp').value='';
     saveState(); renderForecastPage();
+    if(note)alert('Added '+label+'.'+note);
   });
   $('#btnFpClear').addEventListener('click',()=>{
     if(!ppCtx)return;
@@ -3643,6 +3675,7 @@ function renderCoPricing(){
         L.weeks=L.weeks||{};
         const emp=el('input',{class:'rate-in',list:'coEmpList',style:'width:170px;text-align:left',value:L.emp||''});
         emp.addEventListener('change',()=>{ L.emp=emp.value;
+          ensureRatedPerson(L.emp);                    // new people join the project rate table
           if((!L.cost||L.cost==='')&&(!L.bill||L.bill==='')){ const r=empRates(L.emp); L.cost=r.cost; L.bill=r.bill; }
           saveState(); renderCoPricing(); });
         const costIn=rateIn(L,'cost'), billIn=rateIn(L,'bill');
