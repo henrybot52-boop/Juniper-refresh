@@ -465,6 +465,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
       <button id="btnApExpand" title="Expand every task">Expand all</button>
       <button id="btnApCollapse" title="Collapse to task level — one row per task with its rollups">Collapse all</button>
       <button id="btnApReport">Status report</button>
+      <button id="btnApRevDist" title="Revenue by discipline: weekly planned vs achieved, printable and exportable so each team can adjust">Revenue by discipline</button>
       <button id="btnApHist">Baseline history</button>
       <button id="btnApCsv">Export CSV</button>
     </div>
@@ -619,7 +620,9 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
       <label>Project: <select id="skProject" style="max-width:430px"></select></label>
       <button id="btnSkAdd" class="primary small">+ Add subcontractor</button>
       <button id="btnSkXlsx" class="small">Export Excel</button>
-      <button id="btnSkImp" class="small" title="Import from Excel (.xlsx) or CSV: Vendor, Subcontract/PO #, Description, Status, Commitment, Task code(s), Notes">Import</button>
+      <button id="btnSkImp" class="small" title="Import from Excel (.xlsx) or CSV: Vendor, Subcontract/PO #, Description, Status, Commitment, Task code(s), Notes">Import register</button>
+      <button id="btnSkHours" class="small" title="Import a subcontractor labor-detail timesheet (Employee, Date, Hours, Billing) — hours land in the forecast under their own task">Import sub hours…</button>
+      <input type="file" id="skHoursFile" accept=".xlsx,.xls,.csv,.tsv,.txt" class="hidden">
       <input type="file" id="skFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
     </div>
     <p class="hint">Track each subcontractor / subconsultant commitment (PO or subcontract value) and the actual cost charged against its task code(s) from the extract.
@@ -2018,6 +2021,7 @@ function setupProjectPages(){
     saveState(); renderActualsPage();
   });
   $('#btnApReport').addEventListener('click',()=>{ if(ppCtx)showStatusReport(ppCtx.proj); });
+  $('#btnApRevDist').addEventListener('click',showRevByDiscipline);
   $('#revCum').addEventListener('change',updateRevChart);
   $$('button.modebtn').forEach(b=>b.addEventListener('click',()=>setPpMode(b.dataset.mode)));
   $('#btnApExpand').addEventListener('click',()=>{ if(ppCtx){ apCollapsed[ppCtx.proj]=new Set(); renderActualsPage(); } });
@@ -4251,6 +4255,8 @@ function setupSubTab(){
   });
   $('#btnSkXlsx').addEventListener('click',exportSkXlsx);
   $('#btnSkImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#skFile').click(); });
+  $('#btnSkHours').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#skHoursFile').click(); });
+  $('#skHoursFile').addEventListener('change',e=>{ if(e.target.files[0])importSubHours(e.target.files[0]); e.target.value=''; });
   $('#skFile').addEventListener('change',e=>{ if(e.target.files[0])importSkFile(e.target.files[0]); e.target.value=''; });
 }
 function renderSubTab(){
@@ -4740,6 +4746,179 @@ function showStatusReport(proj){
     wrap.append(el('h3',null,'Billing'),el('p',null,'Invoiced '+fmtMoney(inv)+' · paid '+fmtMoney(paid)+' · outstanding '+fmtMoney(inv-paid))); }
   wrap.append(el('div',{class:'noprint',style:'margin-top:16px'},el('button',{class:'primary',onclick:()=>window.print()},'Print / Save PDF')));
   openDModal(wrap);
+}
+
+/* ---- subcontractor timesheet import (Employee / Date / Hours / Billing) ---- */
+function importSubHours(file){
+  readTabular(file,grid=>applySubHours(grid),'sub hours','labor');
+}
+function applySubHours(grid0){
+  if(!ppCtx)return;
+  const grid=grid0.filter(r=>r.some(c=>String(c).trim()!==''));
+  if(!grid.length)throw new Error('file is empty');
+  const norm2=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+  let hi=grid.findIndex(r=>r.some(c=>{const n=norm2(c);return n==='employee'||n==='employeename'||n==='name';}));
+  if(hi<0)hi=grid.findIndex(r=>r.some(c=>norm2(c)==='date'));
+  if(hi<0)throw new Error('no header row found — expected an Employee and Date column');
+  const H=grid[hi].map(norm2);
+  const f=(...n)=>{for(const x of n){const i=H.indexOf(x);if(i>=0)return i;}return -1;};
+  const ci={ emp:f('employee','employeename','name','staff'), date:f('date','workdate','weekending'),
+    totH:f('totalhours','hours','hrs'), regH:f('regularhours','reghours'),
+    totB:f('totalbilling','totalbill','billing','amount','totalamount'), regB:f('regularbilling','regbilling') };
+  if(ci.emp<0||ci.date<0)throw new Error('need at least Employee and Date columns');
+  const hCol = ci.totH>=0?ci.totH:ci.regH, bCol = ci.totB>=0?ci.totB:ci.regB;
+  if(hCol<0)throw new Error('no hours column found (Total Hours / Regular Hours)');
+  const per=new Map();   // emp -> {weeks:{wk:hours}, hours, billing}
+  let rows=0, skipped=0, minD=null, maxD=null;
+  for(let r=hi+1;r<grid.length;r++){
+    const row=grid[r], cell=i=>i>=0&&i<row.length?row[i]:'';
+    const emp=String(cell(ci.emp)).trim(); if(!emp||/^total/i.test(emp))continue;
+    const d=parseDateVal(cell(ci.date)); const h=parseNumber(cell(hCol))||0;
+    if(!d||!h){ skipped++; continue; }
+    if(!minD||d<minD)minD=d; if(!maxD||d>maxD)maxD=d;
+    const wk=wkKey(d);
+    let p=per.get(emp); if(!p){ p={weeks:{},hours:0,billing:0}; per.set(emp,p); }
+    p.weeks[wk]=(p.weeks[wk]||0)+h; p.hours+=h;
+    if(bCol>=0)p.billing+=parseNumber(cell(bCol))||0;
+    rows++;
+  }
+  if(!per.size)throw new Error('no dated rows with hours found');
+  // which subcontractor is this?
+  const subs=(ppCtx.meta._subs||[]);
+  const names=subs.map(s=>s.vendor).filter(Boolean);
+  let vendor=prompt('Which subcontractor is this timesheet for?'+(names.length?'\n\nOn this project: '+names.join(', '):''), names[0]||'Subcontractor');
+  if(vendor==null)return; vendor=vendor.trim()||'Subcontractor';
+  const taskName=prompt('Put these hours under which task? (a separate task keeps sub hours out of your staff tasks)','SUB — '+vendor);
+  if(taskName==null)return;
+  const task=(taskName.trim()||('SUB — '+vendor));
+  const node=planNode(ppCtx.proj,'taskEmployee');
+  const rt=ppCtx.meta._rateTable; node.manual=node.manual||[];
+  const tag='subhrs:'+vendor.toLowerCase();
+  // replace anything previously imported for this vendor+task (re-import is idempotent)
+  const prev=node.manual.filter(m=>m.src===tag&&m.label.startsWith(task+' · ')).map(m=>m.label);
+  node.manual=node.manual.filter(m=>!(m.src===tag&&m.label.startsWith(task+' · ')));
+  for(const lab of prev){ const pre=lab+'|'; for(const k of Object.keys(node.current))if(k.startsWith(pre))delete node.current[k]; }
+  const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
+  let people=0, totH=0, totB=0;
+  for(const [emp,p] of per){
+    const label=task+' · '+emp;
+    if(!node.manual.some(m=>m.label===label))node.manual.push({label,emp,isLabor:true,src:tag});
+    for(const wk in p.weeks) node.current[label+'|'+wk]=(node.current[label+'|'+wk]||0)+p.weeks[wk];
+    // rates: what the sub bills us is our cost; price to owner = that + non-labor markup
+    if(!rt[emp])rt[emp]={};
+    if(p.billing>0&&p.hours>0){
+      const rate=Math.round((p.billing/p.hours)*100)/100;
+      if(!(rt[emp].cost>0))rt[emp].cost=rate;
+      if(!(rt[emp].bill>0))rt[emp].bill=Math.round(rate*mkup*100)/100;
+    }
+    people++; totH+=p.hours; totB+=p.billing;
+  }
+  // make sure the register has a row for this vendor
+  ppCtx.meta._subs=ppCtx.meta._subs||[];
+  let sub=ppCtx.meta._subs.find(s=>String(s.vendor||'').trim().toLowerCase()===vendor.toLowerCase());
+  if(!sub){ sub={id:Date.now()+'-'+Math.random().toString(36).slice(2,6),vendor,po:'',desc:'Timesheet import',status:'Committed',commit:0,tasks:'',notes:''};
+    ppCtx.meta._subs.push(sub); }
+  sub.tsHours=(totH); sub.tsBilling=(totB); sub.tsTask=task;
+  sub.notes=(sub.notes?sub.notes+' · ':'')+'timesheet to '+fmtDate(maxD);
+  saveState(); renderSubTab();
+  alert('Imported '+rows+' timesheet rows for '+vendor+':\n\n'+people+' people · '+fmtNum(totH,1)+' hours'
+    +(totB?' · '+fmtMoney(totB)+' billed to us':'')
+    +'\nWeeks '+wkKey(minD)+' → '+wkKey(maxD)
+    +'\n\nThey are in the working forecast under the task "'+task+'".'
+    +(skipped?'\n('+skipped+' rows skipped — no date or no hours.)':''));
+}
+
+/* ---- revenue by discipline / task: weekly short-or-high, printable + Excel ---- */
+function revByDiscipline(){
+  const node=ppCtx.node, weeks=ppCtx.visWeeks||[];
+  const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
+  const map=new Map();
+  for(const it of ppCtx.items){
+    const tk=fpTaskOf(it);
+    let g=map.get(tk); if(!g){ g={task:tk,plan:weeks.map(()=>0),act:weeks.map(()=>0),planT:0,actT:0}; map.set(tk,g); }
+    const nb=!!node.nb[it.label];
+    weeks.forEach((wk,i)=>{
+      const k=it.label+'|'+wk;
+      if(it.isLabor){ const bill=nb?0:billRateOf(it);
+        if(node.baseline[k]!=null){ g.plan[i]+=node.baseline[k]*bill; g.planT+=node.baseline[k]*bill; }
+        if(wk<=ppCtx.lastActualWeek){ const a=(it.hoursW.get(wk)||0)*bill; g.act[i]+=a; g.actT+=a; }
+      } else { const fct=nb?0:mkup;
+        if(node.baseline[k]!=null){ g.plan[i]+=node.baseline[k]*fct; g.planT+=node.baseline[k]*fct; }
+        if(wk<=ppCtx.lastActualWeek){ const a=(it.costW.get(wk)||0)*fct; g.act[i]+=a; g.actT+=a; }
+      }
+    });
+  }
+  return {weeks,groups:[...map.values()].sort((a,b)=>taskCompare(a.task,b.task))};
+}
+function showRevByDiscipline(){
+  if(!ppCtx||ppCtx.mode!=='a'){ renderActualsPage(); }
+  if(!ppCtx)return;
+  const {weeks,groups}=revByDiscipline();
+  const wrap=el('div',{class:'rep'});
+  wrap.append(el('h1',null,'Revenue by discipline — planned vs achieved'),
+    el('div',{class:'sub'},ppCtx.proj+' · Datum · '+fmtDate(new Date())+' · a positive delta means the team earned more than planned that week'));
+  // summary first
+  const t1=el('table');
+  t1.append(el('thead',null,el('tr',null,el('th',null,'Discipline / task'),el('th',null,'Planned revenue'),el('th',null,'Achieved to date'),el('th',null,'Delta'),el('th',null,'% of plan'))));
+  const b1=el('tbody'); let sp=0,sa=0;
+  for(const g of groups){ sp+=g.planT; sa+=g.actT; const dl=g.actT-g.planT;
+    b1.append(el('tr',null,el('td',null,g.task),el('td',null,fmtMoney(g.planT)),el('td',null,fmtMoney(g.actT)),
+      el('td',{style:'color:'+(dl<-0.5?'#b00020':'#0a7d3f')},(dl>0?'+':'')+fmtMoney(dl)),
+      el('td',null,g.planT?(100*g.actT/g.planT).toFixed(0)+'%':'—'))); }
+  b1.append(el('tr',null,el('td',null,el('b',null,'TOTAL')),el('td',null,el('b',null,fmtMoney(sp))),el('td',null,el('b',null,fmtMoney(sa))),
+    el('td',null,el('b',null,(sa-sp>0?'+':'')+fmtMoney(sa-sp))),el('td',null,sp?el('b',null,(100*sa/sp).toFixed(0)+'%'):'—')));
+  t1.append(b1); wrap.append(el('h3',null,'Summary'),t1);
+  // weekly delta matrix
+  const t2=el('table');
+  t2.append(el('thead',null,el('tr',null,el('th',null,'Discipline / task'),...weeks.map(w=>el('th',null,wkLabel(w))),el('th',null,'Total'))));
+  const b2=el('tbody');
+  for(const g of groups){
+    const cells=weeks.map((w,i)=>{ const dl=g.act[i]-g.plan[i];
+      return el('td',{style:Math.abs(dl)<0.5?'':('color:'+(dl<0?'#b00020':'#0a7d3f'))}, Math.abs(dl)<0.5?'':((dl>0?'+':'')+fmtMoney(dl))); });
+    const tot=g.actT-g.planT;
+    b2.append(el('tr',null,el('td',null,g.task),...cells,el('td',{style:'color:'+(tot<-0.5?'#b00020':'#0a7d3f')},(tot>0?'+':'')+fmtMoney(tot))));
+  }
+  t2.append(b2);
+  wrap.append(el('h3',null,'Weekly delta (achieved − planned) — where each team is short or ahead'),t2);
+  wrap.append(el('div',{class:'noprint',style:'margin-top:16px'},
+    el('button',{class:'primary',onclick:()=>window.print()},'Print / Save PDF'),' ',
+    el('button',{onclick:()=>exportRevByDiscipline()},'Export Excel')));
+  openDModal(wrap);
+}
+function exportRevByDiscipline(){
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const {weeks,groups}=revByDiscipline();
+  const BRAND='1F4E79', M='"$"#,##0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const wb=XLSX.utils.book_new();
+  const style=(ws,hdrRow,moneyFrom)=>{ const rng=XLSX.utils.decode_range(ws['!ref']);
+    for(let C=0;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:hdrRow,c:C})];if(c)c.s=HDR;}
+    for(let R=hdrRow+1;R<=rng.e.r;R++)for(let C=moneyFrom;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:R,c:C})];if(c&&typeof c.v==='number')c.z=M;} };
+  // summary
+  const a1=[['Revenue by discipline — '+ppCtx.proj],['Generated',fmtDate(new Date())],[],
+    ['Discipline / task','Planned revenue','Achieved to date','Delta','% of plan']];
+  let sp=0,sa=0;
+  for(const g of groups){ sp+=g.planT; sa+=g.actT; a1.push([g.task,g.planT,g.actT,g.actT-g.planT,g.planT?g.actT/g.planT:'']); }
+  a1.push(['TOTAL',sp,sa,sa-sp,sp?sa/sp:'']);
+  const ws1=XLSX.utils.aoa_to_sheet(a1); if(ws1['A1'])ws1['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  style(ws1,3,1); ws1['!cols']=[{wch:36},{wch:16},{wch:16},{wch:14},{wch:10}];
+  { const rng=XLSX.utils.decode_range(ws1['!ref']); for(let R=4;R<=rng.e.r;R++){ const c=ws1[XLSX.utils.encode_cell({r:R,c:4})]; if(c&&typeof c.v==='number')c.z='0%'; } }
+  XLSX.utils.book_append_sheet(wb,ws1,'Summary');
+  // weekly sheets
+  const mk=(title,pick)=>{
+    const a=[['Discipline / task',...weeks.map(w=>'WE '+w),'Total']];
+    for(const g of groups)a.push([g.task,...weeks.map((w,i)=>pick(g,i)),weeks.reduce((s,w,i)=>s+pick(g,i),0)]);
+    const ws=XLSX.utils.aoa_to_sheet(a); style(ws,0,1);
+    ws['!cols']=[{wch:36},...weeks.map(()=>({wch:12})),{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,title);
+  };
+  mk('Weekly delta',(g,i)=>g.act[i]-g.plan[i]);
+  mk('Weekly planned',(g,i)=>g.plan[i]);
+  mk('Weekly achieved',(g,i)=>g.act[i]);
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'revenue-by-discipline-'+ppCtx.proj+'.xlsx'});
+  document.body.append(a); a.click(); a.remove();
 }
 
 /* ===================== Settings ===================== */
