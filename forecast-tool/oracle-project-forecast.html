@@ -528,6 +528,7 @@
       <button id="btnRtAdd" class="small">Add</button>
       <label style="margin-left:14px">Set bill = cost × <input type="number" id="rtMult" step="0.05" value="2.5" style="width:74px"></label>
       <button id="btnRtFill" class="small">Fill empty bill rates</button>
+      <label class="hint" style="margin-left:14px"><input type="checkbox" id="rtOnlyBad"> Show only people missing a rate</label>
     </div>
     <div class="tablewrap" style="max-height:520px"><table id="rateTable"></table></div>
   </div>
@@ -1992,6 +1993,7 @@ function setupProjectPages(){
     s.ohMult=v>0?v:2.3474; saveState(); reRender();
   });
   $('#rtOhExc').addEventListener('change',e=>{ s.ohExceptions=e.target.value; saveState(); reRender(); });
+  $('#rtOnlyBad').addEventListener('change',renderRateTable);
   $('#btnRtAdd').addEventListener('click',()=>{
     if(!ppCtx)return;
     const name=$('#rtNewEmp').value.trim();
@@ -2599,7 +2601,29 @@ function renderActualsPage(){
   t.append(el('thead',null,el('tr',null,...headCells)));
   const tb=el('tbody');
   const colCount=headCells.length;
-  for(const it of ppCtx.items){
+  // group rows under their task (same WBS ordering as the baseline view)
+  const taskMap=new Map();
+  for(const it of ppCtx.items){ const tk=fpTaskOf(it); if(!taskMap.has(tk))taskMap.set(tk,[]); taskMap.get(tk).push(it); }
+  const orderedTasks=[...taskMap.keys()].sort(taskCompare);
+  ppCtx._apTaskRows=[];
+  const orderedItems=[];
+  for(const tk of orderedTasks) for(const it of taskMap.get(tk)) orderedItems.push(it);
+  const emitTaskHeader=tk=>{
+    const kids=taskMap.get(tk);
+    const trT=el('tr',{class:'taskrow'});
+    trT.append(el('td',{title:tk},el('span',null,tk),' ',el('span',{class:'pill'},kids.length+(kids.length===1?' person':' people'))));
+    if(hiddenWeeks.length)trT.append(el('td'));
+    const wkTds=visWeeks.map(()=>{ const td=el('td',{class:'wk num'}); trT.append(td); return td; });
+    const sum={};
+    ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','origEac','over'].forEach((k,i)=>{
+      const td=el('td',{class:'num'+(i===0?' sumcol':'')}); sum[k]=td; trT.append(td); });
+    tb.append(trT);
+    ppCtx._apTaskRows.push({kids,wkTds,sum,weeks:visWeeks});
+  };
+  let curTask=null;
+  for(const it of orderedItems){
+    const tkNow=fpTaskOf(it);
+    if(tkNow!==curTask){ curTask=tkNow; emitTaskHeader(tkNow); }
     const tr=el('tr');
     tr.append(makeItemCell(it,tr,colCount));
     if(hiddenWeeks.length){
@@ -2668,6 +2692,19 @@ function renderActualsPage(){
     const td=el('td',{class:'num'+(i===0?' sumcol':'')}); ppCtx._totSum[k]=td; trTot.append(td);
   });
   tb.append(trTot);
+  // per-week revenue: planned (baseline) vs achieved (actual)
+  const mkRevRow=(label,title,cls)=>{
+    const tr=el('tr',{class:'total'});
+    tr.append(el('td',{title},label));
+    if(hiddenWeeks.length)tr.append(el('td'));
+    const tds=visWeeks.map(()=>{ const td=el('td',{class:'wk num'+(cls||'')}); tr.append(td); return td; });
+    const tot=el('td',{class:'num sumcol'+(cls||'')}); tr.append(tot);
+    for(let i=0;i<10;i++)tr.append(el('td'));
+    tb.append(tr); return {tds,tot};
+  };
+  ppCtx._revPlanRow=mkRevRow('Revenue — planned','Baseline hours × bill rate (subs/expenses at cost + markup), per week');
+  ppCtx._revActRow =mkRevRow('Revenue — achieved','Actual charged hours × bill rate (subs/expenses at cost + markup), per week');
+  ppCtx._revVarRow =mkRevRow('Revenue — variance','Achieved − planned, per week');
   t.append(tb);
   updatePlanTotals();
   updatePlanChart();
@@ -2754,6 +2791,64 @@ function updatePlanTotals(){
     const c=itemCalc(it);
     if(it.isLabor){ actH+=c.act; planTD+=c.planTD; toGo+=c.toGo; eacH+=c.eac; baseH+=c.baseTot; if(c.over!=null){overSum+=c.over;hasBase=true;} }
     actC+=it.cost; eacC+=c.eacCost; eacR+=c.eacRev||0;
+  }
+  // per-task rollups (view ②)
+  for(const R of (ppCtx._apTaskRows||[])){
+    let tH=0,tPlan=0,tGo=0,tEac=0,tActC=0,tEacC=0,tRev=0,tBase=0,tOver=0,anyOver=false;
+    R.weeks.forEach((wk,i)=>{
+      let a=0,p=0;
+      for(const it of R.kids){ if(!it.isLabor)continue;
+        a+=it.hoursW.get(wk)||0;
+        const v=node.current[it.label+'|'+wk]; if(v!=null)p+=v; }
+      R.wkTds[i].innerHTML='';
+      R.wkTds[i].append(el('span',{class:'wk-act'},wk<=ppCtx.lastActualWeek&&a?fmtNum(a,1):''),
+        el('span',null,p?fmtNum(p,1):''));
+    });
+    for(const it of R.kids){ const c=itemCalc(it);
+      if(it.isLabor){ tH+=c.act; tPlan+=c.planTD; tGo+=c.toGo; tEac+=c.eac; tBase+=c.baseTot; if(c.over!=null){tOver+=c.over;anyOver=true;} }
+      tActC+=it.cost; tEacC+=c.eacCost; tRev+=c.eacRev||0; }
+    R.sum.act.textContent=tH?fmtNum(tH,1):'';
+    R.sum.planTD.textContent=tPlan?fmtNum(tPlan,1):'';
+    R.sum.varTD.textContent=tPlan?fmtNum(tH-tPlan,1):'';
+    R.sum.varTD.className='num '+(tPlan&&tH-tPlan>0.5?'neg':'');
+    R.sum.toGo.textContent=tGo?fmtNum(tGo,1):'';
+    R.sum.eac.textContent=tEac?fmtNum(tEac,1):'';
+    R.sum.rate.textContent='';
+    R.sum.actC.textContent=tActC?fmtMoney(tActC):'';
+    R.sum.eacC.textContent=tEacC?fmtMoney(tEacC):'';
+    R.sum.eacRev.textContent=tRev?fmtMoney(tRev):'';
+    R.sum.origEac.textContent=tBase?fmtNum(tBase,1):'';
+    R.sum.over.textContent=anyOver?((tOver>0?'+':'')+fmtNum(tOver,1)):'';
+    R.sum.over.className='num '+(anyOver&&tOver>0.5?'neg':anyOver?'pos':'');
+  }
+  // per-week planned vs achieved revenue
+  if(ppCtx._revPlanRow){
+    const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
+    let sp=0,sa=0;
+    ppCtx.visWeeks.forEach((wk,i)=>{
+      let p=0,a=0;
+      for(const it of ppCtx.items){
+        const nb=!!node.nb[it.label];
+        const k=it.label+'|'+wk;
+        if(it.isLabor){ const bill=nb?0:billRateOf(it);
+          if(node.baseline[k]!=null)p+=node.baseline[k]*bill;
+          a+=(it.hoursW.get(wk)||0)*bill;
+        } else { const f=nb?0:mkup;
+          if(node.baseline[k]!=null)p+=node.baseline[k]*f;
+          a+=(it.costW.get(wk)||0)*f; }
+      }
+      const past=wk<=ppCtx.lastActualWeek;
+      sp+=p; if(past)sa+=a;
+      ppCtx._revPlanRow.tds[i].textContent=p?fmtMoney(p):'';
+      ppCtx._revActRow.tds[i].textContent=past&&a?fmtMoney(a):'';
+      const v=past?a-p:null;
+      ppCtx._revVarRow.tds[i].textContent=(v!=null&&Math.abs(v)>0.5)?((v>0?'+':'')+fmtMoney(v)):'';
+      ppCtx._revVarRow.tds[i].className='wk num '+(v!=null?(v<-0.5?'neg':'pos'):'');
+    });
+    ppCtx._revPlanRow.tot.textContent=fmtMoney(sp);
+    ppCtx._revActRow.tot.textContent=fmtMoney(sa);
+    ppCtx._revVarRow.tot.textContent=(sa-sp>0?'+':'')+fmtMoney(sa-sp);
+    ppCtx._revVarRow.tot.className='num sumcol '+((sa-sp)<-0.5?'neg':'pos');
   }
   const T=ppCtx._totSum;
   T.act.textContent=fmtNum(actH,1)+' h';
@@ -2902,6 +2997,14 @@ function renderRtKpis(){
   const kpi=(lbl,val,sub)=>k.append(el('div',{class:'kpi'},el('div',{class:'lbl'},lbl),el('div',{class:'val'},val),sub?el('div',{class:'sub'},sub):null));
   kpi('People in rate table',String(n));
   kpi('With bill rates',String(withBill),n>withBill?(n-withBill)+' missing — their revenue counts as 0':'');
+  { let noRates=0,noCostN=0,noBillN=0;
+    for(const emp of rateTableEmps()){ const e=rt[emp]||{}; const es2=ppCtx.empStats[emp];
+      const c=e.cost!=null?e.cost:(es2&&es2.rate?es2.rate:0);
+      const nc=!(c>0), nb2=!(e.bill>0);
+      if(nc&&nb2)noRates++; if(nc)noCostN++; if(nb2)noBillN++; }
+    if(noCostN||noBillN) kpi('⚠ Missing rates',String(noRates||Math.max(noCostN,noBillN)),
+      noCostN+' with no cost rate · '+noBillN+' with no bill rate');
+  }
   if(withBill){
     kpi('Avg cost / bill rate',fmtNum(cSum/withBill,2)+' / '+fmtNum(bSum/withBill,2));
     kpi('Avg margin per hour',fmtNum((bSum-cSum)/withBill,2),(100*(bSum-cSum)/bSum).toFixed(1)+'% of bill');
@@ -2909,6 +3012,7 @@ function renderRtKpis(){
 }
 function renderRateTable(){
   if(!ppCtx)return;
+  const showOnlyBad=$('#rtOnlyBad')&&$('#rtOnlyBad').checked;
   const rt=ppCtx.meta._rateTable;
   const t=$('#rateTable'); t.innerHTML='';
   t.append(el('thead',null,el('tr',null,
@@ -2936,15 +3040,22 @@ function renderRateTable(){
     wire(costIn,'cost'); wire(billIn,'bill');
     const del=!es? el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove from rate table',
       onclick:()=>{ delete rt[emp]; saveState(); renderRateTable(); updateAllSummaries(); }},'✕') : null;
-    tb.append(el('tr',null,
-      el('td',null,emp),
+    const noCost=!(effCost>0), noBill=!(e.bill>0);
+    const flagged=noCost||noBill;
+    const rowTr=el('tr',null,
+      el('td',null,emp,flagged?el('span',{class:'pill bad',style:'margin-left:6px',
+        title:(noCost&&noBill)?'No cost rate and no bill rate — this person costs and earns $0 in every forecast'
+             :(noCost?'No cost rate — their hours cost $0':'No bill rate — their hours earn $0 revenue')},
+        (noCost&&noBill)?'no rates':(noCost?'no cost':'no bill')):''),
       el('td',{class:'num'},es?fmtNum(es.hours,1):''),
       el('td',{class:'num',style:'color:#8aa0bd'},es&&es.rate?fmtNum(es.rate,2):''),
       el('td',{class:'num'},costIn),
       el('td',{class:'num'},billIn),
       el('td',{class:margin!=null?numCls(margin):'num'},margin!=null?fmtNum(margin,2):''),
       el('td',{class:margin!=null&&e.bill?numCls(margin):'num'},margin!=null&&e.bill?(100*margin/e.bill).toFixed(1)+'%':''),
-      el('td',null,del)));
+      el('td',null,del));
+    if(flagged)rowTr.style.background='#3a1f26';
+    if(!(showOnlyBad&&!flagged))tb.append(rowTr);
   }
   t.append(tb);
   renderRtKpis();
