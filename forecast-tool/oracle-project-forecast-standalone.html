@@ -968,6 +968,9 @@ function runHealthCheck(){
       if(a.negRows){ unNetRows+=a.negRows; unNetHours+=a.negH; estOver+=a.negH*(a.posH?a.rev/a.posH:0); }
     }
     if(unNetRows) add('warn',unNetRows+' negative-hours reversal row(s) totalling '+fmtNum(unNetHours,1)+' h have no bill rate on their employee, so they do NOT reduce revenue — Dashboard revenue may be overstated by ~'+fmtMoney(estOver)+' (estimated at each project’s average bill rate). Match these rows to a Rate Table bill rate, or fix the employee name so each reversal nets against its original labor.');
+    { let tsH=0,tsV=new Set();
+      for(const p of Object.values(state.plans)) for(const pk of (p._subTS||[])){ tsV.add(pk.vendor); for(const e of (pk.entries||[]))tsH+=+e.hours||0; }
+      if(tsH) add('info',fmtNum(tsH,1)+' subcontractor timesheet hours from '+tsV.size+' vendor(s) are included as actuals — remove them on the Subcontractors tab once their invoices appear in the extract.'); }
     if(!issues.some(i=>i.sev==='err'||i.sev==='warn')) add('ok','No problems found — data and rates look clean.');
   }
   const wrap=el('div',null,el('h1',null,'Health check'),el('p',{class:'sub'},'A quick scan of the loaded data, mapping and rates.'));
@@ -1209,7 +1212,41 @@ function applyMapping(){
   buildAllFilterbars();
   switchTab('dashboard');
 }
+// Subcontractor timesheets are stored per project and re-injected as actual transactions
+// after every extract upload / workbook open, so they survive next week's import.
+function injectSubTimesheets(){
+  if(!Array.isArray(data))return;
+  // drop any previously injected rows first (idempotent)
+  for(let i=data.length-1;i>=0;i--) if(data[i]._subTS) data.splice(i,1);
+  for(const [proj,p] of Object.entries(state.plans||{})){
+    const packs=p._subTS||[]; if(!packs.length)continue;
+    const sample=data.find(r=>(r.projectNumber||r.projectName)===proj)||{};
+    for(const pk of packs){
+      const m=String(pk.task||'').match(/^([0-9][0-9.]*)\s*(.*)$/);
+      const tNum=m?m[1]:'', tName=m?(m[2]||pk.task):pk.task;
+      for(const e of (pk.entries||[])){
+        const d=parseDateVal(e.date); if(!d)continue;
+        const row={};
+        for(const f of FIELDS) row[f.key]= f.type==='num'?0:(f.type==='date'?null:'');
+        row.projectNumber=sample.projectNumber||proj; row.projectName=sample.projectName||proj;
+        row.businessUnit=sample.businessUnit||''; row.division=sample.division||'';
+        row.projectManager=sample.projectManager||'';
+        row.employee=e.emp; row.taskNumber=tNum; row.taskName=tName;
+        row.topTaskNumber=tNum; row.topTaskName=tName;
+        row.transactionType='Subcontractor timesheet';
+        row.expenditureType='Subconsultant labor';
+        row.glDate=d; row.transactionDate=d;
+        row.hours=+e.hours||0;
+        row.subsCost=+e.billing||0; row.totalCost=+e.billing||0;
+        row.billedStatus=''; row.comments='Imported from '+(pk.vendor||'subcontractor')+' timesheet';
+        row._subTS=true; row._subVendor=pk.vendor||'';
+        data.push(row);
+      }
+    }
+  }
+}
 function recomputePeriods(){
+  try{ injectSubTimesheets(); }catch(e){}
   const src=state.settings.periodSource;
   let unparsed=0;
   for(const r of data){
@@ -4281,7 +4318,8 @@ function renderSubTab(){
   t.append(el('thead',null,el('tr',null,...[
     ['Vendor / Subconsultant',''],['Subcontract / PO #',''],['Description',''],['Status','For tracking only — does not change the forecast'],
     ['Commitment','PO / subcontract value'],['Task code(s)','Low-level task number(s) the sub charges to — comma separated; a code also captures its sub-tasks'],
-    ['Actual cost','Total Cost from the extract charged to the task code(s) — read-only'],['% used',''],['Notes',''],['','']
+    ['Actual cost','Total Cost from the extract charged to the task code(s) — read-only'],['% used',''],
+    ['Timesheet hrs','Sub timesheet hours imported as actuals — ✕ removes them when their invoice lands in Oracle'],['Notes',''],['','']
   ].map(h=>el('th',{class:(h[0]==='Commitment'||h[0]==='Actual cost'||h[0]==='% used')?'num':'',title:h[1]},h[0])))));
   const tb=el('tbody');
   const txt=(s,key,wd)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+';text-align:left',value:s[key]||''});i.addEventListener('change',()=>{s[key]=i.value;saveState();});return i;};
@@ -4299,6 +4337,13 @@ function renderSubTab(){
     const pct=(+s.commit||0)>0&&a.codes.length? (100*a.cost/(+s.commit)).toFixed(0)+'%':'';
     const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',
       onclick:()=>{ if(confirm('Delete '+(s.vendor||'this subcontractor')+'?')){ meta._subs=meta._subs.filter(x=>x!==s); saveState(); renderSubTab(); } }},'✕');
+    const packs=(meta._subTS||[]).filter(p=>String(p.vendor||'').toLowerCase()===String(s.vendor||'').toLowerCase());
+    let tsH=0,tsB=0; for(const p of packs)for(const e of (p.entries||[])){ tsH+=+e.hours||0; tsB+=+e.billing||0; }
+    const tsCell = packs.length
+      ? el('span',null,el('span',{class:'pill ok',title:'Timesheet hours imported as actuals — task: '+packs.map(p=>p.task).join(', ')},fmtNum(tsH,1)+' h'),
+          ' ',el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove these imported actuals (do this when their invoice lands in Oracle)',
+            onclick:()=>removeSubTimesheet(s.vendor,'')},'✕'))
+      : el('span',{class:'hint'},'—');
     tb.append(el('tr',null,
       el('td',null,txt(s,'vendor','190px')),
       el('td',null,txt(s,'po','120px')),
@@ -4308,6 +4353,7 @@ function renderSubTab(){
       el('td',null,taskIn),
       el('td',{class:'num'},acCell),
       el('td',{class:'num'+(over?' neg':'')},pct),
+      el('td',{class:'num'},tsCell),
       el('td',null,txt(s,'notes','200px')),
       el('td',null,del)));
   }
@@ -4317,7 +4363,7 @@ function renderSubTab(){
     el('td'),
     el('td',{class:'num'},fmtMoney(actCommitted)),
     el('td',{class:'num'},committed?(100*actCommitted/committed).toFixed(0)+'%':''),
-    el('td'),el('td')));
+    el('td'),el('td'),el('td')));
   t.append(tb);
   $('#skInfo').textContent=subs.length+' subcontractor'+(subs.length===1?'':'s')+' · committed '+fmtMoney(committed)+' · actual to date '+fmtMoney(actAll);
 }
@@ -4768,66 +4814,73 @@ function applySubHours(grid0){
   if(ci.emp<0||ci.date<0)throw new Error('need at least Employee and Date columns');
   const hCol = ci.totH>=0?ci.totH:ci.regH, bCol = ci.totB>=0?ci.totB:ci.regB;
   if(hCol<0)throw new Error('no hours column found (Total Hours / Regular Hours)');
-  const per=new Map();   // emp -> {weeks:{wk:hours}, hours, billing}
-  let rows=0, skipped=0, minD=null, maxD=null;
+  const entries=[]; const per=new Map();
+  let rowsRead=0, skipped=0, minD=null, maxD=null;
   for(let r=hi+1;r<grid.length;r++){
     const row=grid[r], cell=i=>i>=0&&i<row.length?row[i]:'';
     const emp=String(cell(ci.emp)).trim(); if(!emp||/^total/i.test(emp))continue;
     const d=parseDateVal(cell(ci.date)); const h=parseNumber(cell(hCol))||0;
     if(!d||!h){ skipped++; continue; }
+    const b=bCol>=0?(parseNumber(cell(bCol))||0):0;
     if(!minD||d<minD)minD=d; if(!maxD||d>maxD)maxD=d;
-    const wk=wkKey(d);
-    let p=per.get(emp); if(!p){ p={weeks:{},hours:0,billing:0}; per.set(emp,p); }
-    p.weeks[wk]=(p.weeks[wk]||0)+h; p.hours+=h;
-    if(bCol>=0)p.billing+=parseNumber(cell(bCol))||0;
-    rows++;
+    entries.push({emp,date:fmtDate(d),hours:h,billing:b});
+    const p=per.get(emp)||{hours:0,billing:0}; p.hours+=h; p.billing+=b; per.set(emp,p);
+    rowsRead++;
   }
-  if(!per.size)throw new Error('no dated rows with hours found');
-  // which subcontractor is this?
+  if(!entries.length)throw new Error('no dated rows with hours found');
   const subs=(ppCtx.meta._subs||[]);
   const names=subs.map(s=>s.vendor).filter(Boolean);
   let vendor=prompt('Which subcontractor is this timesheet for?'+(names.length?'\n\nOn this project: '+names.join(', '):''), names[0]||'Subcontractor');
   if(vendor==null)return; vendor=vendor.trim()||'Subcontractor';
-  const taskName=prompt('Put these hours under which task? (a separate task keeps sub hours out of your staff tasks)','SUB — '+vendor);
+  const taskName=prompt('Post these hours to which task? (a separate task keeps sub hours out of your staff tasks)','SUB — '+vendor);
   if(taskName==null)return;
   const task=(taskName.trim()||('SUB — '+vendor));
+  const meta=ppCtx.meta, rt=meta._rateTable;
+  meta._subTS=meta._subTS||[];
+  // replace any earlier import for this vendor+task, and clear forecast rows from the old behaviour
+  const existed=meta._subTS.find(p=>p.vendor===vendor&&p.task===task);
+  meta._subTS=meta._subTS.filter(p=>!(p.vendor===vendor&&p.task===task));
+  meta._subTS.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),vendor,task,importedAt:new Date().toISOString(),entries});
   const node=planNode(ppCtx.proj,'taskEmployee');
-  const rt=ppCtx.meta._rateTable; node.manual=node.manual||[];
   const tag='subhrs:'+vendor.toLowerCase();
-  // replace anything previously imported for this vendor+task (re-import is idempotent)
-  const prev=node.manual.filter(m=>m.src===tag&&m.label.startsWith(task+' · ')).map(m=>m.label);
-  node.manual=node.manual.filter(m=>!(m.src===tag&&m.label.startsWith(task+' · ')));
-  for(const lab of prev){ const pre=lab+'|'; for(const k of Object.keys(node.current))if(k.startsWith(pre))delete node.current[k]; }
-  const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
-  let people=0, totH=0, totB=0;
+  const stale=(node.manual||[]).filter(m=>m.src===tag).map(m=>m.label);
+  node.manual=(node.manual||[]).filter(m=>m.src!==tag);
+  for(const lab of stale){ const pre=lab+'|'; for(const k of Object.keys(node.current))if(k.startsWith(pre))delete node.current[k]; }
+  // rates: what the sub bills us is our cost; price to owner = cost + non-labor markup
+  const mkup=1+(Number(meta._nlMarkup)||0)/100;
+  let totH=0,totB=0;
   for(const [emp,p] of per){
-    const label=task+' · '+emp;
-    if(!node.manual.some(m=>m.label===label))node.manual.push({label,emp,isLabor:true,src:tag});
-    for(const wk in p.weeks) node.current[label+'|'+wk]=(node.current[label+'|'+wk]||0)+p.weeks[wk];
-    // rates: what the sub bills us is our cost; price to owner = that + non-labor markup
     if(!rt[emp])rt[emp]={};
     if(p.billing>0&&p.hours>0){
       const rate=Math.round((p.billing/p.hours)*100)/100;
       if(!(rt[emp].cost>0))rt[emp].cost=rate;
       if(!(rt[emp].bill>0))rt[emp].bill=Math.round(rate*mkup*100)/100;
     }
-    people++; totH+=p.hours; totB+=p.billing;
+    totH+=p.hours; totB+=p.billing;
   }
-  // make sure the register has a row for this vendor
-  ppCtx.meta._subs=ppCtx.meta._subs||[];
-  let sub=ppCtx.meta._subs.find(s=>String(s.vendor||'').trim().toLowerCase()===vendor.toLowerCase());
-  if(!sub){ sub={id:Date.now()+'-'+Math.random().toString(36).slice(2,6),vendor,po:'',desc:'Timesheet import',status:'Committed',commit:0,tasks:'',notes:''};
-    ppCtx.meta._subs.push(sub); }
-  sub.tsHours=(totH); sub.tsBilling=(totB); sub.tsTask=task;
-  sub.notes=(sub.notes?sub.notes+' · ':'')+'timesheet to '+fmtDate(maxD);
-  saveState(); renderSubTab();
-  alert('Imported '+rows+' timesheet rows for '+vendor+':\n\n'+people+' people · '+fmtNum(totH,1)+' hours'
-    +(totB?' · '+fmtMoney(totB)+' billed to us':'')
-    +'\nWeeks '+wkKey(minD)+' → '+wkKey(maxD)
-    +'\n\nThey are in the working forecast under the task "'+task+'".'
-    +(skipped?'\n('+skipped+' rows skipped — no date or no hours.)':''));
+  let sub=meta._subs&&meta._subs.find(s=>String(s.vendor||'').trim().toLowerCase()===vendor.toLowerCase());
+  if(!sub){ meta._subs=meta._subs||[];
+    sub={id:Date.now()+'-'+Math.random().toString(36).slice(2,6),vendor,po:'',desc:'Timesheet import',status:'Committed',commit:0,tasks:'',notes:''};
+    meta._subs.push(sub); }
+  if(!String(sub.tasks||'').trim()&&/^[0-9]/.test(task))sub.tasks=task.split(' ')[0];
+  saveState();
+  recomputePeriods();            // re-injects the timesheet as actual transactions
+  buildAllFilterbars();
+  renderSubTab();
+  alert('Imported '+rowsRead+' timesheet rows for '+vendor+' as ACTUALS:\n\n'
+    +per.size+' people · '+fmtNum(totH,1)+' hours'+(totB?' · '+fmtMoney(totB)+' billed to us (their cost)':'')
+    +'\nWeeks '+wkKey(minD)+' → '+wkKey(maxD)+' · task "'+task+'"'
+    +(existed?'\n\n(Replaced the previous import for this vendor/task.)':'')
+    +(skipped?'\n('+skipped+' rows skipped — no date or no hours.)':'')
+    +'\n\nThese sit alongside the Oracle extract as actual cost/hours. When their invoice appears in Oracle, remove the import from the Subcontractors tab so the cost is not counted twice.');
 }
-
+function removeSubTimesheet(vendor,task){
+  if(!ppCtx)return;
+  if(!confirm('Remove the imported timesheet actuals for '+vendor+(task?' ('+task+')':'')+'?\n\nUse this once their invoice appears in the Oracle extract, so the cost is not double counted.'))return;
+  const meta=ppCtx.meta;
+  meta._subTS=(meta._subTS||[]).filter(p=>!(p.vendor===vendor&&(!task||p.task===task)));
+  saveState(); recomputePeriods(); buildAllFilterbars(); renderSubTab();
+}
 /* ---- revenue by discipline / task: weekly short-or-high, printable + Excel ---- */
 function revByDiscipline(){
   const node=ppCtx.node, weeks=ppCtx.visWeeks||[];
