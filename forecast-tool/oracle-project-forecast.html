@@ -92,10 +92,24 @@
   #ppTable td.over{background:#42222a}
   #ppTable td.over input.plan-in{border-color:#7a3a44}
   #ppTable th.fut,#ppTable td.fut-h{color:#7dd3fc}
-  #ppTable th:first-child,#ppTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:2;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+  /* ---- freeze panes: first column stays put while week columns scroll ---- */
+  #ppTable th:first-child,#ppTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:2;max-width:280px;overflow:hidden;text-overflow:ellipsis;box-shadow:2px 0 4px -2px rgba(0,0,0,.55)}
   #ppTable thead th:first-child{z-index:4}
   #ppTable tr:hover td:first-child{background:#22304a}
   #ppTable tr.total td:first-child{background:var(--panel2)}
+  #ppTable tr.detailrow td:first-child{position:static;box-shadow:none}
+  #fpTable th:first-child,#fpTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:2;box-shadow:2px 0 4px -2px rgba(0,0,0,.55)}
+  #fpTable thead th:first-child{z-index:4}
+  #fpTable tr:hover td:first-child{background:#22304a}
+  #fpTable tr.taskrow td:first-child{background:#20304a}
+  #fpTable tr.total td:first-child{background:var(--panel2)}
+  #fpTable tr.detailrow td:first-child{position:static;box-shadow:none}
+  #coPriceLabor th:first-child,#coPriceLabor td:first-child{position:sticky;left:0;background:var(--panel);z-index:2;box-shadow:2px 0 4px -2px rgba(0,0,0,.55)}
+  #coPriceLabor thead th:first-child{z-index:4}
+  #coPriceLabor tr.cat-row td:first-child{background:#26364f}
+  #coPriceLabor tr.tsk-row td:first-child{background:#1e2c44}
+  #coPriceLabor tr.total td:first-child{background:var(--panel2)}
+  #coPriceLabor tr:hover td:first-child{background:#22304a}
   #ppTable td.sumcol,#ppTable th.sumcol{border-left:1px solid #3d5070}
   #fpTable tr.taskrow td{background:#20304a;font-weight:600;border-top:1px solid #3d5070}
   #fpTable td.taskcell{color:#cfe3f7}
@@ -427,6 +441,15 @@
   <div class="card">
     <h2>Hours by week — actual vs updated vs original</h2>
     <div class="chartbox"><canvas id="chPlan"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Revenue — planned vs actual <span class="hint">cumulative, by week</span></h2>
+    <div class="row" style="margin-bottom:8px">
+      <label class="hint"><input type="checkbox" id="revCum" checked> Cumulative (uncheck for per-week)</label>
+      <span class="hint">Planned = baseline hours × bill rate · Actual = charged hours × bill rate · subs/expenses at cost + markup. Needs bill rates on the Rate Table.</span>
+    </div>
+    <div class="chartbox" style="height:320px"><canvas id="chRev"></canvas></div>
+    <div class="hint" id="revInfo"></div>
   </div>
 </section>
 
@@ -1921,6 +1944,7 @@ function setupProjectPages(){
     saveState(); renderActualsPage();
   });
   $('#btnApReport').addEventListener('click',()=>{ if(ppCtx)showStatusReport(ppCtx.proj); });
+  $('#revCum').addEventListener('change',updateRevChart);
   $('#btnApHist').addEventListener('click',showBaselineHistory);
   $('#btnApClear').addEventListener('click',()=>{
     if(!ppCtx)return;
@@ -2949,6 +2973,54 @@ function updatePlanChart(){
   ];
   if(node.baselineAt) ds.push({label:'Original forecast',data:base,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',tension:.2,pointRadius:2});
   drawChart('chPlan',{type:'bar',data:{labels,datasets:ds},options:chartOpts()});
+  updateRevChart();
+}
+function updateRevChart(){
+  if(!ppCtx||ppCtx.mode!=='a')return;
+  if(!$('#chRev'))return;
+  const node=ppCtx.node, visWeeks=ppCtx.visWeeks||[];
+  const cumEl=$('#revCum'), cum=cumEl?cumEl.checked:true;
+  const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
+  const P=[],U=[],A=[]; let cp=0,cu=0,ca=0, missing=0;
+  const seenNoBill=new Set();
+  for(const wk of visWeeks){
+    let p=0,u=0,a=0;
+    for(const it of ppCtx.items){
+      const nb=!!node.nb[it.label];
+      const k=it.label+'|'+wk;
+      if(it.isLabor){
+        const bill=nb?0:billRateOf(it);
+        if(!bill&&!nb&&!seenNoBill.has(it.label)){ seenNoBill.add(it.label); missing++; }
+        if(node.baseline[k]!=null)p+=node.baseline[k]*bill;
+        if(node.current[k]!=null)u+=node.current[k]*bill;
+        a+=(it.hoursW.get(wk)||0)*bill;
+      } else {
+        const f=nb?0:mkup;
+        if(node.baseline[k]!=null)p+=node.baseline[k]*f;
+        if(node.current[k]!=null)u+=node.current[k]*f;
+        a+=(it.costW.get(wk)||0)*f;
+      }
+    }
+    cp+=p; cu+=u; ca+=a;
+    const past = wk<=ppCtx.lastActualWeek;
+    P.push(node.baselineAt?Math.round(cum?cp:p):null);
+    U.push(Math.round(cum?cu:u));
+    A.push(past?Math.round(cum?ca:a):null);
+  }
+  const labels=visWeeks.map(wkLabel);
+  const ds=[];
+  if(node.baselineAt) ds.push({label:'Planned revenue (baseline)',data:P,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',tension:.2,pointRadius:0,borderWidth:2});
+  ds.push({label:'Updated forecast revenue',data:U,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',borderDash:[6,5],tension:.2,pointRadius:0,borderWidth:2});
+  ds.push(cum
+    ? {label:'Actual revenue',data:A,borderColor:'#34d399',backgroundColor:'rgba(52,211,153,.15)',type:'line',tension:.2,pointRadius:0,borderWidth:2.5,fill:true}
+    : {label:'Actual revenue',data:A,backgroundColor:'#34d399',type:'bar'});
+  drawChart('chRev',{type:cum?'line':'bar',data:{labels,datasets:ds},options:chartOpts()});
+  const inf=$('#revInfo');
+  if(inf){
+    const varTxt = node.baselineAt? ' · actual vs planned to date: '+((ca-cp)>=0?'+':'')+fmtMoney(ca-cp) : '';
+    inf.textContent='Actual revenue to date '+fmtMoney(ca)+' · forecast at completion '+fmtMoney(cu)+varTxt
+      +(missing? ' · ⚠ '+missing+' labor row(s) have no bill rate (counted as $0) — set them on the Rate Table tab':'');
+  }
 }
 function toggleDetail(it,tr,colCount){
   const next=tr.nextSibling;
