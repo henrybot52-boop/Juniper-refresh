@@ -155,6 +155,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
   .modal .close-x{float:right;cursor:pointer;color:var(--muted);font-size:22px;line-height:1}
   .modal .close-x:hover{color:#fff}
   #datumVer{background:#16324e;color:#9bd0f5;border-color:#1d4f74}
+  button.modebtn{font-size:13px}
   .hlist{list-style:none;margin:0;padding:0}
   .hlist li{padding:7px 10px;border-bottom:1px solid var(--border);font-size:13px;display:flex;gap:9px;align-items:flex-start}
   .hlist li .tag{flex:0 0 auto;font-weight:700;border-radius:4px;padding:1px 7px;font-size:11px}
@@ -218,16 +219,15 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
   <button data-tab="dashboard">2 · Dashboard</button>
   <button data-tab="explorer">3 · Pivot Explorer</button>
   <button data-tab="forecast">4 · Forecast</button>
-  <button data-tab="pforecast">5 · Project Forecast</button>
-  <button data-tab="pactuals">6 · Actuals vs Forecast</button>
-  <button data-tab="subs">7 · Cost Actuals</button>
-  <button data-tab="rates">8 · Rate Table</button>
-  <button data-tab="ev">9 · Earned Value</button>
-  <button data-tab="co">10 · Change Orders</button>
-  <button data-tab="subco">11 · Subcontractors</button>
-  <button data-tab="risk">12 · Risk Register</button>
-  <button data-tab="billing">13 · Billing</button>
-  <button data-tab="settings">14 · Settings</button>
+  <button data-tab="pplan">5 · Project Plan</button>
+  <button data-tab="subs">6 · Cost Actuals</button>
+  <button data-tab="rates">7 · Rate Table</button>
+  <button data-tab="ev">8 · Earned Value</button>
+  <button data-tab="co">9 · Change Orders</button>
+  <button data-tab="subco">10 · Subcontractors</button>
+  <button data-tab="risk">11 · Risk Register</button>
+  <button data-tab="billing">12 · Billing</button>
+  <button data-tab="settings">13 · Settings</button>
 </nav>
 
 <main>
@@ -366,6 +366,14 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 
 <!-- ============ PROJECT FORECAST TAB ============ -->
 <section id="tab-pforecast" class="hidden">
+  <div class="card" style="padding:10px 14px;margin-bottom:14px">
+    <div class="row">
+      <span class="hint" style="font-weight:600">View:</span>
+      <button class="modebtn primary" data-mode="base">① Baseline plan</button>
+      <button class="modebtn" data-mode="work">② Actuals &amp; working forecast</button>
+      <span class="hint">Set up the job: task tree, hours per person per week, contract values and reserves. This is the fixed original forecast.</span>
+    </div>
+  </div>
   <div class="card">
     <h2>Project forecast — baseline plan <span class="hint">— build the original job plan: hours per person per week, rates, price to owner</span></h2>
     <div class="row">
@@ -427,6 +435,14 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 
 <!-- ============ ACTUALS VS FORECAST TAB ============ -->
 <section id="tab-pactuals" class="hidden">
+  <div class="card" style="padding:10px 14px;margin-bottom:14px">
+    <div class="row">
+      <span class="hint" style="font-weight:600">View:</span>
+      <button class="modebtn" data-mode="base">① Baseline plan</button>
+      <button class="modebtn primary" data-mode="work">② Actuals &amp; working forecast</button>
+      <span class="hint">Each week: actuals land next to your editable forecast, with the original-vs-updated-vs-actual comparison.</span>
+    </div>
+  </div>
   <div class="card">
     <h2>Actuals &amp; updated forecast <span class="hint">— weekly actuals against the plan; revise the forecast and compare to the original</span></h2>
     <div class="row">
@@ -828,7 +844,7 @@ let state = {
     expDims:['projectNumber','projectName'], expMetric:'totalCost',
     fcLevel:'projectNumber,projectName', fcMetric:'totalCost', fcMethod:'avgN',
     fcLookback:3, fcHorizon:6, fcGrowth:0, fcExcludeLatest:true,
-    ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12,
+    ppProject:'', ppLevel:'topTaskEmployee', ppWeekEnd:5, ppPast:'8', ppAhead:12, ppMode:'base',
     ohMult:2.3474, ohExceptions:'Jeff Frahm=2.1138',
     scProject:'__ALL__', scLevel:'employee', scMetric:'totalCost', scPeriod:'week',
   },
@@ -1889,7 +1905,7 @@ function updateAllSummaries(){
 }
 function setupProjectPages(){
   const s=state.settings;
-  const reRender=()=>{ const t=activeTab(); if(t==='pforecast')renderForecastPage(); else if(t==='pactuals')renderActualsPage(); else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); else if(t==='co')renderCoTab(); else if(t==='subco')renderSubTab(); else if(t==='risk')renderRiskTab(); else if(t==='billing')renderBillingTab(); };
+  const reRender=()=>{ const t=activeTab(); if(t==='pplan'){ if(ppMode()==='work')renderActualsPage(); else renderForecastPage(); } else if(t==='rates')renderRatesTab(); else if(t==='ev')renderEvTab(); else if(t==='co')renderCoTab(); else if(t==='subco')renderSubTab(); else if(t==='risk')renderRiskTab(); else if(t==='billing')renderBillingTab(); };
   for(const [id,key,isNum] of [['fpProject','ppProject'],['apProject','ppProject'],['rtProject','ppProject'],['evProject','ppProject'],['coProject','ppProject'],['skProject','ppProject'],['rkProject','ppProject'],['blProject','ppProject'],['fpWeekEnd','ppWeekEnd',1],['apWeekEnd','ppWeekEnd',1]]){
     $('#'+id).addEventListener('change',e=>{ s[key]=isNum?+e.target.value:e.target.value; saveState(); reRender(); });
   }
@@ -1966,6 +1982,7 @@ function setupProjectPages(){
   });
   $('#btnApReport').addEventListener('click',()=>{ if(ppCtx)showStatusReport(ppCtx.proj); });
   $('#revCum').addEventListener('change',updateRevChart);
+  $$('button.modebtn').forEach(b=>b.addEventListener('click',()=>setPpMode(b.dataset.mode)));
   $('#btnApHist').addEventListener('click',showBaselineHistory);
   $('#btnApClear').addEventListener('click',()=>{
     if(!ppCtx)return;
@@ -4493,7 +4510,7 @@ function restoreBaseline(i){
   nd.baselineHistory=nd.baselineHistory||[];
   if(Object.keys(nd.baseline||{}).length) nd.baselineHistory.push({ts:new Date().toISOString(),at:nd.baselineAt||'',baseline:Object.assign({},nd.baseline)});
   nd.baseline=Object.assign({},s.baseline); nd.baselineAt=s.at||new Date().toISOString();
-  saveState(); closeDModal(); if(activeTab()==='pactuals')renderActualsPage(); else if(activeTab()==='pforecast')renderForecastPage();
+  saveState(); closeDModal(); if(activeTab()==='pplan'){ if(ppMode()==='work')renderActualsPage(); else renderForecastPage(); }
   alert('Baseline restored.');
 }
 /* ---- one-page status report ---- */
@@ -4871,20 +4888,23 @@ function importConfig(file){
 }
 
 /* ===================== Tabs ===================== */
+function ppMode(){ return state.settings.ppMode==='work'?'work':'base'; }
+function setPpMode(m){ state.settings.ppMode=(m==='work'?'work':'base'); saveState(); switchTab('pplan'); }
 function switchTab(name){
   $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
-  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','co','subco','risk','billing','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==name));
+  // "Project Plan" is one tab with two views: the baseline section or the working section
+  const shown = name==='pplan' ? (ppMode()==='work'?'pactuals':'pforecast') : name;
+  ['upload','dashboard','explorer','forecast','pforecast','pactuals','subs','rates','ev','co','subco','risk','billing','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==shown));
   refreshActiveTab();
 }
-function activeTab(){ return $('nav.tabs button.active').dataset.tab; }
+function activeTab(){ const b=$('nav.tabs button.active'); return b?b.dataset.tab:'upload'; }
 function refreshActiveTab(){
   const t=activeTab();
   if(!data.length) return;
   if(t==='dashboard') renderDashboard();
   else if(t==='explorer') renderExplorer();
   else if(t==='forecast') renderForecast();
-  else if(t==='pforecast') renderForecastPage();
-  else if(t==='pactuals') renderActualsPage();
+  else if(t==='pplan'){ if(ppMode()==='work')renderActualsPage(); else renderForecastPage(); }
   else if(t==='subs') renderCostActuals();
   else if(t==='rates') renderRatesTab();
   else if(t==='ev') renderEvTab();
