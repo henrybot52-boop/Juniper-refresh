@@ -111,7 +111,9 @@
   #coPriceLabor tr.total td:first-child{background:var(--panel2)}
   #coPriceLabor tr:hover td:first-child{background:#22304a}
   #ppTable td.sumcol,#ppTable th.sumcol{border-left:1px solid #3d5070}
-  #fpTable tr.taskrow td{background:#20304a;font-weight:600;border-top:1px solid #3d5070}
+  #fpTable tr.taskrow td,#ppTable tr.taskrow td{background:#20304a;font-weight:600;border-top:2px solid #3d5070;color:#cfe3f7}
+  #ppTable tr.taskrow td:first-child{background:#20304a}
+  #ppTable tr.personrow td:first-child{padding-left:26px}
   #fpTable td.taskcell{color:#cfe3f7}
   .caret{cursor:pointer;margin-right:7px;color:var(--accent);user-select:none}
   td.childlabel{padding-left:30px}
@@ -439,6 +441,8 @@
       <button id="btnApCopyActuals">Copy actual hours into past cells</button>
       <button id="btnApRebase">Set new baseline from updated forecast</button>
       <button id="btnApClear">Clear updated forecast</button>
+      <button id="btnApExpand" title="Expand every task">Expand all</button>
+      <button id="btnApCollapse" title="Collapse to task level — one row per task with its rollups">Collapse all</button>
       <button id="btnApReport">Status report</button>
       <button id="btnApHist">Baseline history</button>
       <button id="btnApCsv">Export CSV</button>
@@ -1963,6 +1967,8 @@ function setupProjectPages(){
   $('#btnApReport').addEventListener('click',()=>{ if(ppCtx)showStatusReport(ppCtx.proj); });
   $('#revCum').addEventListener('change',updateRevChart);
   $$('button.modebtn').forEach(b=>b.addEventListener('click',()=>setPpMode(b.dataset.mode)));
+  $('#btnApExpand').addEventListener('click',()=>{ if(ppCtx){ apCollapsed[ppCtx.proj]=new Set(); renderActualsPage(); } });
+  $('#btnApCollapse').addEventListener('click',()=>{ if(!ppCtx)return; const s=apCollapsedSet(); for(const it of ppCtx.items)s.add(fpTaskOf(it)); renderActualsPage(); });
   $('#btnApHist').addEventListener('click',showBaselineHistory);
   $('#btnApClear').addEventListener('click',()=>{
     if(!ppCtx)return;
@@ -2610,8 +2616,11 @@ function renderActualsPage(){
   for(const tk of orderedTasks) for(const it of taskMap.get(tk)) orderedItems.push(it);
   const emitTaskHeader=tk=>{
     const kids=taskMap.get(tk);
+    const closed=apCollapsedSet().has(tk);
     const trT=el('tr',{class:'taskrow'});
-    trT.append(el('td',{title:tk},el('span',null,tk),' ',el('span',{class:'pill'},kids.length+(kids.length===1?' person':' people'))));
+    const caret=el('span',{class:'caret',title:closed?'Expand':'Collapse',
+      onclick:()=>{ const s=apCollapsedSet(); if(s.has(tk))s.delete(tk); else s.add(tk); renderActualsPage(); }},closed?'▸':'▾');
+    trT.append(el('td',{title:tk},caret,el('span',null,tk),' ',el('span',{class:'pill'},kids.length+(kids.length===1?' person':' people'))));
     if(hiddenWeeks.length)trT.append(el('td'));
     const wkTds=visWeeks.map(()=>{ const td=el('td',{class:'wk num'}); trT.append(td); return td; });
     const sum={};
@@ -2621,10 +2630,12 @@ function renderActualsPage(){
     ppCtx._apTaskRows.push({kids,wkTds,sum,weeks:visWeeks});
   };
   let curTask=null;
+  const apColl=apCollapsedSet();
   for(const it of orderedItems){
     const tkNow=fpTaskOf(it);
     if(tkNow!==curTask){ curTask=tkNow; emitTaskHeader(tkNow); }
-    const tr=el('tr');
+    if(apColl.has(tkNow))continue;              // task collapsed — skip its people
+    const tr=el('tr',{class:'personrow'});
     tr.append(makeItemCell(it,tr,colCount));
     if(hiddenWeeks.length){
       let hAct=0; for(const wk of hiddenWeeks) hAct+=(it.isLabor?it.hoursW.get(wk):it.costW.get(wk))||0;
@@ -2708,11 +2719,15 @@ function renderActualsPage(){
   t.append(tb);
   updatePlanTotals();
   updatePlanChart();
-  $('#ppInfo').textContent = ppCtx.items.length+' items · '+ppCtx.projRows.length.toLocaleString()+' transactions'
+  const oneNoTask = orderedTasks.length===1 && /^\(no task\)/.test(orderedTasks[0]);
+  $('#ppInfo').textContent = (oneNoTask? '⚠ Rows cannot be split by task — map Task Number / Task Name on the Upload tab (or this project has no task detail). ' : orderedTasks.length+' tasks · ')
+    +ppCtx.items.length+' items · '+ppCtx.projRows.length.toLocaleString()+' transactions'
     +' · window '+visWeeks[0]+' → '+visWeeks[visWeeks.length-1]
     +(node.baselineAt?' · original forecast entered '+node.baselineAt.slice(0,10):' · no original forecast yet')
     +(ppCtx.undated?' · '+ppCtx.undated+' undated rows excluded from weekly columns':'');
 }
+let apCollapsed={};
+function apCollapsedSet(){ const p=(ppCtx&&ppCtx.proj)||'_'; if(!apCollapsed[p])apCollapsed[p]=new Set(); return apCollapsed[p]; }
 function refreshCellOver(td,act,plan,wk,lastActualWeek){
   const past=wk<=lastActualWeek;
   td.classList.toggle('over', past && plan!=null && act>plan+0.26);
