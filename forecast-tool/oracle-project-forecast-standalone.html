@@ -3218,6 +3218,15 @@ function updatePlanChart(){
   const visWeeks=ppCtx.visWeeks||[];
   const labels=visWeeks.map(wkLabel);
   const act=[],plan=[],base=[];
+  // subcontractor timesheet hours, per vendor per week (they are actuals, but shown separately)
+  const subW=new Map();
+  for(const r of ppCtx.projRows){
+    if(!r._subTS||!(r.hours>0))continue;
+    const d=r.transactionDate||r.glDate; if(!d)continue;
+    const wk=wkKey(d), v=r._subVendor||'Subcontractor';
+    let m=subW.get(v); if(!m){ m=new Map(); subW.set(v,m); }
+    m.set(wk,(m.get(wk)||0)+r.hours);
+  }
   for(const wk of visWeeks){
     let a=0,p=0,b=0;
     for(const it of ppCtx.items){ if(!it.isLabor)continue;
@@ -3226,14 +3235,25 @@ function updatePlanChart(){
       if(node.current[k]!=null)p+=node.current[k];
       if(node.baseline[k]!=null)b+=node.baseline[k];
     }
-    act.push(wk<=ppCtx.lastActualWeek?a:null); plan.push(p); base.push(node.baselineAt?b:null);
+    let sh=0; for(const m of subW.values())sh+=m.get(wk)||0;
+    act.push(wk<=ppCtx.lastActualWeek?a-sh:null); plan.push(p); base.push(node.baselineAt?b:null);
   }
+  // staff + each subcontractor stack into one actual-hours bar; the forecast lines each sit in
+  // their own stack so turning stacking on for the bars leaves them reading as absolute totals
   const ds=[
-    {label:'Actual hrs',data:act,backgroundColor:'#38bdf8',type:'bar'},
-    {label:'Updated forecast',data:plan,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',borderDash:[6,5],tension:.2,pointRadius:2},
+    {label:subW.size?'Actual hrs — staff':'Actual hrs',data:act,backgroundColor:'#38bdf8',type:'bar',stack:'act'},
   ];
-  if(node.baselineAt) ds.push({label:'Original forecast',data:base,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',tension:.2,pointRadius:2});
-  drawChart('chPlan',{type:'bar',data:{labels,datasets:ds},options:chartOpts()});
+  for(const [v,m] of subW){
+    ds.push({label:'Actual hrs — '+v,type:'bar',stack:'act',backgroundColor:subColorFor(v),
+      data:visWeeks.map(wk=>wk<=ppCtx.lastActualWeek?(m.get(wk)||0):null)});
+  }
+  ds.push(
+    {label:'Updated forecast',data:plan,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',stack:'fc-u',borderDash:[6,5],tension:.2,pointRadius:2},
+  );
+  if(node.baselineAt) ds.push({label:'Original forecast',data:base,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',stack:'fc-b',tension:.2,pointRadius:2});
+  const opts=chartOpts();
+  opts.scales.x.stacked=true; opts.scales.y.stacked=true;
+  drawChart('chPlan',{type:'bar',data:{labels,datasets:ds},options:opts});
   updateRevChart();
 }
 function updateRevChart(){
@@ -4276,6 +4296,15 @@ function skActualFor(proj,sk){
   for(const r of data){ if((r.projectNumber||r.projectName)!==proj)continue; if(coMatch(r.taskNumber,codes)){ cost+=r.totalCost||0; n++; } }
   return {cost,n,codes};
 }
+const SUB_PALETTE=['#f472b6','#c084fc','#fb923c','#22d3ee','#a3e635','#facc15','#f87171','#60a5fa'];
+function subColorFor(vendor,meta){
+  meta=meta||(ppCtx&&ppCtx.meta); if(!meta)return SUB_PALETTE[0];
+  const subs=meta._subs||[];
+  const i=subs.findIndex(s=>String(s.vendor||'').toLowerCase()===String(vendor||'').toLowerCase());
+  const s=i>=0?subs[i]:null;
+  if(s&&/^#[0-9a-f]{6}$/i.test(String(s.color||'')))return s.color;
+  return SUB_PALETTE[(i<0?0:i)%SUB_PALETTE.length];
+}
 function skActual(sk){
   const codes=coCodes(sk); if(!codes.length||!ppCtx)return {cost:0,n:0,codes};
   let cost=0,n=0;
@@ -4316,7 +4345,7 @@ function renderSubTab(){
   [...new Set(ppCtx.projRows.map(r=>String(r.taskNumber||'').trim()).filter(Boolean))].sort(taskCompare).forEach(tn=>dl.append(el('option',{value:tn})));
   const t=$('#skTable'); t.innerHTML='';
   t.append(el('thead',null,el('tr',null,...[
-    ['Vendor / Subconsultant',''],['Subcontract / PO #',''],['Description',''],['Status','For tracking only — does not change the forecast'],
+    ['Vendor / Subconsultant',''],['Colour','Colour used for this subcontractor in the hours chart'],['Subcontract / PO #',''],['Description',''],['Status','For tracking only — does not change the forecast'],
     ['Commitment','PO / subcontract value'],['Task code(s)','Low-level task number(s) the sub charges to — comma separated; a code also captures its sub-tasks'],
     ['Actual cost','Total Cost from the extract charged to the task code(s) — read-only'],['% used',''],
     ['Timesheet hrs','Sub timesheet hours imported as actuals — ✕ removes them when their invoice lands in Oracle'],['Notes',''],['','']
@@ -4344,8 +4373,12 @@ function renderSubTab(){
           ' ',el('span',{style:'cursor:pointer;color:var(--bad)',title:'Remove these imported actuals (do this when their invoice lands in Oracle)',
             onclick:()=>removeSubTimesheet(s.vendor,'')},'✕'))
       : el('span',{class:'hint'},'—');
+    const colIn=el('input',{type:'color',style:'width:38px;height:24px;padding:0;border:1px solid var(--border);border-radius:4px;background:none;cursor:pointer',
+      title:'Colour for '+(s.vendor||'this subcontractor')+' in the hours chart',value:subColorFor(s.vendor)});
+    colIn.addEventListener('change',()=>{ s.color=colIn.value; saveState(); renderSubTab(); if(ppCtx&&ppCtx.mode==='a')updatePlanChart(); });
     tb.append(el('tr',null,
       el('td',null,txt(s,'vendor','190px')),
+      el('td',null,colIn),
       el('td',null,txt(s,'po','120px')),
       el('td',null,txt(s,'desc','240px')),
       el('td',null,sel),
@@ -4358,7 +4391,7 @@ function renderSubTab(){
       el('td',null,del)));
   }
   tb.append(el('tr',{class:'total'},
-    el('td',{colspan:4},'COMMITTED TOTAL'),
+    el('td',{colspan:5},'COMMITTED TOTAL'),
     el('td',{class:'num'},fmtMoney(committed)),
     el('td'),
     el('td',{class:'num'},fmtMoney(actCommitted)),
