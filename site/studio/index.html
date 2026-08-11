@@ -116,6 +116,7 @@
       <h1>Studio</h1>
       <span class="sub" id="counts"></span>
       <div class="spacer"></div>
+      <button id="carToggle" title="Build a swipeable set from one wedding">Carousels</button>
       <button id="secToggle" title="Switch between the photo queue and the enquiry funnel">Leads</button>
       <button id="approveAll">Approve all shown</button>
       <button id="refresh">Refresh</button>
@@ -259,11 +260,9 @@ function renderFilters(c){
   // before it's approved or after it's posted. "To pin" is the pinning queue:
   // everything (bar skipped) that isn't on any board yet.
   if(PIN_READY) defs.splice(3,0,['topin','To pin']);
-  defs.push(['carousels','Carousels']);
   f.innerHTML='';
   defs.forEach(([k,label])=>{
     const n=k==='all'?ITEMS.length
-      :k==='carousels'?CAROUSELS.length
       :k==='topin'?ITEMS.filter(i=>i.status!=='skipped'&&!(PINNED[i.id]||[]).length).length
       :(c[k]||0);
     const b=document.createElement('button');
@@ -280,10 +279,19 @@ function visible(){
   return ITEMS.filter(i=>i.status===FILTER||STICKY.has(i.id));
 }
 
+let carMode=false;
+document.getElementById('carToggle').onclick=async()=>{
+  carMode=!carMode;
+  if(carMode && leadsMode) document.getElementById('secToggle').click();
+  document.getElementById('carToggle').textContent = carMode ? 'Photos' : 'Carousels';
+  render();
+  if(carMode) window.scrollTo({top:0,behavior:'smooth'});
+};
+
 function render(){
-  const carMode = FILTER==='carousels';
   document.getElementById('carPanel').hidden=!carMode;
   document.getElementById('grid').hidden=carMode;
+  document.getElementById('filters').hidden=carMode;
   document.getElementById('approveAll').hidden=carMode;
   if(carMode){ document.getElementById('empty').hidden=true; renderCarousels(); return; }
   const g=document.getElementById('grid'); g.innerHTML='';
