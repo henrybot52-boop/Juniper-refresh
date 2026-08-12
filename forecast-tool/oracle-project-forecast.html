@@ -1223,8 +1223,11 @@ function applyMapping(){
 // after every extract upload / workbook open, so they survive next week's import.
 function injectSubTimesheets(){
   if(!Array.isArray(data))return;
-  // drop any previously injected rows first (idempotent)
-  for(let i=data.length-1;i>=0;i--) if(data[i]._subTS) data.splice(i,1);
+  // drop any previously injected rows first (idempotent). Matching on the stamped
+  // transaction type as well as the in-memory flag also de-duplicates workbooks that
+  // older versions saved with the injected rows baked into the Data sheet.
+  for(let i=data.length-1;i>=0;i--)
+    if(data[i]._subTS || data[i].transactionType==='Subcontractor timesheet') data.splice(i,1);
   for(const [proj,p] of Object.entries(state.plans||{})){
     const packs=p._subTS||[]; if(!packs.length)continue;
     const sample=data.find(r=>(r.projectNumber||r.projectName)===proj)||{};
@@ -5826,7 +5829,9 @@ async function newInWorkspace(){
   catch(e){ alert('Could not create workbook: '+e.message); }
 }
 function buildWorkbookObj(){
-  const rows=data.map(r=>{ const o={}; for(const f of FIELDS){ const v=r[f.key]; o[f.key]= f.type==='date'? (v?fmtDate(v):null) : v; } return o; });
+  // injected subcontractor-timesheet rows are NOT saved: they are rebuilt from the
+  // timesheet packs (plans._subTS) on open — saving them too would duplicate the hours
+  const rows=data.filter(r=>!r._subTS).map(r=>{ const o={}; for(const f of FIELDS){ const v=r[f.key]; o[f.key]= f.type==='date'? (v?fmtDate(v):null) : v; } return o; });
   return {app:'project-forecast-tool', version:2, datumVersion:DATUM_VERSION, savedAt:new Date().toISOString(),
     settings:state.settings, mapping:state.mapping, filters:state.filters,
     budgets:state.budgets, plans:state.plans, rows};
@@ -5877,7 +5882,8 @@ function buildXlsx(obj){
   XLSX.utils.book_append_sheet(wb,cover,'Cover');
   // ---- data ----
   const dataAoa=[FIELDS.map(f=>f.label)];
-  for(const r of data) dataAoa.push(FIELDS.map(f=>{ const v=r[f.key]; return f.type==='date'? (v||null) : v; }));
+  for(const r of data){ if(r._subTS)continue;   // rebuilt from the timesheet packs on open
+    dataAoa.push(FIELDS.map(f=>{ const v=r[f.key]; return f.type==='date'? (v||null) : v; })); }
   const wsData=XLSX.utils.aoa_to_sheet(dataAoa,{cellDates:true});
   const dataFmts={};
   FIELDS.forEach((f,i)=>{
