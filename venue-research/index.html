@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Juniper — Austin Venue Outreach</title>
+<style>
+  :root{
+    --bg:#faf7f2; --card:#ffffff; --ink:#2f2a26; --muted:#7c7168;
+    --line:#e7ded2; --sage:#6f7d5f; --sage-dark:#586448; --rose:#b07d76;
+    --gold:#a8894f; --shadow:0 1px 3px rgba(60,50,40,.08),0 6px 20px rgba(60,50,40,.06);
+    --open:#e6efe0; --open-ink:#43602f;
+    --curated:#f3ead6; --curated-ink:#8a6a1f;
+    --verify:#eee3df; --verify-ink:#96574d;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;font-size:16px;padding-bottom:56px;
+  }
+  .wrap{max-width:820px;margin:0 auto;padding:0 16px}
+  header{padding:30px 16px 18px;text-align:center}
+  .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--sage);font-weight:600}
+  h1{font-family:Georgia,"Times New Roman",serif;font-weight:600;font-size:27px;margin:.35em 0 .15em;line-height:1.2}
+  .sub{color:var(--muted);font-size:14.5px;max-width:640px;margin:0 auto}
+  .private-tag{display:inline-block;margin-top:12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 11px;background:var(--card)}
+
+  h2.section{font-family:Georgia,serif;font-size:19px;font-weight:600;margin:30px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+
+  /* Summary table */
+  .tablecard{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+  .tbl-scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:#fbf9f5}
+  tbody tr:last-child td{border-bottom:none}
+  td.vname{font-weight:600}
+  td.vname a{color:inherit;text-decoration:none;border-bottom:1px dotted var(--line)}
+  .prio{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;
+    background:var(--sage);color:#fff;font-size:12px;font-weight:700}
+  .prio.p2{background:var(--gold)}
+  .prio.p3{background:#b9a98f}
+
+  /* Status selector */
+  .status-cell select{
+    font:inherit;font-size:13px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);appearance:none;-webkit-appearance:none;min-width:104px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' stroke='%237c7168' fill='none' stroke-width='1.5'/></svg>");
+    background-repeat:no-repeat;background-position:right 8px center;padding-right:24px
+  }
+  .status-cell select.s-sent{background-color:#f3ead6;border-color:#e4d3a8}
+  .status-cell select.s-replied{background-color:#e6efe0;border-color:#c3d8b3}
+
+  /* Badges */
+  .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .badge.open{background:var(--open);color:var(--open-ink)}
+  .badge.curated{background:var(--curated);color:var(--curated-ink)}
+  .badge.verify{background:var(--verify);color:var(--verify-ink)}
+
+  /* Venue cards */
+  .cards{display:flex;flex-direction:column;gap:16px;margin-top:6px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+  .card-head{padding:16px 16px 14px}
+  .rowtop{display:flex;align-items:flex-start;gap:10px}
+  .rank{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--sage);color:#fff;
+    font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:2px}
+  .rank.p2{background:var(--gold)} .rank.p3{background:#b9a98f}
+  .headmain{flex:1 1 auto;min-width:0}
+  .vtitle{font-family:Georgia,serif;font-size:18.5px;font-weight:600;margin:0;line-height:1.25}
+  .vmeta{color:var(--muted);font-size:13px;margin-top:2px}
+  .badges{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{font-size:11.5px;color:var(--muted);background:#f6f1e9;border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+  .fit{margin-top:12px;font-size:14px;color:#4a433d}
+  .flags{margin-top:9px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+  .flags .f::before{content:"•";color:var(--sage);margin-right:6px}
+  .contact{margin-top:12px;font-size:13.5px}
+  .contact a{color:var(--sage-dark);font-weight:600;text-decoration:none;border-bottom:1px solid #d8e0cd}
+  .sources{margin-top:10px;font-size:12px;color:var(--muted)}
+  .sources a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+  .sources a+a{margin-left:0}
+  .srcline{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:3px}
+
+  .expand-btn{width:100%;border:none;border-top:1px solid var(--line);background:#fbf9f5;color:var(--sage-dark);
+    font:inherit;font-weight:600;font-size:14px;padding:13px 16px;text-align:left;cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center}
+  .expand-btn:hover{background:#f6f1e9}
+  .expand-btn .caret{transition:transform .2s;color:var(--muted);font-size:12px}
+  .card.open-email .expand-btn .caret{transform:rotate(180deg)}
+
+  .email{display:none;padding:0 16px 18px;border-top:1px solid var(--line);background:#fefdfb}
+  .card.open-email .email{display:block}
+  .email-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 0 8px;flex-wrap:wrap}
+  .email-meta .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .subject{font-size:14px;font-weight:600;margin:2px 0 12px;padding:10px 12px;background:#f6f1e9;border-radius:8px;border:1px solid var(--line)}
+  .subject .sk{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:3px}
+  .body{white-space:pre-wrap;font-size:14px;line-height:1.6;color:#3d3833;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .copy-btn{border:1px solid var(--sage);background:var(--sage);color:#fff;font:inherit;font-weight:600;font-size:13px;
+    padding:8px 14px;border-radius:9px;cursor:pointer;white-space:nowrap;transition:background .15s}
+  .copy-btn:active{transform:translateY(1px)}
+  .copy-btn.done{background:var(--sage-dark);border-color:var(--sage-dark)}
+
+  footer{text-align:center;color:var(--muted);font-size:12px;margin:34px 0 8px;padding:0 16px}
+  footer a{color:var(--muted)}
+  .legend{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  @media (min-width:560px){ h1{font-size:31px} .card-head{padding:20px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Juniper Floral Studio · Austin</div>
+  <h1>Austin Venue Outreach Board</h1>
+  <p class="sub">Hill Country &amp; Austin wedding venues worth pitching for preferred-vendor placement — screened to exclude in-house florists, sorted by fit. Tap any card for a ready-to-send email.</p>
+  <span class="private-tag">🔒 Private internal tool · not indexed</span>
+</header>
+
+<div class="wrap">
+  <h2 class="section">At a glance</h2>
+  <div class="tablecard">
+    <div class="tbl-scroll">
+      <table id="summary">
+        <thead>
+          <tr><th>Venue</th><th>Policy</th><th>Priority</th><th>Status</th></tr>
+        </thead>
+        <tbody id="summary-body"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:#6f7d5f"></span> Open list</span>
+    <span><span class="dot" style="background:#a8894f"></span> Curated / preferred list</span>
+    <span><span class="dot" style="background:#b07d76"></span> Verify policy</span>
+  </div>
+
+  <h2 class="section">Venues by pitch priority</h2>
+  <div class="cards" id="cards"></div>
+
+  <h2 class="section">Screened out — do not pitch</h2>
+  <p class="sub" style="text-align:left;margin:0 0 12px;font-size:13.5px">Checked and set aside: each has an in-house or exclusive florist (a dead end), or is otherwise off-limits.</p>
+  <div class="tablecard"><ul id="screened" style="list-style:none;margin:0;padding:4px 0"></ul></div>
+
+  <footer>
+    Compiled for Kate Jones · Juniper Floral Studio · Research current as of Aug 2026.<br>
+    Vendor-policy claims link to sources — always re-confirm on a tour before quoting a couple.
+  </footer>
+</div>
+
+<script>
+/* ============ VENUE DATA ============ */
+const SIG = "\n\nWarmly,\nKate Jones\nFounder, Juniper Floral Studio\njuniperfloralstudio.com  ·  Lookbook: juniperfloralstudio.com/lookbook/view\nhello@juniperfloralstudio.com";
+
+const VENUES = [
+{
+  id:"mamaison", rank:1, tier:1,
+  name:"Ma Maison", location:"Dripping Springs", capacity:"~300",
+  price:"$$–$$$", policy:"Curated", policyLabel:"Preferred list",
+  tagline:"French Old-World estate on 23 Hill Country acres",
+  website:"https://themamaison.com/",
+  email:"info@themamaison.com", contactUrl:"https://themamaison.com/contact", phone:"text 512-777-1642",
+  fit:"An ideal romantic-garden match: European “Old World” architecture, chapel and outdoor trellis, marketed as “approachable luxury.” Best of all, they publish an approved-vendor list that already includes florists — the exact placement to pitch for.",
+  flags:["Confirm whether the florist list is mandatory or recommended.","Direct email published — strongest first-contact of the set."],
+  sources:[
+    {label:"themamaison.com", url:"https://themamaison.com/"},
+    {label:"Here Comes the Guide (preferred-vendor list)", url:"https://www.herecomestheguide.com/wedding-venues/texas/ma-maison"}
+  ],
+  subject:"A garden-style florist who finally made it to the Hill Country",
+  bodyText:`Hi Ma Maison team,
+
+I'm Kate Jones, founder of Juniper Floral Studio — a small, family-run studio built entirely around romantic, garden-style wedding florals. We recently moved from Toronto to Austin, and Ma Maison is exactly the home we hoped to find here: that Old-World architecture, the chapel, the trellis — all of it asks for loose, lush, just-gathered arrangements.
+
+I understand you keep a curated list of florists you recommend to couples, and I'd love to be considered for it. Our style leans into soft palettes and seasonal blooms that complement classic, romantic venues like yours rather than compete with them.
+
+Could I send over our lookbook, or stop by for a tour? I'd happily design a sample piece so you can see exactly how our work would feel in your spaces.`+SIG
+},
+{
+  id:"pecansprings", rank:2, tier:1,
+  name:"Pecan Springs Ranch", location:"Austin (SW Hill Country)", capacity:"~300",
+  price:"$$–$$$", policy:"Curated", policyLabel:"Preferred list",
+  tagline:"Pecan groves, sunset ceremonies, indoor + outdoor spaces",
+  website:"https://pecanspringsranch.com/",
+  email:"info@pecanspringsranch.com", contactUrl:"https://pecanspringsranch.com/", phone:"512-632-1046",
+  fit:"Strong garden-romantic fit — pecan groves and golden-hour ceremonies. Keeps an active preferred-vendor list; florists aren't restricted to it, so functionally open, but the list is the placement worth pitching. Couples here carry real floral budgets.",
+  flags:["Install pros doing hanging/ladder work need liability insurance + non-damaging methods.","Confirmed direct email on-site."],
+  sources:[
+    {label:"Preferred Vendors page", url:"https://pecanspringsranch.com/brides/preferred-vendors/"},
+    {label:"Venue FAQs", url:"https://pecanspringsranch.com/faqs/"}
+  ],
+  subject:"Garden-style florals for Pecan Springs couples — a quick hello",
+  bodyText:`Hi there,
+
+I'm Kate Jones of Juniper Floral Studio, a family-run boutique specializing in romantic, garden-style wedding flowers. We recently relocated to Austin and have quietly fallen for the Hill Country — and Pecan Springs Ranch, with its pecan groves and those golden sunset ceremonies, is a setting I'd love to design for.
+
+I understand you keep a preferred-vendor list, and I'd be honored to be considered. Our work leans into seasonal, textural arrangements that feel gathered from the garden — the kind of soft, romantic blooms that suit your indoor-and-outdoor spaces beautifully. I'm also happy to carry the insurance your team likes to see for installs.
+
+If it's helpful, I can send our lookbook and a few venue-specific ideas, or arrange a time to meet on-site. I'd love to become a florist you feel confident recommending.`+SIG
+},
+{
+  id:"greenhouse", rank:3, tier:1,
+  name:"The Greenhouse at Driftwood", location:"Driftwood", capacity:"Full-size weddings",
+  price:"$$–$$$", policy:"Curated", policyLabel:"Preferred list",
+  tagline:"Named a Harper's Bazaar “best garden wedding venue in the world”",
+  website:"https://www.thegreenhousedriftwood.com",
+  email:"info@thegreenhousedriftwood.com", contactUrl:"https://www.thegreenhousedriftwood.com/rates---faq", phone:"512-239-9187",
+  fit:"Possibly the purest garden-venue fit in the region — greenhouses, native landscaping, creeks and open fields. Preferred list is recommendation-only; outside florists welcome with written approval.",
+  flags:["Tenting is restricted to two named vendors — does not affect florals.","Direct email published."],
+  sources:[
+    {label:"Rates & FAQ (vendor policy)", url:"https://www.thegreenhousedriftwood.com/rates---faq"},
+    {label:"thegreenhousedriftwood.com", url:"https://www.thegreenhousedriftwood.com"}
+  ],
+  subject:"A garden florist for one of the world's best garden venues",
+  bodyText:`Hi Greenhouse team,
+
+I'm Kate Jones, founder of Juniper Floral Studio — a family-run studio built entirely around romantic, garden-style florals. When a venue lands on Harper's Bazaar's list of the best garden wedding venues in the world, I pay attention: your greenhouses, native landscaping, and creekside setting are a florist's dream, and precisely the kind of place our work belongs.
+
+We recently moved the studio from Toronto to Austin, and I'm introducing us to the venues we'd most love to work with. I know you keep a preferred-vendor list and welcome approved outside florists — I'd be grateful to be considered for that list.
+
+May I send our lookbook, or come out for a walkthrough? I'd love to show how we'd let your gardens lead and simply add to them.`+SIG
+},
+{
+  id:"greenpastures", rank:4, tier:1,
+  name:"Mattie's at Green Pastures", location:"Austin (Bouldin / 78704)", capacity:"~150 outdoor / ~275 indoor",
+  price:"$$–$$$", policy:"Open", policyLabel:"Open list",
+  tagline:"Historic 7-acre Austin estate — heritage oaks, gardens, roaming peacocks",
+  website:"https://greenpasturesaustin.com/events",
+  email:"", contactUrl:"https://greenpasturesaustin.com/inquire", phone:"512-444-1888",
+  fit:"A lush, garden-romantic Austin institution — heritage oaks, gardens and peacocks, with both ballroom and lawn/pavilion spaces. Outside florists demonstrably work here; no closed floral list surfaced.",
+  flags:["Food & beverage is in-house with minimums — florals appear open; confirm any outside-vendor fee.","No public email — inquiry form / phone only."],
+  sources:[
+    {label:"Green Pastures events site", url:"https://greenpasturesaustin.com/events"},
+    {label:"Here Comes the Guide", url:"https://www.herecomestheguide.com/wedding-venues/texas/green-pastures-events"}
+  ],
+  subject:"A garden-style florist, newly (and truly) in Austin",
+  bodyText:`Hello Green Pastures team,
+
+I'm Kate Jones, founder of Juniper Floral Studio, a family-run boutique specializing in romantic, garden-style wedding florals. There's a slightly funny backstory to our arrival: while we were still based in Toronto, an Austin venue once listed us as a preferred vendor by mistake, and we spent a season gently turning away couples we couldn't serve. We've since actually made the move — Austin is home now.
+
+Mattie's at Green Pastures sits near the top of the short list of places I'd be thrilled to design for. The heritage oaks, the gardens, the peacocks — it's the lush, romantic setting our loose, seasonal style was made for.
+
+I'd love to introduce myself properly and become a florist your team feels good recommending. Could I send our lookbook, or arrange a tour?`+SIG
+},
+{
+  id:"commodoreperry", rank:5, tier:1,
+  name:"Commodore Perry Estate", location:"Austin (Hyde Park)", capacity:"~300",
+  price:"$$$", policy:"Verify", policyLabel:"Verify policy",
+  tagline:"1920s Italianate estate — Auberge Resorts Collection, 10 acres of gardens",
+  website:"https://auberge.com/commodore-perry/events/weddings/",
+  email:"", contactUrl:"https://auberge.com/commodore-perry/events/weddings/", phone:"512-628-4100",
+  fit:"A luxury garden estate — Italianate architecture and ten acres of gardens. Many independent florists have worked here, so outside florals are welcome, but weddings are planner-led and vendors are typically approved/insured; no published preferred list.",
+  flags:["A wedding planner is required — build planner relationships alongside the venue pitch.","Confirm whether a formal preferred-vendor list exists. Form / phone only."],
+  sources:[
+    {label:"Auberge weddings page", url:"https://auberge.com/commodore-perry/events/weddings/"},
+    {label:"Carats & Cake venue profile", url:"https://caratsandcake.com/venue/commodore-perry-estate"}
+  ],
+  subject:"Garden-style florals for Commodore Perry weddings",
+  bodyText:`Dear Commodore Perry events team,
+
+I'm Kate Jones, founder of Juniper Floral Studio — a family-run studio specializing in romantic, garden-style wedding florals. The Commodore Perry Estate is, quite simply, one of the most beautiful places in Austin to say “I do”: the 1920s Italianate architecture and those ten acres of gardens call for florals that feel effortless and of-the-garden, which is the whole of what we do.
+
+We recently relocated from Toronto to Austin, and I'm reaching out to introduce us to the venues and planners we'd most love to collaborate with. I know your weddings are planner-led and beautifully considered — I'd welcome the chance to be a florist your team and its planners can recommend with confidence.
+
+Might I send our lookbook, or arrange a time to walk the grounds together?`+SIG
+},
+{
+  id:"ladybird", rank:6, tier:2,
+  name:"Lady Bird Johnson Wildflower Center", location:"Austin (78739)", capacity:"~240",
+  price:"$$", policy:"Curated", policyLabel:"Preferred list",
+  tagline:"Native botanical gardens & limestone courtyards (UT / nonprofit)",
+  website:"https://www.wildflower.org/private-events/weddings",
+  email:"", contactUrl:"https://www.wildflower.org/private-events/book-an-event", phone:"512-232-0100",
+  fit:"Arguably the most natural philosophical fit of all: a native-plant botanical garden where our “complement, don't compete” approach shines. Couples may choose any florist (only caterers are restricted); a recommended-vendor list is the target.",
+  flags:["Expect stricter plant/site-protection rules on installs — lean into it in the pitch.","No public email — inquiry form only."],
+  sources:[
+    {label:"Weddings page (vendor policy)", url:"https://www.wildflower.org/private-events/weddings"},
+    {label:"Book an event (inquiry)", url:"https://www.wildflower.org/private-events/book-an-event"}
+  ],
+  subject:"Native, garden-style florals for the Wildflower Center",
+  bodyText:`Hello Wildflower Center events team,
+
+I'm Kate Jones, founder of Juniper Floral Studio, a family-run boutique specializing in romantic, garden-style wedding florals. Of every venue in Austin, yours may be the one where our philosophy fits most naturally: we design to complement a garden, not to compete with it — seasonal, textural, softly wild arrangements that would sit comfortably among your native landscapes and limestone courtyards.
+
+We recently moved the studio from Toronto to Austin, and I'm introducing us to the venues we'd be honored to work with. I understand couples are free to choose their florist and that you keep a recommended-vendor list — I'd love to be considered, and I'm glad to work within any guidelines that protect your gardens and plantings.
+
+Could I share our lookbook, or arrange a visit? I'd be delighted to talk through how we'd design lightly and sustainably on-site.`+SIG
+},
+{
+  id:"hummingbird", rank:7, tier:2,
+  name:"Hummingbird House", location:"Manchaca / Austin", capacity:"~175",
+  price:"$$", policy:"Curated", policyLabel:"Preferred list",
+  tagline:"Garden ceremony site, stone paths, glass-walled pavilion",
+  website:"https://hummingbirdhouseaustin.com/",
+  email:"", contactUrl:"https://hummingbirdhouseaustin.com/contact-us", phone:"512-934-0201",
+  fit:"An intimate, garden-forward setting — stone pathways and a glass pavilion — excellent for romantic installations. Recommended-vendor list applies to catering & DJ; florals are open.",
+  flags:["Booked through Dec 2026 — pitch with 2027 dates in mind.","Narrow stone aisles limit oversized pieces; outdoor arches must be weighted. Form only."],
+  sources:[
+    {label:"Venue FAQ (vendor policy)", url:"https://hummingbirdhouseaustin.com/faq"},
+    {label:"Poppy Flowers venue guide", url:"https://www.poppyflowers.com/help/venues/hummingbird-house/"}
+  ],
+  subject:"A garden florist for your 2027 couples",
+  bodyText:`Hi Hummingbird House team,
+
+I'm Kate Jones, founder of Juniper Floral Studio — a family-run studio specializing in romantic, garden-style wedding florals. Your garden ceremony site, the stone pathways and that glass-walled pavilion make Hummingbird House one of the most romantic settings around Austin, and exactly the kind of place our loose, seasonal work belongs.
+
+I saw you're happily booked well into next year — congratulations! — so I'm reaching out early, with an eye toward your 2027 couples. We recently relocated from Toronto to Austin, and I'd love to be one of the florists your team feels confident recommending.
+
+I know your gardens and stone aisles reward a florist who designs with the space rather than over it, which is very much how we work. Could I send our lookbook, or arrange a walkthrough when it suits you?`+SIG
+},
+{
+  id:"lesanmichele", rank:8, tier:2,
+  name:"Le San Michele", location:"Buda", capacity:"~300",
+  price:"$$–$$$", policy:"Verify", policyLabel:"Verify policy",
+  tagline:"12-acre French/Italian estate — fountains, statuary, gardens, pond",
+  website:"https://lesanmicheleweddings.com",
+  email:"", contactUrl:"https://lesanmicheleweddings.com/details/faqs/", phone:"512-415-0935",
+  fit:"A romantic, Old-World garden estate — fountains, statuary and seasonal gardens — that suits lush garden design beautifully. Owner recommends vendors but doesn't mandate a florist.",
+  flags:["Setup caveat: staff-only rearranging + ~$25/hr/person setup labor — clarify how it applies to florist installs before pitching.","No confirmed public email — contact Virginia Fleming via site/phone."],
+  sources:[
+    {label:"Venue FAQs", url:"https://lesanmicheleweddings.com/details/faqs/"},
+    {label:"The Knot marketplace", url:"https://www.theknot.com/marketplace/le-san-michele-buda-tx-263772"}
+  ],
+  subject:"Romantic garden florals for Le San Michele",
+  bodyText:`Hello Le San Michele team,
+
+I'm Kate Jones, founder of Juniper Floral Studio, a family-run boutique specializing in romantic, garden-style wedding florals. Your French-and-Italian estate — the fountains, the statuary, the seasonal gardens and pond — is the kind of Old-World, romantic setting our work was made for, all soft palettes and just-gathered blooms.
+
+We recently moved the studio from Toronto to Austin, and I'm reaching out to the venues we'd most love to design for. I'd be grateful to be a florist you feel comfortable suggesting to your couples. I also want to be an easy partner on-site — I know every venue runs setup a little differently, and I'm glad to coordinate closely with your team on installation so everything is handled just the way you prefer.
+
+Might I send our lookbook, or arrange a tour of the grounds?`+SIG
+},
+{
+  id:"vistawest", rank:9, tier:2,
+  name:"Vista West Ranch", location:"Dripping Springs", capacity:"~250",
+  price:"$$–$$$", policy:"Curated", policyLabel:"Preferred list",
+  tagline:"Restored barn + Biergarten, a versatile rustic-luxe canvas",
+  website:"https://www.vistawestranch.com",
+  email:"events@vistawestranch.com", contactUrl:"https://www.vistawestranch.com/vendor-contact-request-page", phone:"512-894-3500",
+  fit:"A characterful, customizable rustic-luxe space — restored barn and Biergarten — that warms up beautifully with lush romantic florals. Keeps a preferred list and welcomes outside florists.",
+  flags:["Caterers need insurance + a 30-day walkthrough; no florist restriction.","Direct email + a dedicated vendor-contact form."],
+  sources:[
+    {label:"Venue FAQ (vendor policy)", url:"https://www.vistawestranch.com/faq"},
+    {label:"Vendor contact request", url:"https://www.vistawestranch.com/vendor-contact-request-page"}
+  ],
+  subject:"Garden-style florals for Vista West couples",
+  bodyText:`Hi Vista West team,
+
+I'm Kate Jones of Juniper Floral Studio, a family-run boutique specializing in romantic, garden-style wedding florals. I love what you've built at Vista West — the restored barn and Biergarten give couples such a versatile, characterful canvas, and it's a joy to design lush, romantic florals that warm up that Hill Country space.
+
+We recently relocated the studio from Toronto to Austin, and I'm introducing us to the venues we'd most love to work with. I understand you keep a preferred-vendor list and welcome outside florists — I'd be honored to be considered for it, and I'm happy to carry insurance and do the walkthroughs your team likes to see.
+
+Could I send over our lookbook, or set up a time to meet on-site? I'd love to become a florist you feel great recommending.`+SIG
+},
+{
+  id:"videre", rank:10, tier:2,
+  name:"The Videre Estate", location:"Wimberley", capacity:"~300",
+  price:"$$$", policy:"Open", policyLabel:"Open list",
+  tagline:"Modern luxury estate — floor-to-ceiling glass, marble, lakeside views",
+  website:"https://www.thevidereestate.co",
+  email:"", contactUrl:"https://www.thevidereestate.co/contact", phone:"",
+  fit:"A striking, contemporary-glam canvas where soft garden florals add warmth against clean modern light — a contrast worth designing for. Fully open third-party vendor policy (only alcohol is restricted).",
+  flags:["Open vendor policy — no gatekeeping; aim to simply be top-of-mind for referrals.","No public email — inquiry / tour forms only."],
+  sources:[
+    {label:"Poppy Flowers venue guide (open policy)", url:"https://www.poppyflowers.com/help/venues/the-videre-estate/"},
+    {label:"The Knot marketplace", url:"https://www.theknot.com/marketplace/the-videre-estate-wimberley-tx-2067135"}
+  ],
+  subject:"Romantic garden florals for The Videre Estate",
+  bodyText:`Hello Videre Estate team,
+
+I'm Kate Jones, founder of Juniper Floral Studio — a family-run studio specializing in romantic, garden-style wedding florals. The Videre is such a striking canvas: the floor-to-ceiling windows, the marble and chandeliers, those panoramic lakeside views. It's a setting where soft, garden-gathered florals bring a lovely warmth and romance to all that clean, modern light — a contrast I adore designing for.
+
+We recently moved the studio from Toronto to Austin, and I'm reaching out to introduce us to the venues we'd be thrilled to work with. I know you keep an open vendor policy, which makes it easy — I'd simply love to be on your radar as a florist to mention when couples ask for a recommendation.
+
+May I send our lookbook, or arrange a time to see the estate in person?`+SIG
+},
+{
+  id:"wildflowerbarn", rank:11, tier:3,
+  name:"The Wildflower Barn", location:"Driftwood", capacity:"~150",
+  price:"$", policy:"Open", policyLabel:"Open list",
+  tagline:"Rustic barn among Hill Country wildflower fields",
+  website:"https://thewildflowerbarn.com/",
+  email:"", contactUrl:"https://thewildflowerbarn.com/booking-information/", phone:"text 512-751-2739",
+  fit:"A charming natural home for loose, wildflower-leaning arrangements. Fully open policy — but it skews DIY/budget, so treat as a referral relationship rather than a high-spend target.",
+  flags:["Directory-listed email (weddings@thewildflowerbarn.com) is unconfirmed — use the request form / text.","Budget/DIY couples — lower floral spend likely."],
+  sources:[
+    {label:"Booking info (open vendor policy)", url:"https://thewildflowerbarn.com/booking-information/"},
+    {label:"WeddingWire listing", url:"https://www.weddingwire.com/biz/the-wildflower-barn-driftwood/f81439a138c94211.html"}
+  ],
+  subject:"A florist who loves loose, wildflower-style arrangements",
+  bodyText:`Hi Wildflower Barn team,
+
+I'm Kate Jones, founder of Juniper Floral Studio, a family-run boutique specializing in romantic, garden-style wedding florals. Your rustic barn set among the Hill Country wildflower fields is genuinely charming — it's the natural home for the loose, gathered, wildflower-leaning arrangements our couples love most.
+
+We recently relocated from Toronto to Austin, and I'm introducing us to the venues we'd enjoy working with. I know you keep an open vendor policy and let couples bring whomever they like — I'd just love to be a name your team is happy to pass along when a couple asks who to call for flowers.
+
+I'm always glad to work with a range of budgets, too, and to make the most of whatever the season is giving us. Could I send our lookbook, or come out to see the barn sometime?`+SIG
+}
+];
+
+const SCREENED = [
+  {name:"Barr Mansion", reason:"Owner also owns STEMS ATX (a competitor florist). Off-limits — and the source of our accidental-listing backstory."},
+  {name:"The Grand Lady", reason:"In-house Grand Lady Floral. Closed to outside florists."},
+  {name:"Addison Grove", reason:"In-house Native Bloom floral partnership."},
+  {name:"Prospect House", reason:"Owned by Heyens Hospitality, which runs in-house Native Bloom Floral — floral work is steered internally."},
+  {name:"Camp Lucy", reason:"In-house Whim Florals; couples report being required to use it. Effectively closed."},
+  {name:"Kindred Oaks", reason:"In-house florist (ZuZu's Petals); outside florals must arrive pre-assembled. Also reportedly closing May 2026."},
+  {name:"Terra Estate / Rancho Mirando", reason:"Florals supplied in-house."}
+];
+
+/* ============ RENDER ============ */
+const STORE_KEY = "juniper_venue_status_v1";
+const statusMap = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+const STATUSES = ["Not sent","Sent","Replied"];
+
+function saveStatus(){ localStorage.setItem(STORE_KEY, JSON.stringify(statusMap)); }
+function badgeClass(p){ return p==="Open"?"open":(p==="Curated"?"curated":"verify"); }
+function policyLabel(v){ return v.policyLabel || v.policy; }
+
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function selClass(s){ return s==="Sent"?"s-sent":(s==="Replied"?"s-replied":""); }
+
+/* Summary table */
+function renderSummary(){
+  const tb = document.getElementById("summary-body");
+  tb.innerHTML = "";
+  VENUES.forEach(v=>{
+    const st = statusMap[v.id] || "Not sent";
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td class="vname"><a href="#'+v.id+'">'+esc(v.name)+'</a></td>'+
+      '<td><span class="badge '+badgeClass(v.policy)+'">'+esc(policyLabel(v))+'</span></td>'+
+      '<td><span class="prio p'+v.tier+'">'+v.rank+'</span></td>'+
+      '<td class="status-cell"></td>';
+    const cell = tr.querySelector(".status-cell");
+    const sel = document.createElement("select");
+    sel.className = selClass(st);
+    STATUSES.forEach(s=>{
+      const o=document.createElement("option"); o.value=s; o.textContent=s; if(s===st)o.selected=true; sel.appendChild(o);
+    });
+    sel.addEventListener("change",()=>{
+      statusMap[v.id]=sel.value; saveStatus();
+      sel.className=selClass(sel.value);
+      const cardSel=document.querySelector('#'+v.id+' select.card-status');
+      if(cardSel){cardSel.value=sel.value;cardSel.className='card-status '+selClass(sel.value);}
+    });
+    cell.appendChild(sel);
+    tb.appendChild(tr);
+  });
+}
+
+/* Cards */
+function renderCards(){
+  const wrap = document.getElementById("cards");
+  wrap.innerHTML="";
+  VENUES.forEach(v=>{
+    const card=document.createElement("div");
+    card.className="card"; card.id=v.id;
+    const chips=[];
+    if(v.location) chips.push('<span class="chip">📍 '+esc(v.location)+'</span>');
+    if(v.capacity) chips.push('<span class="chip">👥 '+esc(v.capacity)+'</span>');
+    if(v.price) chips.push('<span class="chip">'+esc(v.price)+'</span>');
+    const flags=(v.flags||[]).map(f=>'<span class="f">'+esc(f)+'</span>').join("");
+    const sources=(v.sources||[]).map(s=>'<a href="'+esc(s.url)+'" target="_blank" rel="noopener">'+esc(s.label)+' ↗</a>').join("");
+    let contactHtml="";
+    if(v.email) contactHtml='<a href="mailto:'+esc(v.email)+'">'+esc(v.email)+'</a>';
+    else if(v.contactUrl) contactHtml='<a href="'+esc(v.contactUrl)+'" target="_blank" rel="noopener">Inquiry form ↗</a>';
+    if(v.email && v.contactUrl) contactHtml+=' · <a href="'+esc(v.contactUrl)+'" target="_blank" rel="noopener">form ↗</a>';
+    if(v.phone) contactHtml+=' · <span style="color:var(--muted)">'+esc(v.phone)+'</span>';
+
+    card.innerHTML=
+      '<div class="card-head">'+
+        '<div class="rowtop">'+
+          '<div class="rank p'+v.tier+'">'+v.rank+'</div>'+
+          '<div class="headmain">'+
+            '<h3 class="vtitle">'+esc(v.name)+'</h3>'+
+            '<div class="vmeta">'+esc(v.tagline||"")+'</div>'+
+            '<div class="badges"><span class="badge '+badgeClass(v.policy)+'">'+esc(policyLabel(v))+'</span>'+
+              (v.website?'<a class="chip" style="text-decoration:none;color:var(--sage-dark)" href="'+esc(v.website)+'" target="_blank" rel="noopener">website ↗</a>':'')+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="badges">'+chips.join("")+'</div>'+
+        '<div class="fit">'+esc(v.fit)+'</div>'+
+        (flags?'<div class="flags">'+flags+'</div>':'')+
+        '<div class="contact">✉️ '+contactHtml+'</div>'+
+        (sources?'<div class="sources">Sources:<div class="srcline">'+sources+'</div></div>':'')+
+      '</div>'+
+      '<button class="expand-btn" aria-expanded="false">Outreach email <span class="caret">▼</span></button>'+
+      '<div class="email">'+
+        '<div class="email-meta"><span class="lbl">Ready to send</span>'+
+          '<select class="card-status '+selClass(statusMap[v.id]||"Not sent")+'" style="font:inherit;font-size:13px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:#fff"></select>'+
+        '</div>'+
+        '<div class="subject"><span class="sk">Subject</span>'+esc(v.subject)+'</div>'+
+        '<div class="body" id="body-'+v.id+'">'+esc(v.bodyText)+'</div>'+
+        '<div style="margin-top:14px"><button class="copy-btn" data-id="'+v.id+'">Copy email</button></div>'+
+      '</div>';
+
+    // expand toggle
+    const btn=card.querySelector(".expand-btn");
+    btn.addEventListener("click",()=>{
+      card.classList.toggle("open-email");
+      btn.setAttribute("aria-expanded", card.classList.contains("open-email"));
+    });
+    // card status select
+    const csel=card.querySelector("select.card-status");
+    STATUSES.forEach(s=>{const o=document.createElement("option");o.value=s;o.textContent=s;if(s===(statusMap[v.id]||"Not sent"))o.selected=true;csel.appendChild(o);});
+    csel.addEventListener("change",()=>{
+      statusMap[v.id]=csel.value; saveStatus(); csel.className='card-status '+selClass(csel.value);
+      renderSummary();
+    });
+    // copy
+    const cbtn=card.querySelector(".copy-btn");
+    cbtn.addEventListener("click",async()=>{
+      const text="Subject: "+v.subject+"\n\n"+v.bodyText;
+      try{ await navigator.clipboard.writeText(text); }
+      catch(e){ const ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove(); }
+      cbtn.textContent="Copied ✓"; cbtn.classList.add("done");
+      setTimeout(()=>{cbtn.textContent="Copy email";cbtn.classList.remove("done");},1800);
+    });
+    wrap.appendChild(card);
+  });
+}
+
+function renderScreened(){
+  const ul=document.getElementById("screened");
+  ul.innerHTML="";
+  SCREENED.forEach(s=>{
+    const li=document.createElement("li");
+    li.style.cssText="padding:11px 14px;border-bottom:1px solid var(--line);font-size:13.5px";
+    li.innerHTML='<strong style="color:var(--rose)">✕ '+esc(s.name)+'</strong> <span style="color:var(--muted)">— '+esc(s.reason)+'</span>';
+    ul.appendChild(li);
+  });
+  if(ul.lastChild) ul.lastChild.style.borderBottom="none";
+}
+
+renderSummary();
+renderCards();
+renderScreened();
+</script>
+</body>
+</html>
