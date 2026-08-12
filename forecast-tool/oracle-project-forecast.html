@@ -92,6 +92,14 @@
   #ppTable td.over{background:#42222a}
   #ppTable td.over input.plan-in{border-color:#7a3a44}
   #ppTable th.fut,#ppTable td.fut-h{color:#7dd3fc}
+  /* ---- billing-period band over the week columns ---- */
+  #fpTable tr.bpband th,#ppTable tr.bpband th{top:0;height:21px;padding:1px 4px;font-size:11px;font-weight:600;
+    text-align:center;color:#a9c2e0;background:#1b2942;letter-spacing:.2px;border-bottom:1px solid var(--border)}
+  #fpTable tr.bpband th:first-child,#ppTable tr.bpband th:first-child{text-align:left;color:var(--muted);font-weight:400}
+  #fpTable tr.bpband th.gap,#ppTable tr.bpband th.gap{color:#6b7f9c;background:#18243a}
+  #fpTable thead tr.wkhead.offset th,#ppTable thead tr.wkhead.offset th{top:21px}
+  #fpTable th.bpstart,#fpTable td.bpstart,#ppTable th.bpstart,#ppTable td.bpstart{border-left:2px solid #4a628a}
+  #fpTable tr.bpband th+th.bpstart,#ppTable tr.bpband th+th.bpstart{border-left:2px solid #4a628a}
   /* ---- freeze panes: first column stays put while week columns scroll ---- */
   #ppTable th:first-child,#ppTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:2;max-width:280px;overflow:hidden;text-overflow:ellipsis;box-shadow:2px 0 4px -2px rgba(0,0,0,.55)}
   #ppTable thead th:first-child{z-index:4}
@@ -1945,6 +1953,43 @@ function billRateOf(it){
   if(!it.emp)return numOr(ppCtx.avgBillRate);
   return 0;
 }
+// Map the visible plan weeks onto the project's billing calendar so the plan grid can
+// show where each period starts and closes. A week belongs to the period whose
+// start..finish contains its week-ending date; a week in a gap goes to the next period
+// that closes after it — the same rule the Billing tab totals use, so the band and the
+// theoretical-billing column can never disagree.
+function bpBands(weeks,meta){
+  const L=(meta&&meta._blPeriods)||[];
+  const wins=L.map(p=>({name:String(p.name||'').trim(),s:parseDateVal(p.start),f:parseDateVal(p.finish),due:p.due||''}))
+    .filter(w=>w.s&&w.f).sort((a,b)=>a.f-b.f);
+  if(!wins.length||!weeks.length)return null;
+  const groups=[], starts=new Set();
+  weeks.forEach((wk,i)=>{
+    const d=parseDateVal(wk);
+    const w=d? (wins.find(x=>d>=x.s&&d<=x.f) || wins.find(x=>d<=x.f) || null) : null;
+    const key=w? w.name+'|'+fmtDate(w.f) : '';
+    const last=groups[groups.length-1];
+    if(last&&last.key===key){ last.span++; last.last=wk; }
+    else { groups.push({key,win:w,span:1,first:wk,last:wk}); if(i>0)starts.add(wk); }
+  });
+  if(!groups.some(g=>g.win))return null;          // no visible week falls in the calendar
+  return {groups,starts};
+}
+function bpBandRow(bands,leading,trailing){
+  const tr=el('tr',{class:'bpband'});
+  tr.append(el('th',{colspan:leading,title:'Billing periods from the Billing tab — the dividers are your period cut-offs'},'Billing period'));
+  for(const g of bands.groups){
+    const w=g.win;
+    const short=g.span<=2 && w ? w.name.slice(0,3) : (w? w.name : '—');
+    const th=el('th',{colspan:g.span,class:(g.first===bands.groups[0].first?'':'bpstart')+(w?'':' gap'),
+      title: w? w.name+': '+fmtDate(w.s)+' – '+fmtDate(w.f)+(w.due?' · invoice due '+w.due:'')+' ('+g.span+' week'+(g.span===1?'':'s')+' shown)'
+              : 'These weeks fall outside the billing calendar — add the periods on the Billing tab'},
+      short||'—');
+    tr.append(th);
+  }
+  if(trailing>0) tr.append(el('th',{colspan:trailing}));
+  return tr;
+}
 function projWeekWindow(node,actualWeeks){
   // ONE date range shared by Project Forecast, Actuals vs Forecast and Cost
   // Actuals: plan start + plan length, auto-extended through the latest
@@ -2305,10 +2350,13 @@ function renderForecastPage(){
     ['Revenue','Total hours × bill rate; subs/expenses at cost + non-labor markup. $0 if marked no-bill'],
     ['Margin','Revenue − cost'],
   ];
+  const bands=bpBands(weeks,ppCtx.meta);
+  const bpS=ppCtx._bpStarts=bands?bands.starts:new Set();
   const headCells=[el('th',null,'Task / Person'),
-    ...weeks.map(wk=>el('th',{class:'num',title:'Week ending '+wk},'WE '+wkLabel(wk))),
+    ...weeks.map(wk=>el('th',{class:'num'+(bpS.has(wk)?' bpstart':''),title:'Week ending '+wk},'WE '+wkLabel(wk))),
     ...sumCols.map((c,i)=>el('th',{class:'num'+(i===0?' sumcol':''),title:c[1]},c[0]))];
-  t.append(el('thead',null,el('tr',null,...headCells)));
+  const wkHead=el('tr',{class:'wkhead'+(bands?' offset':'')},...headCells);
+  t.append(bands? el('thead',null,bpBandRow(bands,1,sumCols.length),wkHead) : el('thead',null,wkHead));
   const tb=el('tbody');
   const colCount=headCells.length;
   const collapsed=fpCollapsedSet();
@@ -2325,7 +2373,7 @@ function renderForecastPage(){
     const addLink=el('a',{class:'addperson',onclick:()=>{ $('#fpNewTask').value=tk; $('#fpNewEmp').focus(); }},'+ person');
     trT.append(el('td',{title:tk},caret,el('span',null,tk),' ',
       el('span',{class:'pill'},kids.length+(kids.length===1?' person':' people')),addLink));
-    const weekTds=weeks.map(()=>{ const td=el('td',{class:'wk num taskcell',title:'Sum of the people under this task'}); trT.append(td); return td; });
+    const weekTds=weeks.map(wk=>{ const td=el('td',{class:'wk num taskcell'+(bpS.has(wk)?' bpstart':''),title:'Sum of the people under this task'}); trT.append(td); return td; });
     const sumTds={};
     [['tot',' sumcol'],['rate',''],['bill',''],['cost',''],['rev',''],['margin','']].forEach(([key,cls])=>{
       const td=el('td',{class:'num'+cls}); sumTds[key]=td; trT.append(td); });
@@ -2364,7 +2412,7 @@ function renderForecastPage(){
           });
           inp.addEventListener('paste',e=>handlePlanPaste(e,inp));
           rowInputs.push(inp);
-          tr.append(el('td',{class:'wk'},inp));
+          tr.append(el('td',{class:'wk'+(bpS.has(wk)?' bpstart':'')},inp));
         }
         ppCtx.inputs.push(rowInputs);
         it._sum={};
@@ -2378,7 +2426,7 @@ function renderForecastPage(){
   }
   const trTot=el('tr',{class:'total'});
   trTot.append(el('td',null,'TOTAL'));
-  ppCtx._fpWeekTds=weeks.map(()=>{const td=el('td',{class:'num wk'});trTot.append(td);return td;});
+  ppCtx._fpWeekTds=weeks.map(wk=>{const td=el('td',{class:'num wk'+(bpS.has(wk)?' bpstart':'')});trTot.append(td);return td;});
   ppCtx._fpSum={};
   ['tot','rate','bill','cost','rev','margin'].forEach((k,i)=>{
     const td=el('td',{class:'num'+(i===0?' sumcol':'')}); ppCtx._fpSum[k]=td; trTot.append(td);
@@ -2689,15 +2737,18 @@ function renderActualsPage(){
     ['Orig EAC','The original baseline total for this row (hours, or dollars for cost rows)'],
     ['Overrun','EAC − original baseline. Red = more than originally planned'],
   ];
+  const bands=bpBands(visWeeks,ppCtx.meta);
+  const bpS=ppCtx._bpStarts=bands?bands.starts:new Set();
   const headCells=[el('th',null,'Item')];
   if(hiddenWeeks.length) headCells.push(el('th',{class:'num',title:hiddenWeeks.length+' earlier weeks ('+wkLabel(hiddenWeeks[0])+' … '+wkLabel(hiddenWeeks[hiddenWeeks.length-1])+')'},'Earlier'));
   for(const wk of visWeeks){
     const fut=wk>lastActualWeek;
-    headCells.push(el('th',{class:'num'+(fut?' fut':''),title:'Week ending '+wk+(wk===todayWk?' (current week — likely partial)':'')},
+    headCells.push(el('th',{class:'num'+(fut?' fut':'')+(bpS.has(wk)?' bpstart':''),title:'Week ending '+wk+(wk===todayWk?' (current week — likely partial)':'')},
       'WE '+wkLabel(wk)+(wk===todayWk?' •':'')));
   }
   sumCols.forEach((c,i)=>headCells.push(el('th',{class:'num'+(i===0?' sumcol':''),title:c[1]},c[0])));
-  t.append(el('thead',null,el('tr',null,...headCells)));
+  const wkHead=el('tr',{class:'wkhead'+(bands?' offset':'')},...headCells);
+  t.append(bands? el('thead',null,bpBandRow(bands,1+(hiddenWeeks.length?1:0),sumCols.length),wkHead) : el('thead',null,wkHead));
   const tb=el('tbody');
   const colCount=headCells.length;
   // group rows under their task (same WBS ordering as the baseline view)
@@ -2715,7 +2766,7 @@ function renderActualsPage(){
       onclick:()=>{ const s=apCollapsedSet(); if(s.has(tk))s.delete(tk); else s.add(tk); renderActualsPage(); }},closed?'▸':'▾');
     trT.append(el('td',{title:tk},caret,el('span',null,tk),' ',el('span',{class:'pill'},kids.length+(kids.length===1?' person':' people'))));
     if(hiddenWeeks.length)trT.append(el('td'));
-    const wkTds=visWeeks.map(()=>{ const td=el('td',{class:'wk num'}); trT.append(td); return td; });
+    const wkTds=visWeeks.map(wk=>{ const td=el('td',{class:'wk num'+(bpS.has(wk)?' bpstart':'')}); trT.append(td); return td; });
     const sum={};
     ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','revDelta','origEac','over'].forEach((k,i)=>{
       const td=el('td',{class:'num'+(i===0?' sumcol':'')}); sum[k]=td; trT.append(td); });
@@ -2752,7 +2803,7 @@ function renderActualsPage(){
       inp.addEventListener('change',updatePlanChart);
       inp.addEventListener('paste',e=>handlePlanPaste(e,inp));
       rowInputs.push(inp);
-      const td=el('td',{class:'wk'},
+      const td=el('td',{class:'wk'+(bpS.has(wk)?' bpstart':'')},
         el('span',{class:'wk-act'},fut?'':(act?(it.isLabor?fmtNum(act,1):fmtNum(act,0)):'')),
         inp);
       refreshCellOver(td,act,plan,wk,lastActualWeek);
@@ -2790,7 +2841,7 @@ function renderActualsPage(){
   trTot.append(el('td',null,'TOTAL'));
   if(hiddenWeeks.length) trTot.append(el('td',{class:'num'}));
   ppCtx._totWeekTds=[];
-  for(const wk of visWeeks){ const td=el('td',{class:'wk num'}); ppCtx._totWeekTds.push(td); trTot.append(td); }
+  for(const wk of visWeeks){ const td=el('td',{class:'wk num'+(bpS.has(wk)?' bpstart':'')}); ppCtx._totWeekTds.push(td); trTot.append(td); }
   ppCtx._totSum={};
   ['act','planTD','varTD','toGo','eac','rate','actC','eacC','eacRev','revDelta','origEac','over'].forEach((k,i)=>{
     const td=el('td',{class:'num'+(i===0?' sumcol':'')}); ppCtx._totSum[k]=td; trTot.append(td);
@@ -2801,7 +2852,7 @@ function renderActualsPage(){
     const tr=el('tr',{class:'total'});
     tr.append(el('td',{title},label));
     if(hiddenWeeks.length)tr.append(el('td'));
-    const tds=visWeeks.map(()=>{ const td=el('td',{class:'wk num'+(cls||'')}); tr.append(td); return td; });
+    const tds=visWeeks.map(wk=>{ const td=el('td',{class:'wk num'+(cls||'')+(bpS.has(wk)?' bpstart':'')}); tr.append(td); return td; });
     const tot=el('td',{class:'num sumcol'+(cls||'')}); tr.append(tot);
     for(let i=0;i<11;i++)tr.append(el('td'));
     tb.append(tr); return {tds,tot};
@@ -2966,7 +3017,7 @@ function updatePlanTotals(){
       ppCtx._revActRow.tds[i].textContent=past&&a?fmtMoney(a):'';
       const v=past?a-p:null;
       ppCtx._revVarRow.tds[i].textContent=(v!=null&&Math.abs(v)>0.5)?((v>0?'+':'')+fmtMoney(v)):'';
-      ppCtx._revVarRow.tds[i].className='wk num '+(v!=null?(v<-0.5?'neg':'pos'):'');
+      ppCtx._revVarRow.tds[i].className='wk num '+(ppCtx._bpStarts&&ppCtx._bpStarts.has(wk)?'bpstart ':'')+(v!=null?(v<-0.5?'neg':'pos'):'');
     });
     ppCtx._revPlanRow.tot.textContent=fmtMoney(sp);
     ppCtx._revActRow.tot.textContent=fmtMoney(sa);
