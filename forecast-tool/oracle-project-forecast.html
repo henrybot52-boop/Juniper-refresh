@@ -654,7 +654,26 @@
     </div>
   </div>
   <div class="kpis" id="blKpis"></div>
-  <div class="card"><div class="tablewrap" style="max-height:520px"><table id="blTable"></table></div><div class="hint" id="blInfo" style="margin-top:8px"></div></div>
+  <div class="card">
+    <h2>Billing periods <span class="hint">— your accounting calendar: theoretical billing vs what actually went out</span></h2>
+    <div class="row">
+      <button id="btnBpGen" class="small">Generate calendar…</button>
+      <button id="btnBpAdd" class="small">+ Add period</button>
+      <button id="btnBpXlsx" class="small">Export Excel</button>
+      <button id="btnBpImp" class="small">Import</button>
+      <input type="file" id="bpFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
+      <button id="btnBpCut" class="small" title="Set the Dashboard billing cut-off to the finish date of the last period that has closed">Cut-off → dashboard</button>
+      <button id="btnBpClear" class="small" title="Delete every period in this project's calendar">Clear</button>
+    </div>
+    <div class="hint" style="margin-top:6px">Type your periods in, paste them from Excel with <b>Import</b>, or use <b>Generate calendar</b> for a 4-4-5 / 4-weekly / calendar-month pattern.
+      <b>Theoretical</b> is what the updated forecast says you should bill in that window — overwrite the cell to set your own number, clear it to go back to the forecast.
+      <b>Actual billed</b> defaults to the invoices below whose Period matches, and is likewise editable.</div>
+    <div class="tablewrap" style="max-height:460px"><table id="bpTable"></table></div>
+    <div class="hint" id="bpInfo" style="margin-top:8px"></div>
+    <div class="chartbox" style="height:300px;margin-top:10px"><canvas id="chBp"></canvas></div>
+  </div>
+  <div class="card"><div class="tablewrap" style="max-height:520px"><table id="blTable"></table></div><div class="hint" id="blInfo" style="margin-top:8px"></div>
+    <datalist id="bpNameList"></datalist></div>
   <div class="card">
     <h2>Cash flow — forecast revenue vs invoiced <span class="hint">by month</span></h2>
     <div class="tablewrap" style="max-height:320px"><table id="blCash"></table></div>
@@ -4557,6 +4576,27 @@ function setupBillingTab(){
   $('#btnBlXlsx').addEventListener('click',exportBlXlsx);
   $('#btnBlImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#blFile').click(); });
   $('#blFile').addEventListener('change',e=>{ if(e.target.files[0])importBlFile(e.target.files[0]); e.target.value=''; });
+  $('#btnBpAdd').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;}
+    const L=bpList(ppCtx.meta), last=L[L.length-1];
+    const st=last&&last.finish? fmtDate(dAdd(parseDateVal(last.finish),1)) : '';
+    L.push({id:bpId(),name:bpNextName(last),start:st,finish:st?fmtDate(dAdd(parseDateVal(st),27)):'',due:'',notes:''});
+    saveState(); renderBillingTab(); });
+  $('#btnBpGen').addEventListener('click',bpGenDialog);
+  $('#btnBpXlsx').addEventListener('click',exportBpXlsx);
+  $('#btnBpImp').addEventListener('click',()=>{ if(!ppCtx){alert('Open a project first.');return;} $('#bpFile').click(); });
+  $('#bpFile').addEventListener('change',e=>{ if(e.target.files[0])importBpFile(e.target.files[0]); e.target.value=''; });
+  $('#btnBpCut').addEventListener('click',()=>{
+    if(!ppCtx){alert('Open a project first.');return;}
+    const today=new Date(); today.setHours(0,0,0,0);
+    const closed=bpList(ppCtx.meta).map(p=>parseDateVal(p.finish)).filter(d=>d&&d<=today).sort((a,b)=>b-a)[0];
+    if(!closed){alert('No billing period has closed yet — give the periods start and finish dates first.');return;}
+    state.settings.billCutoff=fmtDate(closed);
+    if($('#billCutoff'))$('#billCutoff').value=state.settings.billCutoff;
+    saveState(); renderBilling();
+    alert('Dashboard billing cut-off set to '+state.settings.billCutoff+' — the hours-vs-billed reconciliation now lines up with your period end.');
+  });
+  $('#btnBpClear').addEventListener('click',()=>{ if(!ppCtx)return;
+    if(confirm('Delete every billing period for '+ppCtx.proj+'? Invoices in the log are not touched.')){ ppCtx.meta._blPeriods=[]; saveState(); renderBillingTab(); } });
   spLinkSetup('blSpLink','blSpOpen','billing');
 }
 function renderBillingTab(){
@@ -4575,20 +4615,237 @@ function renderBillingTab(){
   const t=$('#blTable'); t.innerHTML='';
   t.append(el('thead',null,el('tr',null,...[['Period',''],['Invoice #',''],['Amount',''],['Invoice date',''],['Status',''],['Link','SharePoint / invoice link'],['Notes',''],['','']].map(h=>el('th',{class:h[0]==='Amount'?'num':'',title:h[1]},h[0])))));
   const tb=el('tbody');
-  const txt=(o,key,wd)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+';text-align:left',value:o[key]||''});i.addEventListener('change',()=>{o[key]=i.value;saveState();});return i;};
+  const txt=(o,key,wd,listId)=>{const at={class:'rate-in',style:'width:'+wd+';text-align:left',value:o[key]||''}; if(listId)at.list=listId;
+    const i=el('input',at);i.addEventListener('change',()=>{o[key]=i.value;saveState();if(listId)renderBpTable();});return i;};
   for(const b of bills){
     const sel=el('select',null,...BL_STATUS.map(o=>el('option',{value:o},o))); sel.value=b.status||'Draft'; sel.style.color=blColor(sel.value); sel.style.fontWeight='600';
     sel.addEventListener('change',()=>{b.status=sel.value;saveState();renderBillingTab();});
     const amt=el('input',{class:'rate-in',type:'text',inputmode:'decimal',value:b.amount||''}); amt.addEventListener('change',()=>{b.amount=parseNumber(amt.value)||0;saveState();renderBillingTab();});
     const del=el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete',onclick:()=>{ if(confirm('Delete this invoice?')){ meta._bills=meta._bills.filter(x=>x!==b); saveState(); renderBillingTab(); } }},'✕');
     tb.append(el('tr',null,
-      el('td',null,txt(b,'period','100px')), el('td',null,txt(b,'invoice','120px')), el('td',{class:'num'},amt),
+      el('td',null,txt(b,'period','110px','bpNameList')), el('td',null,txt(b,'invoice','120px')), el('td',{class:'num'},amt),
       el('td',null,txt(b,'date','108px')), el('td',null,sel), el('td',null,recLink(b,'link')), el('td',null,txt(b,'notes','180px')), el('td',null,del)));
   }
   tb.append(el('tr',{class:'total'},el('td',{colspan:2},'TOTAL INVOICED'),el('td',{class:'num'},fmtMoney(invoiced)),el('td'),el('td'),el('td'),el('td'),el('td')));
   t.append(tb);
   $('#blInfo').textContent=bills.length+' invoice'+(bills.length===1?'':'s')+' · invoiced '+fmtMoney(invoiced)+' · outstanding '+fmtMoney(outstanding);
+  renderBpTable();
   renderCashFlow();
+}
+/* ---- billing periods: the accounting calendar, theoretical vs actual ---- */
+const BP_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function bpId(){ return Date.now()+'-'+Math.random().toString(36).slice(2,6); }
+function dAdd(d,n){ return d? new Date(d.getFullYear(),d.getMonth(),d.getDate()+n) : null; }
+function bpList(meta){ meta._blPeriods=meta._blPeriods||[]; return meta._blPeriods; }
+function bpNextName(prev){
+  const i=prev? BP_MONTHS.findIndex(m=>m.toLowerCase()===String(prev.name||'').trim().toLowerCase()) : -1;
+  return i<0? '' : BP_MONTHS[(i+1)%12];
+}
+// forecast revenue that lands inside each window. Weeks are assigned to the period whose
+// start..finish contains the week-ending date; a week that falls in a gap goes to the next
+// period that closes after it, so nothing is counted twice and nothing silently disappears.
+function bpPlanned(meta,proj){
+  const L=bpList(meta), out=new Map(); if(!L.length)return out;
+  const wins=L.map(p=>({id:p.id,s:parseDateVal(p.start),f:parseDateVal(p.finish)})).filter(w=>w.s&&w.f).sort((a,b)=>a.f-b.f);
+  if(!wins.length)return out;
+  const node=(state.plans[proj]&&state.plans[proj].taskEmployee)||null; if(!node||!node.current)return out;
+  const rt=(state.plans[proj]&&state.plans[proj]._rateTable)||{};
+  const nb=node.nb||{};
+  for(const kk in node.current){
+    const i=kk.lastIndexOf('|'); const label=kk.slice(0,i), wk=kk.slice(i+1);
+    if(nb[label])continue;                                  // marked non-billable
+    const hrs=+node.current[kk]||0; if(!hrs)continue;
+    const emp=label.indexOf(' · ')>=0?label.split(' · ').pop():'';
+    const bill=numOr(rt[emp]&&rt[emp].bill,0); if(!bill)continue;
+    const d=parseDateVal(wk); if(!d)continue;
+    let w=wins.find(x=>d>=x.s&&d<=x.f) || wins.find(x=>d<=x.f); if(!w)continue;
+    out.set(w.id,(out.get(w.id)||0)+hrs*bill);
+  }
+  return out;
+}
+// revenue actually earned in the window, from the extract
+function bpEarned(meta,rows){
+  const L=bpList(meta), out=new Map(); if(!L.length)return out;
+  const wins=L.map(p=>({id:p.id,s:parseDateVal(p.start),f:parseDateVal(p.finish)})).filter(w=>w.s&&w.f).sort((a,b)=>a.f-b.f);
+  if(!wins.length)return out;
+  for(const r of rows){
+    const d=r.transactionDate||r.glDate; if(!d)continue;
+    const w=wins.find(x=>d>=x.s&&d<=x.f); if(!w)continue;
+    out.set(w.id,(out.get(w.id)||0)+rowRevenue(r));
+  }
+  return out;
+}
+// invoices in the log tagged to this period (matched on the Period text)
+function bpInvoiced(meta,p){
+  const nm=String(p.name||'').trim().toLowerCase(); if(!nm)return {amt:0,n:0};
+  let amt=0,n=0;
+  for(const b of (meta._bills||[])){
+    if(String(b.period||'').trim().toLowerCase()!==nm)continue;
+    if(b.status!=='Submitted'&&b.status!=='Paid')continue;
+    amt+=+b.amount||0; n++;
+  }
+  return {amt,n};
+}
+function bpBilled(meta,p){ return (p.billed==null||p.billed==='')? bpInvoiced(meta,p).amt : (+p.billed||0); }
+function bpTheor(p,planned){ return (p.plan==null||p.plan==='')? (planned.get(p.id)||0) : (+p.plan||0); }
+function renderBpTable(){
+  const t=$('#bpTable'); if(!t||!ppCtx)return;
+  const meta=ppCtx.meta, L=bpList(meta);
+  const dl=$('#bpNameList'); if(dl){ dl.innerHTML=''; for(const p of L) if(p.name) dl.append(el('option',{value:p.name})); }
+  t.innerHTML='';
+  const head=[['Period',''],['Start',''],['Finish',''],['Invoice due',''],
+    ['Theoretical','What the updated forecast says you should bill in this window. Overwrite to set your own; clear the cell to go back to the forecast.'],
+    ['Earned in period','Revenue actually earned from the extract between start and finish'],
+    ['Actual billed','Defaults to the invoices below whose Period matches this one. Overwrite to set your own.'],
+    ['Δ vs theoretical','Actual billed − theoretical'],['Δ vs earned','Actual billed − earned'],['Notes',''],['','']];
+  t.append(el('thead',null,el('tr',null,...head.map((h,i)=>el('th',{class:(i>=4&&i<=8)?'num':'',title:h[1]},h[0])))));
+  const tb=el('tbody');
+  const planned=bpPlanned(meta,ppCtx.proj), earned=bpEarned(meta,ppCtx.projRows);
+  const txt=(o,key,wd)=>{const i=el('input',{class:'rate-in',style:'width:'+wd+';text-align:left',value:o[key]||''});
+    i.addEventListener('change',()=>{o[key]=i.value;saveState();renderBillingTab();});return i;};
+  const dat=(o,key)=>{const i=el('input',{class:'rate-in',type:'date',style:'width:126px',value:o[key]||''});
+    i.addEventListener('change',()=>{o[key]=i.value;saveState();renderBillingTab();});return i;};
+  const mon=(o,key,auto,tip)=>{
+    const manual=!(o[key]==null||o[key]==='');
+    const i=el('input',{class:'rate-in',type:'text',inputmode:'decimal',title:manual?'Manual override — clear the cell to go back to '+tip:tip,
+      value:manual?o[key]:(auto?Math.round(auto):'')});
+    if(!manual)i.style.opacity='.62';
+    i.addEventListener('change',()=>{ const v=i.value.trim(); if(!v)delete o[key]; else o[key]=parseNumber(v)||0; saveState(); renderBillingTab(); });
+    return i;};
+  let tT=0,tE=0,tB=0;
+  const labels=[],dTh=[],dEa=[],dBi=[];
+  const today=new Date(); today.setHours(0,0,0,0);
+  for(const p of L){
+    const th=bpTheor(p,planned), ea=earned.get(p.id)||0, bi=bpBilled(meta,p);
+    tT+=th; tE+=ea; tB+=bi;
+    const fin=parseDateVal(p.finish), due=parseDateVal(p.due);
+    const closed=fin&&fin<=today;
+    const dT=bi-th, dE=bi-ea;
+    const money=(v,warn)=>{const c=el('td',{class:'num'},v?fmtMoney(v):'—'); if(warn&&Math.abs(v)>0.5)c.style.color=v<0?'var(--bad)':'var(--good)'; return c;};
+    const inv=bpInvoiced(meta,p);
+    const nameCell=el('td',null,txt(p,'name','110px'));
+    if(due&&!bi&&due<today){ const w=el('span',{class:'pill warn',title:'Invoice was due '+p.due+' and nothing is logged against this period'},'due'); nameCell.append(' ',w); }
+    tb.append(el('tr',null,
+      nameCell, el('td',null,dat(p,'start')), el('td',null,dat(p,'finish')), el('td',null,dat(p,'due')),
+      el('td',{class:'num'},mon(p,'plan',planned.get(p.id)||0,'the updated forecast')),
+      el('td',{class:'num',title:closed?'':'period has not closed yet'},ea?fmtMoney(ea):'—'),
+      el('td',{class:'num'},mon(p,'billed',inv.amt,inv.n?inv.n+' invoice(s) in the log':'the invoice log')),
+      money(dT,true), money(dE,true),
+      el('td',null,txt(p,'notes','170px')),
+      el('td',null,el('span',{style:'cursor:pointer;color:var(--bad)',title:'Delete this period',
+        onclick:()=>{ if(confirm('Delete period '+(p.name||'')+'?')){ meta._blPeriods=L.filter(x=>x!==p); saveState(); renderBillingTab(); } }},'✕'))));
+    labels.push(p.name||p.finish||''); dTh.push(Math.round(th)); dEa.push(Math.round(ea)); dBi.push(Math.round(bi));
+  }
+  if(!L.length) tb.append(el('tr',null,el('td',{colspan:11,class:'hint',style:'padding:10px'},
+    'No billing periods yet — use Generate calendar, Import, or + Add period.')));
+  else tb.append(el('tr',{class:'total'},el('td',{colspan:4},'TOTAL'),
+    el('td',{class:'num'},fmtMoney(tT)),el('td',{class:'num'},fmtMoney(tE)),el('td',{class:'num'},fmtMoney(tB)),
+    el('td',{class:'num'},fmtMoney(tB-tT)),el('td',{class:'num'},fmtMoney(tB-tE)),el('td'),el('td')));
+  t.append(tb);
+  $('#bpInfo').textContent = L.length? L.length+' period'+(L.length===1?'':'s')+' · theoretical '+fmtMoney(tT)+' · earned '+fmtMoney(tE)+' · billed '+fmtMoney(tB)+' · under-billed by '+fmtMoney(tE-tB)
+    : 'Set up the calendar to compare theoretical billing against what actually went out.';
+  drawChart('chBp',{type:'bar',data:{labels,datasets:[
+    {label:'Theoretical',data:dTh,backgroundColor:'#a78bfa'},
+    {label:'Earned in period',data:dEa,backgroundColor:'#38bdf8'},
+    {label:'Actual billed',data:dBi,backgroundColor:'#34d399'}
+  ]},options:chartOpts()});
+}
+function bpGenDialog(){
+  if(!ppCtx){alert('Open a project first.');return;}
+  const wrap=el('div',null,el('h1',null,'Generate a billing calendar'),
+    el('p',{class:'sub'},'Builds the periods from a repeating pattern. Anything you generate can still be edited by hand afterwards.'));
+  const f=(lbl,node,hint)=>el('div',{style:'margin:8px 0'},el('label',null,lbl+' ',node),hint?el('span',{class:'hint'},' '+hint):null);
+  const start=el('input',{type:'date',value:fmtDate(new Date(new Date().getFullYear(),0,1))});
+  const pat=el('select',null,el('option',{value:'445'},'4-4-5 weeks (accounting quarters)'),el('option',{value:'4'},'4 weeks, every period'),
+    el('option',{value:'544'},'5-4-4 weeks'),el('option',{value:'m'},'Calendar months'),el('option',{value:'custom'},'Custom week pattern…'));
+  const cust=el('input',{type:'text',value:'4,4,5,4,5',style:'width:130px'});
+  const dueD=el('input',{type:'text',inputmode:'numeric',value:'9',style:'width:56px'});
+  const n=el('input',{type:'text',inputmode:'numeric',value:'12',style:'width:56px'});
+  const first=el('select',null,...BP_MONTHS.map(m=>el('option',{value:m},m)));
+  first.value=BP_MONTHS[new Date().getMonth()];
+  const custRow=f('Weeks per period',cust,'repeats — e.g. 4,4,5,4,5 for a calendar like yours');
+  custRow.style.display='none';
+  pat.addEventListener('change',()=>{ custRow.style.display=pat.value==='custom'?'':'none'; });
+  wrap.append(f('First period starts',start),f('Pattern',pat),custRow,f('Invoice due',dueD,'days after the period finishes'),
+    f('Number of periods',n),f('Label the first period',first,'later periods roll on month by month'));
+  wrap.append(el('div',{class:'row',style:'margin-top:14px'},
+    el('button',{class:'primary',onclick:()=>{
+      const L=bpList(ppCtx.meta);
+      if(L.length&&!confirm('Replace the '+L.length+' existing period(s)?'))return;
+      const cnt=Math.max(1,Math.min(60,Math.round(parseNumber(n.value)||12)));
+      const dd=Math.round(parseNumber(dueD.value)||0);
+      let cur=parseDateVal(start.value); if(!cur){alert('Pick a start date.');return;}
+      let weeks=pat.value==='445'?[4,4,5]:pat.value==='544'?[5,4,4]:pat.value==='4'?[4]:null;
+      if(pat.value==='custom'){
+        weeks=String(cust.value).split(/[^0-9.]+/).map(v=>Math.round(parseNumber(v))).filter(v=>v>0);
+        if(!weeks.length){alert('Enter the weeks per period, e.g. 4,4,5.');return;}
+      }
+      const out=[]; let mi=BP_MONTHS.indexOf(first.value); if(mi<0)mi=0;
+      for(let i=0;i<cnt;i++){
+        let fin;
+        if(weeks){ fin=dAdd(cur,7*weeks[i%weeks.length]-1); }
+        else { const c=new Date(cur.getFullYear(),cur.getMonth()+1,0); fin=c; }
+        out.push({id:bpId(),name:BP_MONTHS[(mi+i)%12],start:fmtDate(cur),finish:fmtDate(fin),due:fmtDate(dAdd(fin,dd)),notes:''});
+        cur=dAdd(fin,1);
+      }
+      ppCtx.meta._blPeriods=out; saveState(); closeDModal(); renderBillingTab();
+    }},'Generate'),
+    el('button',{onclick:closeDModal},'Cancel')));
+  openDModal(wrap);
+}
+function exportBpXlsx(){
+  if(!ppCtx){alert('Open a project first.');return;} if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const meta=ppCtx.meta, L=bpList(meta); const BRAND='1F4E79',M='"$"#,##0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const planned=bpPlanned(meta,ppCtx.proj), earned=bpEarned(meta,ppCtx.projRows);
+  const head=['Period','Start','Finish','Invoice Due','Theoretical','Earned in period','Actual billed','Delta vs theoretical','Delta vs earned','Notes'];
+  const aoa=[['Billing Periods — '+ppCtx.proj],['Generated',fmtDate(new Date())],[],head];
+  let tT=0,tE=0,tB=0;
+  for(const p of L){ const th=bpTheor(p,planned),ea=earned.get(p.id)||0,bi=bpBilled(meta,p); tT+=th;tE+=ea;tB+=bi;
+    aoa.push([p.name||'',p.start||'',p.finish||'',p.due||'',Math.round(th),Math.round(ea),Math.round(bi),Math.round(bi-th),Math.round(bi-ea),p.notes||'']); }
+  aoa.push(['TOTAL','','','',Math.round(tT),Math.round(tE),Math.round(tB),Math.round(tB-tT),Math.round(tB-tE),'']);
+  const ws=XLSX.utils.aoa_to_sheet(aoa); if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  const rng=XLSX.utils.decode_range(ws['!ref']); for(let C=0;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:3,c:C})];if(c)c.s=HDR;}
+  for(let R=4;R<=rng.e.r;R++)for(const C of [4,5,6,7,8]){const c=ws[XLSX.utils.encode_cell({r:R,c:C})];if(c&&typeof c.v==='number')c.z=M;}
+  for(let C=0;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:rng.e.r,c:C})];if(c)c.s={font:{bold:true}};}
+  ws['!cols']=[{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:16},{wch:14},{wch:18},{wch:16},{wch:26}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:3,c:0},e:{r:Math.max(4,3+L.length),c:9}})};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Billing Periods');
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'}); const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'billing-periods-'+ppCtx.proj+'.xlsx'}); document.body.append(a); a.click(); a.remove();
+}
+function importBpFile(file){ readTabular(file,grid=>applyBpGrid(grid),'billing periods','Period'); }
+function applyBpGrid(grid0){
+  if(!ppCtx)return; const grid=grid0.filter(row=>row.some(c=>String(c).trim()!==''));
+  if(!grid.length)throw new Error('file is empty');
+  const norm2=s2=>String(s2).toLowerCase().replace(/[^a-z0-9]/g,'');
+  let hi=grid.findIndex(row=>row.some(c=>{const nn=norm2(c);return nn==='period'||nn==='invoicedue'||nn==='startfinish'||nn==='start';})); if(hi<0)hi=0;
+  const H=grid[hi].map(norm2); const f=(...names)=>{for(const x of names){const i=H.indexOf(x);if(i>=0)return i;}return -1;};
+  const ci={name:f('period','month','billingperiod','name'),due:f('invoicedue','due','duedate','invoicedate'),
+    range:f('startfinish','startfinishdate','dates','periodstartfinish','range'),
+    start:f('start','startdate','periodstart','from'),finish:f('finish','end','enddate','periodend','finishdate','to'),
+    theor:f('theoretical','theoreticalbilling','planned','plan','forecast'),
+    billed:f('actualbilled','actual','billed','invoiced','amountbilled'),notes:f('notes','note','comments')};
+  // "4/20/26 - 5/16/26" in one cell
+  const splitRange=v=>{const s2=String(v).replace(/[\u2010-\u2015\u2212]/g,'-');
+    const m=s2.match(/^\s*(.+?)\s*-\s*(.+?)\s*$/); return m?[m[1],m[2]]:[null,null];};
+  const got=[];
+  for(let r=hi+1;r<grid.length;r++){
+    const row=grid[r],cell=i=>i>=0&&i<row.length?row[i]:'';
+    const name=String(cell(ci.name)).trim();
+    if(/^(total|grand total)/i.test(name))continue;
+    let sv=cell(ci.start), fv=cell(ci.finish);
+    if(ci.range>=0&&(!String(sv).trim()||!String(fv).trim())){ const [a,b]=splitRange(cell(ci.range)); if(a){sv=a;fv=b;} }
+    const sd=parseDateVal(sv), fd=parseDateVal(fv), dueD=parseDateVal(cell(ci.due));
+    if(!name&&!sd&&!fd&&!dueD)continue;
+    const p={id:bpId(),name,start:fmtDate(sd),finish:fmtDate(fd),due:fmtDate(dueD),notes:String(cell(ci.notes)).trim()};
+    const th=String(cell(ci.theor)).trim(); if(th)p.plan=parseNumber(th)||0;
+    const bl=String(cell(ci.billed)).trim(); if(bl)p.billed=parseNumber(bl)||0;
+    got.push(p);
+  }
+  if(!got.length)throw new Error('no period rows found — expected columns like Period, Invoice Due and Start / Finish');
+  mergeOrReplace(ppCtx.meta,'_blPeriods',got,p=>String(p.name||'').trim().toLowerCase()+'|'+(p.start||''),(ex,g)=>{Object.assign(ex,g,{id:ex.id});});
+  saveState(); renderBillingTab(); alert('Imported '+got.length+' billing period(s).');
 }
 function exportBlXlsx(){
   if(!ppCtx){alert('Open a project first.');return;} if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
