@@ -5250,15 +5250,16 @@ function leadPacks(){
   const pastIdx=weeks.map(wk=>law&&wk<=law);
   const taskLead=new Map();
   for(const it of ppCtx.items){ const tk=fpTaskOf(it); if(!taskLead.has(tk))taskLead.set(tk,leadOfTask(tk,ppCtx.items,meta)); }
+  // one pack per task — a task is a discipline, which is what the leads actually own.
   const byLead=new Map();
   for(const it of ppCtx.items){
     const tk=fpTaskOf(it), lead=taskLead.get(tk);
-    let L=byLead.get(lead);
+    let L=byLead.get(tk);
     if(!L){
-      L={lead,email:String((meta._leadEmails||{})[lead]||''),tasks:new Map(),people:[],
+      L={task:tk,lead,email:String((meta._leadEmails||{})[lead]||''),tasks:new Map(),people:[],
         wkPlanRev:weeks.map(()=>0),wkActRev:weeks.map(()=>0),wkPlanH:weeks.map(()=>0),wkActH:weeks.map(()=>0),wkFcH:weeks.map(()=>0),
         planRevTD:0,actRevTD:0,planHTD:0,actHTD:0,planRevAll:0,planHAll:0,toGoH:0,toGoRev:0};
-      byLead.set(lead,L);
+      byLead.set(tk,L);
     }
     let T=L.tasks.get(tk);
     if(!T){ T={task:tk,planRevTD:0,actRevTD:0,planHTD:0,actHTD:0,planRevAll:0,toGoRev:0,
@@ -5300,7 +5301,7 @@ function leadPacks(){
     L.taskList=[...L.tasks.values()].sort((a,b)=>taskCompare(a.task,b.task));
     L.people.sort((a,b)=>taskCompare(a.task,b.task)||a.emp.localeCompare(b.emp));
   }
-  leads.sort((a,b)=>(a.lead===LEAD_NONE)-(b.lead===LEAD_NONE)||a.lead.localeCompare(b.lead));
+  leads.sort((a,b)=>taskCompare(a.task,b.task));
   const proj=ppCtx.proj;
   const projName=(ppCtx.projRows[0]&&ppCtx.projRows[0].projectName)||'';
   return {weeks,pastIdx,law,leads,proj,projName,
@@ -5321,7 +5322,7 @@ function leadEmailText(L,ctx,compact){
   const out=[];
   out.push('Hi '+first+',');
   out.push('');
-  out.push('Here is how your work tracked against forecast on '+proj+', for the '+pw.length+' week'+(pw.length===1?'':'s')
+  out.push('Here is how '+(L.task||'your work')+' tracked against forecast on '+proj+', for the '+pw.length+' week'+(pw.length===1?'':'s')
     +' up to and including week ending '+(ctx.law?wkLabel(ctx.law):'—')+'.');
   out.push('');
   if(compact){
@@ -5349,13 +5350,15 @@ function leadEmailText(L,ctx,compact){
   out.push('  '+pad('Actual hours',22)+rpad(fmtNum(L.actHTD,1),14));
   out.push('  '+pad('Difference',22)+rpad(lpSignedH(L.actHTD-L.planHTD),14));
   out.push('');
-  out.push('BY TASK');
-  for(const T of L.taskList){
-    out.push('  '+pad(T.task.slice(0,38),40)+rpad(fmtMoney(T.planRevTD),12)+rpad(fmtMoney(T.actRevTD),12)
-      +rpad(lpSigned(T.actRevTD-T.planRevTD),12)+'  '+lpPct(T.actRevTD,T.planRevTD));
+  if(L.taskList.length>1){
+    out.push('BY TASK');
+    for(const T of L.taskList){
+      out.push('  '+pad(T.task.slice(0,38),40)+rpad(fmtMoney(T.planRevTD),12)+rpad(fmtMoney(T.actRevTD),12)
+        +rpad(lpSigned(T.actRevTD-T.planRevTD),12)+'  '+lpPct(T.actRevTD,T.planRevTD));
+    }
+    out.push('  '+pad('',40)+rpad('forecast',12)+rpad('achieved',12)+rpad('diff',12));
+    out.push('');
   }
-  out.push('  '+pad('',40)+rpad('forecast',12)+rpad('achieved',12)+rpad('diff',12));
-  out.push('');
   out.push('BY PERSON — HOURS TO DATE, FORECAST vs ACTUAL');
   for(const P of L.people){
     if(!P.isLabor)continue;
@@ -5363,6 +5366,8 @@ function leadEmailText(L,ctx,compact){
       +rpad(lpSignedH(P.actHTD-P.planHTD),9)+'   '+rpad(lpSigned(P.actRevTD-P.planRevTD),11)+' revenue');
   }
   out.push('  '+pad('',26)+rpad('forecast',9)+rpad('actual',9)+rpad('diff',9));
+  out.push('');
+  out.push('WHO THIS COVERS: '+(L.task||'')+(L.lead&&L.lead!==LEAD_NONE?' — lead: '+L.lead:''));
   out.push('');
   if(pw.length){
     out.push('WEEK BY WEEK — REVENUE DIFFERENCE (achieved − forecast)');
@@ -5420,19 +5425,19 @@ function leadEmailText(L,ctx,compact){
   return out.join('\n');
 }
 function leadEmailSubject(L,ctx){
-  return '['+ctx.proj+'] Revenue vs forecast to '+(ctx.law?'WE '+wkLabel(ctx.law):'date')+' — '+L.lead;
+  return '['+ctx.proj+'] '+L.task+' — revenue vs forecast to '+(ctx.law?'WE '+wkLabel(ctx.law):'date');
 }
 function showLeadPacks(){
   if(!ppCtx||ppCtx.mode!=='a'){ setPpMode('work'); return; }
   const ctx=leadPacks(), meta=ppCtx.meta;
   const wrap=el('div',{class:'rep'});
-  wrap.append(el('h1',null,'Lead packs — revenue vs forecast'),
+  wrap.append(el('h1',null,'Lead packs — revenue vs forecast by task'),
     el('div',{class:'sub'},ctx.proj+(ctx.projName?' — '+ctx.projName:'')+' · Datum · '+fmtDate(new Date())
-      +' · '+ctx.leads.length+' lead'+(ctx.leads.length===1?'':'s')+' · actuals through '+(ctx.law?'week ending '+ctx.law:'—')));
-  wrap.append(el('p',{class:'hint'},'One pack per lead: their tasks, their people, forecast vs actual hours and revenue week by week. '
-    +'Forecast to date counts only the weeks already reported, so it is a like-for-like comparison — the full-window forecast is shown separately.'));
+      +' · '+ctx.leads.length+' task'+(ctx.leads.length===1?'':'s')+' · actuals through '+(ctx.law?'week ending '+ctx.law:'—')));
+  wrap.append(el('p',{class:'hint'},'One pack per task — the disciplines the leads actually own. Each pack has that task\'s people, '
+    +'forecast vs actual hours and revenue week by week. Forecast to date counts only the weeks already reported, so it is a like-for-like comparison.'));
   const t=el('table');
-  t.append(el('thead',null,el('tr',null,el('th',null,'Lead'),el('th',null,'Email'),el('th',null,'Tasks'),el('th',null,'People'),
+  t.append(el('thead',null,el('tr',null,el('th',null,'Task'),el('th',null,'Lead'),el('th',null,'Email'),el('th',null,'People'),
     el('th',null,'Forecast to date'),el('th',null,'Achieved'),el('th',null,'Difference'),el('th',null,'% of forecast'),
     el('th',null,'Hours to go'),el('th',null,''))));
   const tb=el('tbody');
@@ -5441,9 +5446,9 @@ function showLeadPacks(){
     em.addEventListener('change',()=>{ meta._leadEmails=meta._leadEmails||{}; meta._leadEmails[L.lead]=em.value.trim(); L.email=em.value.trim(); saveState(); });
     const d=L.actRevTD-L.planRevTD;
     tb.append(el('tr',null,
-      el('td',null,el('b',null,L.lead)),
+      el('td',null,el('b',null,L.task)),
+      el('td',null,L.lead===LEAD_NONE?el('span',{class:'hint'},L.lead):L.lead),
       el('td',{class:'noprint'},em),
-      el('td',null,String(L.taskList.length)),
       el('td',null,String(L.people.length)),
       el('td',null,fmtMoney(L.planRevTD)),
       el('td',null,fmtMoney(L.actRevTD)),
@@ -5456,7 +5461,7 @@ function showLeadPacks(){
   t.append(tb); wrap.append(t);
   wrap.append(el('div',{class:'noprint',style:'margin-top:16px'},
     el('button',{class:'primary',onclick:()=>window.print()},'Print / Save PDF'),' ',
-    el('button',{onclick:()=>exportLeadPacksAll(ctx)},'Export Excel — all leads'),' ',
+    el('button',{onclick:()=>exportLeadPacksAll(ctx)},'Export Excel — all tasks'),' ',
     el('button',{onclick:()=>showLeadAssign()},'Reassign tasks to leads…')));
   wrap.append(el('p',{class:'hint',style:'margin-top:10px'},'Leads come from the Task Manager column on the extract. '
     +'Use "Reassign tasks to leads" to correct one, and it sticks with the project.'));
@@ -5465,9 +5470,10 @@ function showLeadPacks(){
 function showLeadPack(L,ctx){
   const wrap=el('div',{class:'rep'});
   const d=L.actRevTD-L.planRevTD;
-  wrap.append(el('h1',null,L.lead+' — revenue vs forecast'),
-    el('div',{class:'sub'},ctx.proj+(ctx.projName?' — '+ctx.projName:'')+' · actuals through '
-      +(ctx.law?'week ending '+ctx.law:'—')+' · '+fmtDate(new Date())));
+  wrap.append(el('h1',null,L.task+' — revenue vs forecast'),
+    el('div',{class:'sub'},ctx.proj+(ctx.projName?' — '+ctx.projName:'')
+      +(L.lead&&L.lead!==LEAD_NONE?' · lead: '+L.lead:'')
+      +' · actuals through '+(ctx.law?'week ending '+ctx.law:'—')+' · '+fmtDate(new Date())));
   const kt=el('table');
   kt.append(el('tbody',null,
     el('tr',null,el('td',null,el('b',null,'Forecast revenue to date')),el('td',null,fmtMoney(L.planRevTD)),
@@ -5488,15 +5494,16 @@ function showLeadPack(L,ctx){
     b1.append(el('tr',null,el('td',null,T.task),el('td',null,fmtMoney(T.planRevTD)),el('td',null,fmtMoney(T.actRevTD)),
       el('td',{style:'color:'+(dd<-0.5?'#b00020':'#0a7d3f')},lpSigned(dd)),el('td',null,lpPct(T.actRevTD,T.planRevTD)),
       el('td',null,fmtMoney(T.toGoRev)))); }
-  t1.append(b1); wrap.append(el('h3',null,'By task'),t1);
+  t1.append(b1); if(L.taskList.length>1)wrap.append(el('h3',null,'By task'),t1);
   // by person, hours + revenue to date
   const t2=el('table');
-  t2.append(el('thead',null,el('tr',null,el('th',null,'Person'),el('th',null,'Task'),el('th',null,'Bill rate'),
+  const oneTask=L.taskList.length<=1;
+  t2.append(el('thead',null,el('tr',null,el('th',null,'Person'),...(oneTask?[]:[el('th',null,'Task')]),el('th',null,'Bill rate'),
     el('th',null,'Forecast hrs'),el('th',null,'Actual hrs'),el('th',null,'Δ hrs'),
     el('th',null,'Forecast rev'),el('th',null,'Achieved rev'),el('th',null,'Δ rev'),el('th',null,'Hrs to go'))));
   const b2=el('tbody');
   for(const P of L.people){ const dr=P.actRevTD-P.planRevTD, dh=P.actHTD-P.planHTD;
-    b2.append(el('tr',null,el('td',null,P.emp),el('td',null,P.task),el('td',null,P.bill?fmtMoney(P.bill):'—'),
+    b2.append(el('tr',null,el('td',null,P.emp),...(oneTask?[]:[el('td',null,P.task)]),el('td',null,P.bill?fmtMoney(P.bill):'—'),
       el('td',null,fmtNum(P.planHTD,1)),el('td',null,fmtNum(P.actHTD,1)),
       el('td',{style:Math.abs(dh)<0.05?'':('color:'+(dh<0?'#b00020':'#0a7d3f'))},lpSignedH(dh)),
       el('td',null,fmtMoney(P.planRevTD)),el('td',null,fmtMoney(P.actRevTD)),
@@ -5514,7 +5521,7 @@ function showLeadPack(L,ctx){
       let tot=0;
       const cells=cols.map(w=>{ const i=ctx.weeks.indexOf(w); const v=pick(P,i); tot+=v||0;
         return el('td',null,v?fmtNum(v,1):''); });
-      b.append(el('tr',null,el('td',null,P.emp+' · '+P.task),...cells,el('td',null,el('b',null,fmtNum(tot,1)))));
+      b.append(el('tr',null,el('td',null,L.taskList.length>1?P.emp+' · '+P.task:P.emp),...cells,el('td',null,el('b',null,fmtNum(tot,1)))));
     }
     t.append(b); wrap.append(el('h3',null,title),note?el('div',{class:'sub'},note):null,t);
   };
@@ -5532,7 +5539,7 @@ function showLeadPack(L,ctx){
       b3.append(el('tr',null,el('td',null,wk),el('td',null,fmtMoney(L.wkPlanRev[i])),el('td',null,fmtMoney(L.wkActRev[i])),
         el('td',{style:Math.abs(dd)<0.5?'':('color:'+(dd<0?'#b00020':'#0a7d3f'))},lpSigned(dd)),
         el('td',null,fmtNum(L.wkPlanH[i],1)),el('td',null,fmtNum(L.wkActH[i],1)))); });
-    t3.append(b3); wrap.append(el('h3',null,'Week by week — '+L.lead),t3);
+    t3.append(b3); wrap.append(el('h3',null,'Week by week — '+L.task),t3);
   }
   // the email
   const subj=leadEmailSubject(L,ctx), body=leadEmailText(L,ctx,false);
@@ -5555,7 +5562,7 @@ function showLeadPack(L,ctx){
     window.location.href=href;
   };
   wrap.append(el('div',{class:'noprint'},
-    el('h3',null,'Email to '+L.lead+(L.email?' <'+L.email+'>':'')),
+    el('h3',null,'Email to '+(L.lead===LEAD_NONE?'the task lead (unassigned)':L.lead)+(L.email?' <'+L.email+'>':'')),
     el('div',{class:'sub'},'Subject: '+subj),
     ta,
     el('div',{style:'margin-top:10px'},
@@ -5605,7 +5612,8 @@ function lpSafeSheet(name,used){
 }
 function lpLeadSheets(wb,L,ctx,used,prefix){
   const cols=ctx.weeks;
-  const a1=[[(prefix||'')+L.lead+' — revenue vs forecast'],[ctx.proj+(ctx.projName?' — '+ctx.projName:'')],
+  const a1=[[(prefix||'')+L.task+' — revenue vs forecast'],[ctx.proj+(ctx.projName?' — '+ctx.projName:'')
+    +(L.lead&&L.lead!==LEAD_NONE?' — lead: '+L.lead:'')],
     ['Actuals through',ctx.law||''],['Generated',fmtDate(new Date())],[],
     ['Measure','Forecast to date','Achieved to date','Difference','% of forecast'],
     ['Revenue',L.planRevTD,L.actRevTD,L.actRevTD-L.planRevTD,L.planRevTD?L.actRevTD/L.planRevTD:''],
@@ -5621,7 +5629,7 @@ function lpLeadSheets(wb,L,ctx,used,prefix){
   if(ws1['A1'])ws1['A1'].s={font:{bold:true,sz:16,color:{rgb:'1F4E79'}}};
   lpStyleSheet(ws1,5,[1,2,3]); lpStyleSheet(ws1,13,[1,2,3,5]);
   ws1['!cols']=[{wch:40},{wch:18},{wch:18},{wch:16},{wch:14},{wch:16}];
-  XLSX.utils.book_append_sheet(wb,ws1,lpSafeSheet(L.lead+' summary',used));
+  XLSX.utils.book_append_sheet(wb,ws1,lpSafeSheet(L.task+' summary',used));
   // hours per person per week: forecast, actual, variance side by side
   const a2=[['Person','Task','Series',...cols.map(w=>'WE '+w),'Total']];
   for(const P of L.people){
@@ -5636,14 +5644,14 @@ function lpLeadSheets(wb,L,ctx,used,prefix){
   const ws2=XLSX.utils.aoa_to_sheet(a2); lpStyleSheet(ws2,0,null);
   ws2['!cols']=[{wch:24},{wch:34},{wch:13},...cols.map(()=>({wch:11})),{wch:10}];
   ws2['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(1,a2.length-1),c:2}})};
-  XLSX.utils.book_append_sheet(wb,ws2,lpSafeSheet(L.lead+' hours',used));
+  XLSX.utils.book_append_sheet(wb,ws2,lpSafeSheet(L.task+' hours',used));
   // weekly revenue for the lead
   const a3=[['Week ending','Forecast revenue','Achieved revenue','Difference','Forecast hrs','Actual hrs']];
   cols.forEach((wk,i)=>{ a3.push([wk,L.wkPlanRev[i],ctx.pastIdx[i]?L.wkActRev[i]:'',ctx.pastIdx[i]?L.wkActRev[i]-L.wkPlanRev[i]:'',
     ctx.pastIdx[i]?L.wkPlanH[i]:L.wkFcH[i],ctx.pastIdx[i]?L.wkActH[i]:'']); });
   const ws3=XLSX.utils.aoa_to_sheet(a3); lpStyleSheet(ws3,0,[1,2,3]);
   ws3['!cols']=[{wch:14},{wch:18},{wch:18},{wch:16},{wch:14},{wch:12}];
-  XLSX.utils.book_append_sheet(wb,ws3,lpSafeSheet(L.lead+' weekly',used));
+  XLSX.utils.book_append_sheet(wb,ws3,lpSafeSheet(L.task+' weekly',used));
 }
 function lpDownload(wb,name){
   const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
@@ -5654,22 +5662,22 @@ function exportLeadPack(L,ctx){
   if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
   const wb=XLSX.utils.book_new(), used=new Set();
   lpLeadSheets(wb,L,ctx,used,'');
-  lpDownload(wb,'lead-pack-'+ctx.proj+'-'+String(L.lead).replace(/[^A-Za-z0-9]+/g,'-')+'.xlsx');
+  lpDownload(wb,'lead-pack-'+ctx.proj+'-'+String(L.task).replace(/[^A-Za-z0-9]+/g,'-').slice(0,40)+'.xlsx');
 }
 function exportLeadPacksAll(ctx){
   if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
   const wb=XLSX.utils.book_new(), used=new Set();
   const a=[['Lead packs — '+ctx.proj+(ctx.projName?' — '+ctx.projName:'')],['Actuals through',ctx.law||''],['Generated',fmtDate(new Date())],[],
-    ['Lead','Email','Tasks','People','Forecast to date','Achieved to date','Difference','% of forecast','Hours to go','Revenue to go']];
+    ['Task','Lead','Email','People','Forecast to date','Achieved to date','Difference','% of forecast','Hours to go','Revenue to go']];
   let p=0,ac=0;
   for(const L of ctx.leads){ p+=L.planRevTD; ac+=L.actRevTD;
-    a.push([L.lead,L.email||'',L.taskList.length,L.people.length,L.planRevTD,L.actRevTD,L.actRevTD-L.planRevTD,
+    a.push([L.task,L.lead===LEAD_NONE?'':L.lead,L.email||'',L.people.length,L.planRevTD,L.actRevTD,L.actRevTD-L.planRevTD,
       L.planRevTD?L.actRevTD/L.planRevTD:'',L.toGoH,L.toGoRev]); }
   a.push(['TOTAL','','','',p,ac,ac-p,p?ac/p:'','','']);
   const ws=XLSX.utils.aoa_to_sheet(a); if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:'1F4E79'}}};
   lpStyleSheet(ws,4,[4,5,6,9]);
-  ws['!cols']=[{wch:26},{wch:26},{wch:8},{wch:8},{wch:18},{wch:18},{wch:16},{wch:14},{wch:12},{wch:14}];
-  XLSX.utils.book_append_sheet(wb,ws,lpSafeSheet('All leads',used));
+  ws['!cols']=[{wch:34},{wch:22},{wch:26},{wch:8},{wch:18},{wch:18},{wch:16},{wch:14},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,lpSafeSheet('All tasks',used));
   for(const L of ctx.leads)lpLeadSheets(wb,L,ctx,used,'');
   lpDownload(wb,'lead-packs-'+ctx.proj+'.xlsx');
 }
