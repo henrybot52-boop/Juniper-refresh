@@ -453,6 +453,7 @@
       <button id="btnApCollapse" title="Collapse to task level — one row per task with its rollups">Collapse all</button>
       <button id="btnApReport">Status report</button>
       <button id="btnApRevDist" title="Revenue by discipline: weekly planned vs achieved, printable and exportable so each team can adjust">Revenue by discipline</button>
+      <button id="btnApLead" title="One emailable pack per lead: their tasks and people, forecast vs actual hours and revenue week by week">Lead packs (email)</button>
       <button id="btnApHist">Baseline history</button>
       <button id="btnApCsv">Export CSV</button>
     </div>
@@ -2102,6 +2103,7 @@ function setupProjectPages(){
   });
   $('#btnApReport').addEventListener('click',()=>{ if(ppCtx)showStatusReport(ppCtx.proj); });
   $('#btnApRevDist').addEventListener('click',showRevByDiscipline);
+  $('#btnApLead').addEventListener('click',showLeadPacks);
   $('#revCum').addEventListener('change',updateRevChart);
   $$('button.modebtn').forEach(b=>b.addEventListener('click',()=>setPpMode(b.dataset.mode)));
   $('#btnApExpand').addEventListener('click',()=>{ if(ppCtx){ apCollapsed[ppCtx.proj]=new Set(); renderActualsPage(); } });
@@ -5201,6 +5203,452 @@ function removeSubTimesheet(vendor,task){
   meta._subTS=(meta._subTS||[]).filter(p=>!(p.vendor===vendor&&(!task||p.task===task)));
   saveState(); recomputePeriods(); buildAllFilterbars(); renderSubTab();
 }
+/* ---- lead packs: per-lead revenue vs forecast, with the per-person weekly detail, emailable ---- */
+// Who owns a task: the Task Manager on its transactions, unless it has been reassigned by hand.
+function leadOfTask(tk,items,meta){
+  const ov=(meta._taskLeads||{})[tk];
+  if(ov&&String(ov).trim())return String(ov).trim();
+  const tally=new Map();
+  for(const it of items){
+    if(fpTaskOf(it)!==tk)continue;
+    for(const r of it.rows){ const m=String(r.taskManager||'').trim(); if(!m)continue; tally.set(m,(tally.get(m)||0)+1); }
+  }
+  let best='',n=0; for(const [k,v] of tally) if(v>n){best=k;n=v;}
+  return best||LEAD_NONE;
+}
+const LEAD_NONE='(no lead assigned)';
+// Everything a lead needs, built once: to-date planned vs achieved (comparable windows),
+// plan at completion, forecast to go, and the per-person weekly hours behind all of it.
+function leadPacks(){
+  const node=ppCtx.node, weeks=ppCtx.visWeeks||[], meta=ppCtx.meta;
+  const mkup=1+(Number(meta._nlMarkup)||0)/100;
+  const law=ppCtx.lastActualWeek;
+  const pastIdx=weeks.map(wk=>law&&wk<=law);
+  const taskLead=new Map();
+  for(const it of ppCtx.items){ const tk=fpTaskOf(it); if(!taskLead.has(tk))taskLead.set(tk,leadOfTask(tk,ppCtx.items,meta)); }
+  const byLead=new Map();
+  for(const it of ppCtx.items){
+    const tk=fpTaskOf(it), lead=taskLead.get(tk);
+    let L=byLead.get(lead);
+    if(!L){
+      L={lead,email:String((meta._leadEmails||{})[lead]||''),tasks:new Map(),people:[],
+        wkPlanRev:weeks.map(()=>0),wkActRev:weeks.map(()=>0),wkPlanH:weeks.map(()=>0),wkActH:weeks.map(()=>0),wkFcH:weeks.map(()=>0),
+        planRevTD:0,actRevTD:0,planHTD:0,actHTD:0,planRevAll:0,planHAll:0,toGoH:0,toGoRev:0};
+      byLead.set(lead,L);
+    }
+    let T=L.tasks.get(tk);
+    if(!T){ T={task:tk,planRevTD:0,actRevTD:0,planHTD:0,actHTD:0,planRevAll:0,toGoRev:0,
+      plan:weeks.map(()=>0),act:weeks.map(()=>0)}; L.tasks.set(tk,T); }
+    const nb=!!node.nb[it.label];
+    const bill=it.isLabor?(nb?0:billRateOf(it)):0;
+    const fct=it.isLabor?0:(nb?0:mkup);
+    const P={emp:fpEmpOf(it),task:tk,isLabor:it.isLabor,bill,
+      planH:weeks.map(()=>0),actH:weeks.map(()=>0),fcH:weeks.map(()=>0),
+      planHTD:0,actHTD:0,planRevTD:0,actRevTD:0,planHAll:0,toGoH:0,toGoRev:0};
+    weeks.forEach((wk,i)=>{
+      const k=it.label+'|'+wk;
+      const bp=node.baseline[k], cp=node.current[k], past=pastIdx[i];
+      if(it.isLabor){
+        const ah=it.hoursW.get(wk)||0;
+        if(bp!=null){
+          P.planH[i]=bp; P.planHAll+=bp; L.planHAll+=bp; L.planRevAll+=bp*bill; T.planRevAll+=bp*bill;
+          T.plan[i]+=bp*bill; L.wkPlanRev[i]+=bp*bill; L.wkPlanH[i]+=bp;
+          if(past){ P.planHTD+=bp; P.planRevTD+=bp*bill; T.planHTD+=bp; T.planRevTD+=bp*bill; L.planHTD+=bp; L.planRevTD+=bp*bill; }
+        }
+        if(past&&ah){
+          P.actH[i]=ah; P.actHTD+=ah; P.actRevTD+=ah*bill;
+          T.actHTD+=ah; T.actRevTD+=ah*bill; T.act[i]+=ah*bill;
+          L.actHTD+=ah; L.actRevTD+=ah*bill; L.wkActRev[i]+=ah*bill; L.wkActH[i]+=ah;
+        }
+        if(!past&&cp!=null){ P.fcH[i]=cp; P.toGoH+=cp; P.toGoRev+=cp*bill; L.wkFcH[i]+=cp; L.toGoH+=cp; L.toGoRev+=cp*bill; T.toGoRev+=cp*bill; }
+      } else {
+        const ac=it.costW.get(wk)||0;
+        if(bp!=null){ L.planRevAll+=bp*fct; T.planRevAll+=bp*fct; T.plan[i]+=bp*fct; L.wkPlanRev[i]+=bp*fct;
+          if(past){ P.planRevTD+=bp*fct; T.planRevTD+=bp*fct; L.planRevTD+=bp*fct; } }
+        if(past&&ac){ P.actRevTD+=ac*fct; T.actRevTD+=ac*fct; T.act[i]+=ac*fct; L.actRevTD+=ac*fct; L.wkActRev[i]+=ac*fct; }
+        if(!past&&cp!=null){ P.toGoRev+=cp*fct; L.toGoRev+=cp*fct; T.toGoRev+=cp*fct; }
+      }
+    });
+    if(P.planHAll||P.actHTD||P.planRevTD||P.actRevTD||P.toGoH||P.toGoRev)L.people.push(P);
+  }
+  const leads=[...byLead.values()];
+  for(const L of leads){
+    L.taskList=[...L.tasks.values()].sort((a,b)=>taskCompare(a.task,b.task));
+    L.people.sort((a,b)=>taskCompare(a.task,b.task)||a.emp.localeCompare(b.emp));
+  }
+  leads.sort((a,b)=>(a.lead===LEAD_NONE)-(b.lead===LEAD_NONE)||a.lead.localeCompare(b.lead));
+  const proj=ppCtx.proj;
+  const projName=(ppCtx.projRows[0]&&ppCtx.projRows[0].projectName)||'';
+  return {weeks,pastIdx,law,leads,proj,projName,
+    pastWeeks:weeks.filter((w,i)=>pastIdx[i]),futureWeeks:weeks.filter((w,i)=>!pastIdx[i])};
+}
+function lpPct(a,b){ return b? (100*a/b).toFixed(0)+'%' : '—'; }
+function lpSigned(v){ return (v>0.5?'+':'')+fmtMoney(v); }
+function lpSignedH(v){ return (v>0.05?'+':'')+fmtNum(v,1); }
+// The email itself. Plain text on purpose: it survives every mail client, and pastes
+// into Teams or a status report without reformatting.
+function leadEmailText(L,ctx,compact){
+  const pw=ctx.pastWeeks, fw=ctx.futureWeeks;
+  const wl=w=>'WE '+wkLabel(w);
+  const first=String(L.lead||'').split(/[\s,]+/)[0]||'there';
+  const proj=ctx.proj+(ctx.projName?' — '+ctx.projName:'');
+  const pad=(s,n)=>{ s=String(s); return s.length>=n? s : s+' '.repeat(n-s.length); };
+  const rpad=(s,n)=>{ s=String(s); return s.length>=n? s : ' '.repeat(n-s.length)+s; };
+  const out=[];
+  out.push('Hi '+first+',');
+  out.push('');
+  out.push('Here is how your work tracked against forecast on '+proj+', for the '+pw.length+' week'+(pw.length===1?'':'s')
+    +' up to and including week ending '+(ctx.law?wkLabel(ctx.law):'—')+'.');
+  out.push('');
+  if(compact){
+    out.push('POSITION TO DATE (forecast weeks already reported, so it is like for like)');
+    out.push('  '+pad('Forecast revenue',22)+rpad(fmtMoney(L.planRevTD),14));
+    out.push('  '+pad('Achieved revenue',22)+rpad(fmtMoney(L.actRevTD),14));
+    out.push('  '+pad('Difference',22)+rpad(lpSigned(L.actRevTD-L.planRevTD),14)+'   ('+lpPct(L.actRevTD,L.planRevTD)+' of forecast)');
+    out.push('  '+pad('Hours forecast / actual',22)+rpad(fmtNum(L.planHTD,1)+' / '+fmtNum(L.actHTD,1),14));
+    if(fw.length)out.push('  '+pad('Still to come',22)+rpad(fmtNum(L.toGoH,1)+' h / '+fmtMoney(L.toGoRev),14));
+    out.push('');
+    out.push((L.actRevTD-L.planRevTD<-0.5
+      ? 'You are behind the forecast to date. Please confirm whether the work has slipped or the hours simply have not been charged yet.'
+      : 'Please confirm the forecast still reflects your plan for the coming weeks.'));
+    out.push('');
+    out.push('The task, person and week-by-week breakdown is in the attached spreadsheet — correct the hours per person per week and send it back.');
+    out.push('');
+    out.push('Thanks,');
+    return out.join('\n');
+  }
+  out.push('POSITION TO DATE (forecast weeks up to '+(ctx.law?wkLabel(ctx.law):'—')+' only, so it is a like-for-like comparison)');
+  out.push('  '+pad('Forecast revenue',22)+rpad(fmtMoney(L.planRevTD),14));
+  out.push('  '+pad('Achieved revenue',22)+rpad(fmtMoney(L.actRevTD),14));
+  out.push('  '+pad('Difference',22)+rpad(lpSigned(L.actRevTD-L.planRevTD),14)+'   ('+lpPct(L.actRevTD,L.planRevTD)+' of forecast)');
+  out.push('  '+pad('Forecast hours',22)+rpad(fmtNum(L.planHTD,1),14));
+  out.push('  '+pad('Actual hours',22)+rpad(fmtNum(L.actHTD,1),14));
+  out.push('  '+pad('Difference',22)+rpad(lpSignedH(L.actHTD-L.planHTD),14));
+  out.push('');
+  out.push('BY TASK');
+  for(const T of L.taskList){
+    out.push('  '+pad(T.task.slice(0,38),40)+rpad(fmtMoney(T.planRevTD),12)+rpad(fmtMoney(T.actRevTD),12)
+      +rpad(lpSigned(T.actRevTD-T.planRevTD),12)+'  '+lpPct(T.actRevTD,T.planRevTD));
+  }
+  out.push('  '+pad('',40)+rpad('forecast',12)+rpad('achieved',12)+rpad('diff',12));
+  out.push('');
+  out.push('BY PERSON — HOURS TO DATE, FORECAST vs ACTUAL');
+  for(const P of L.people){
+    if(!P.isLabor)continue;
+    out.push('  '+pad(P.emp.slice(0,24),26)+rpad(fmtNum(P.planHTD,1),9)+rpad(fmtNum(P.actHTD,1),9)
+      +rpad(lpSignedH(P.actHTD-P.planHTD),9)+'   '+rpad(lpSigned(P.actRevTD-P.planRevTD),11)+' revenue');
+  }
+  out.push('  '+pad('',26)+rpad('forecast',9)+rpad('actual',9)+rpad('diff',9));
+  out.push('');
+  if(pw.length){
+    out.push('WEEK BY WEEK — REVENUE DIFFERENCE (achieved − forecast)');
+    ctx.weeks.forEach((wk,i)=>{
+      if(!ctx.pastIdx[i])return;
+      const d=L.wkActRev[i]-L.wkPlanRev[i];
+      out.push('  '+pad(wl(wk),12)+rpad(fmtMoney(L.wkPlanRev[i]),12)+rpad(fmtMoney(L.wkActRev[i]),12)+rpad(lpSigned(d),12)
+        +(Math.abs(d)<0.5?'':(d<0?'   short':'   ahead')));
+    });
+    out.push('  '+pad('',12)+rpad('forecast',12)+rpad('achieved',12)+rpad('diff',12));
+    out.push('');
+  }
+  if(!compact&&pw.length){
+    out.push('HOURS PER PERSON PER WEEK — FORECAST (f) vs ACTUAL (a)');
+    const show=pw.slice(-8);
+    out.push('  '+pad('',26)+show.map(w=>rpad(wkLabel(w),16)).join(''));
+    for(const P of L.people){
+      if(!P.isLabor)continue;
+      out.push('  '+pad(P.emp.slice(0,24),26)+show.map(w=>{
+        const i=ctx.weeks.indexOf(w);
+        const f=P.planH[i]||0, a=P.actH[i]||0;
+        return rpad((!f&&!a)?'-':(fmtNum(f,1)+'f / '+fmtNum(a,1)+'a'),16);
+      }).join(''));
+    }
+    if(pw.length>show.length) out.push('  (last '+show.length+' weeks shown — the attached spreadsheet has every week)');
+    out.push('');
+  }
+  if(fw.length){
+    out.push('FORECAST STILL TO COME — HOURS PER PERSON PER WEEK');
+    const show=fw.slice(0,8);
+    out.push('  '+pad('',26)+show.map(w=>rpad(wkLabel(w),8)).join('')+rpad('to go',9));
+    for(const P of L.people){
+      if(!P.isLabor||!P.toGoH)continue;
+      out.push('  '+pad(P.emp.slice(0,24),26)+show.map(w=>{
+        const i=ctx.weeks.indexOf(w); return rpad(P.fcH[i]?fmtNum(P.fcH[i],1):'-',8);
+      }).join('')+rpad(fmtNum(P.toGoH,1),9));
+    }
+    out.push('');
+    out.push('  Remaining forecast for your scope: '+fmtNum(L.toGoH,1)+' hours / '+fmtMoney(L.toGoRev)+' revenue.');
+    out.push('');
+  }
+  out.push('WHAT I NEED FROM YOU');
+  const behind=L.actRevTD-L.planRevTD<-0.5;
+  out.push('  '+(behind
+    ? 'You are behind the forecast to date. Please confirm whether the work has slipped (so we re-phase the forecast) or the hours simply have not been charged yet.'
+    : 'Please confirm the forecast still reflects your plan for the coming weeks, and flag anything not shown above.'));
+  out.push('  Correct the hours per person per week in the attached sheet and send it back, or reply with the changes.');
+  out.push('');
+  out.push('Thanks,');
+  out.push('');
+  out.push('--');
+  out.push('Figures from the Oracle cost extract, forecast as at '+fmtDate(new Date())+'. Revenue is hours x bill rate;');
+  out.push('subconsultants and expenses at cost plus markup. Forecast to date counts only the weeks already reported,');
+  out.push('so it compares like for like.');
+  return out.join('\n');
+}
+function leadEmailSubject(L,ctx){
+  return '['+ctx.proj+'] Revenue vs forecast to '+(ctx.law?'WE '+wkLabel(ctx.law):'date')+' — '+L.lead;
+}
+function showLeadPacks(){
+  if(!ppCtx||ppCtx.mode!=='a'){ setPpMode('work'); return; }
+  const ctx=leadPacks(), meta=ppCtx.meta;
+  const wrap=el('div',{class:'rep'});
+  wrap.append(el('h1',null,'Lead packs — revenue vs forecast'),
+    el('div',{class:'sub'},ctx.proj+(ctx.projName?' — '+ctx.projName:'')+' · Datum · '+fmtDate(new Date())
+      +' · '+ctx.leads.length+' lead'+(ctx.leads.length===1?'':'s')+' · actuals through '+(ctx.law?'week ending '+ctx.law:'—')));
+  wrap.append(el('p',{class:'hint'},'One pack per lead: their tasks, their people, forecast vs actual hours and revenue week by week. '
+    +'Forecast to date counts only the weeks already reported, so it is a like-for-like comparison — the full-window forecast is shown separately.'));
+  const t=el('table');
+  t.append(el('thead',null,el('tr',null,el('th',null,'Lead'),el('th',null,'Email'),el('th',null,'Tasks'),el('th',null,'People'),
+    el('th',null,'Forecast to date'),el('th',null,'Achieved'),el('th',null,'Difference'),el('th',null,'% of forecast'),
+    el('th',null,'Hours to go'),el('th',null,''))));
+  const tb=el('tbody');
+  for(const L of ctx.leads){
+    const em=el('input',{class:'rate-in',style:'width:190px;text-align:left',value:L.email,placeholder:'name@company.com'});
+    em.addEventListener('change',()=>{ meta._leadEmails=meta._leadEmails||{}; meta._leadEmails[L.lead]=em.value.trim(); L.email=em.value.trim(); saveState(); });
+    const d=L.actRevTD-L.planRevTD;
+    tb.append(el('tr',null,
+      el('td',null,el('b',null,L.lead)),
+      el('td',{class:'noprint'},em),
+      el('td',null,String(L.taskList.length)),
+      el('td',null,String(L.people.length)),
+      el('td',null,fmtMoney(L.planRevTD)),
+      el('td',null,fmtMoney(L.actRevTD)),
+      el('td',{style:'color:'+(d<-0.5?'#b00020':'#0a7d3f')},lpSigned(d)),
+      el('td',null,lpPct(L.actRevTD,L.planRevTD)),
+      el('td',null,fmtNum(L.toGoH,1)),
+      el('td',{class:'noprint'},
+        el('button',{class:'small',onclick:()=>showLeadPack(L,ctx)},'Open pack'))));
+  }
+  t.append(tb); wrap.append(t);
+  wrap.append(el('div',{class:'noprint',style:'margin-top:16px'},
+    el('button',{class:'primary',onclick:()=>window.print()},'Print / Save PDF'),' ',
+    el('button',{onclick:()=>exportLeadPacksAll(ctx)},'Export Excel — all leads'),' ',
+    el('button',{onclick:()=>showLeadAssign()},'Reassign tasks to leads…')));
+  wrap.append(el('p',{class:'hint',style:'margin-top:10px'},'Leads come from the Task Manager column on the extract. '
+    +'Use "Reassign tasks to leads" to correct one, and it sticks with the project.'));
+  openDModal(wrap);
+}
+function showLeadPack(L,ctx){
+  const wrap=el('div',{class:'rep'});
+  const d=L.actRevTD-L.planRevTD;
+  wrap.append(el('h1',null,L.lead+' — revenue vs forecast'),
+    el('div',{class:'sub'},ctx.proj+(ctx.projName?' — '+ctx.projName:'')+' · actuals through '
+      +(ctx.law?'week ending '+ctx.law:'—')+' · '+fmtDate(new Date())));
+  const kt=el('table');
+  kt.append(el('tbody',null,
+    el('tr',null,el('td',null,el('b',null,'Forecast revenue to date')),el('td',null,fmtMoney(L.planRevTD)),
+      el('td',null,el('b',null,'Forecast hours to date')),el('td',null,fmtNum(L.planHTD,1))),
+    el('tr',null,el('td',null,el('b',null,'Achieved revenue to date')),el('td',null,fmtMoney(L.actRevTD)),
+      el('td',null,el('b',null,'Actual hours to date')),el('td',null,fmtNum(L.actHTD,1))),
+    el('tr',null,el('td',null,el('b',null,'Difference')),el('td',{style:'color:'+(d<-0.5?'#b00020':'#0a7d3f')},lpSigned(d)+' ('+lpPct(L.actRevTD,L.planRevTD)+')'),
+      el('td',null,el('b',null,'Difference')),el('td',null,lpSignedH(L.actHTD-L.planHTD))),
+    el('tr',null,el('td',null,el('b',null,'Forecast, full window')),el('td',null,fmtMoney(L.planRevAll)),
+      el('td',null,el('b',null,'Still to come')),el('td',null,fmtNum(L.toGoH,1)+' h / '+fmtMoney(L.toGoRev)))));
+  wrap.append(kt);
+  // by task
+  const t1=el('table');
+  t1.append(el('thead',null,el('tr',null,el('th',null,'Task'),el('th',null,'Forecast to date'),el('th',null,'Achieved'),
+    el('th',null,'Difference'),el('th',null,'% of forecast'),el('th',null,'Still to come'))));
+  const b1=el('tbody');
+  for(const T of L.taskList){ const dd=T.actRevTD-T.planRevTD;
+    b1.append(el('tr',null,el('td',null,T.task),el('td',null,fmtMoney(T.planRevTD)),el('td',null,fmtMoney(T.actRevTD)),
+      el('td',{style:'color:'+(dd<-0.5?'#b00020':'#0a7d3f')},lpSigned(dd)),el('td',null,lpPct(T.actRevTD,T.planRevTD)),
+      el('td',null,fmtMoney(T.toGoRev)))); }
+  t1.append(b1); wrap.append(el('h3',null,'By task'),t1);
+  // by person, hours + revenue to date
+  const t2=el('table');
+  t2.append(el('thead',null,el('tr',null,el('th',null,'Person'),el('th',null,'Task'),el('th',null,'Bill rate'),
+    el('th',null,'Forecast hrs'),el('th',null,'Actual hrs'),el('th',null,'Δ hrs'),
+    el('th',null,'Forecast rev'),el('th',null,'Achieved rev'),el('th',null,'Δ rev'),el('th',null,'Hrs to go'))));
+  const b2=el('tbody');
+  for(const P of L.people){ const dr=P.actRevTD-P.planRevTD, dh=P.actHTD-P.planHTD;
+    b2.append(el('tr',null,el('td',null,P.emp),el('td',null,P.task),el('td',null,P.bill?fmtMoney(P.bill):'—'),
+      el('td',null,fmtNum(P.planHTD,1)),el('td',null,fmtNum(P.actHTD,1)),
+      el('td',{style:Math.abs(dh)<0.05?'':('color:'+(dh<0?'#b00020':'#0a7d3f'))},lpSignedH(dh)),
+      el('td',null,fmtMoney(P.planRevTD)),el('td',null,fmtMoney(P.actRevTD)),
+      el('td',{style:Math.abs(dr)<0.5?'':('color:'+(dr<0?'#b00020':'#0a7d3f'))},lpSigned(dr)),
+      el('td',null,fmtNum(P.toGoH,1)))); }
+  t2.append(b2); wrap.append(el('h3',null,'By person — to date'),t2);
+  // the detail the leads actually need: hours per person per week
+  const mkMatrix=(title,cols,pick,note)=>{
+    if(!cols.length)return;
+    const t=el('table');
+    t.append(el('thead',null,el('tr',null,el('th',null,'Person'),...cols.map(w=>el('th',null,wkLabel(w))),el('th',null,'Total'))));
+    const b=el('tbody');
+    for(const P of L.people){
+      if(!P.isLabor)continue;
+      let tot=0;
+      const cells=cols.map(w=>{ const i=ctx.weeks.indexOf(w); const v=pick(P,i); tot+=v||0;
+        return el('td',null,v?fmtNum(v,1):''); });
+      b.append(el('tr',null,el('td',null,P.emp+' · '+P.task),...cells,el('td',null,el('b',null,fmtNum(tot,1)))));
+    }
+    t.append(b); wrap.append(el('h3',null,title),note?el('div',{class:'sub'},note):null,t);
+  };
+  mkMatrix('Forecast hours per week',ctx.pastWeeks.concat(ctx.futureWeeks),(P,i)=>ctx.pastIdx[i]?P.planH[i]:P.fcH[i],
+    'Reported weeks show the original forecast; future weeks show the current forecast — this is the detail to correct and send back.');
+  mkMatrix('Actual hours per week',ctx.pastWeeks,(P,i)=>P.actH[i],'Straight from the Oracle extract.');
+  mkMatrix('Hours variance per week (actual − forecast)',ctx.pastWeeks,(P,i)=>(P.actH[i]||0)-(P.planH[i]||0));
+  // weekly revenue for the lead
+  if(ctx.pastWeeks.length){
+    const t3=el('table');
+    t3.append(el('thead',null,el('tr',null,el('th',null,'Week ending'),el('th',null,'Forecast revenue'),
+      el('th',null,'Achieved revenue'),el('th',null,'Difference'),el('th',null,'Forecast hrs'),el('th',null,'Actual hrs'))));
+    const b3=el('tbody');
+    ctx.weeks.forEach((wk,i)=>{ if(!ctx.pastIdx[i])return; const dd=L.wkActRev[i]-L.wkPlanRev[i];
+      b3.append(el('tr',null,el('td',null,wk),el('td',null,fmtMoney(L.wkPlanRev[i])),el('td',null,fmtMoney(L.wkActRev[i])),
+        el('td',{style:Math.abs(dd)<0.5?'':('color:'+(dd<0?'#b00020':'#0a7d3f'))},lpSigned(dd)),
+        el('td',null,fmtNum(L.wkPlanH[i],1)),el('td',null,fmtNum(L.wkActH[i],1)))); });
+    t3.append(b3); wrap.append(el('h3',null,'Week by week — '+L.lead),t3);
+  }
+  // the email
+  const subj=leadEmailSubject(L,ctx), body=leadEmailText(L,ctx,false);
+  const ta=el('textarea',{style:'width:100%;height:280px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;'
+    +'background:#fff;color:#111;border:1px solid #bbb;border-radius:6px;padding:10px;white-space:pre'});
+  ta.value=body;
+  const status=el('span',{class:'hint'});
+  const copy=()=>{
+    ta.focus(); ta.select();
+    let done=false;
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(ta.value); done=true; } }catch(e){}
+    if(!done){ try{ done=document.execCommand('copy'); }catch(e){} }
+    status.textContent=done?'Copied — paste it into Outlook.':'Press Ctrl+C to copy the selected text.';
+  };
+  const mail=()=>{
+    copy();                                        // full version on the clipboard first
+    const short=leadEmailText(L,ctx,true);
+    const href='mailto:'+(L.email||'')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(short);
+    status.textContent='Draft opened with the summary. The full version is on your clipboard — paste it over the draft if you want every week.';
+    window.location.href=href;
+  };
+  wrap.append(el('div',{class:'noprint'},
+    el('h3',null,'Email to '+L.lead+(L.email?' <'+L.email+'>':'')),
+    el('div',{class:'sub'},'Subject: '+subj),
+    ta,
+    el('div',{style:'margin-top:10px'},
+      el('button',{class:'primary',onclick:copy},'Copy email'),' ',
+      el('button',{onclick:mail},'Open in Outlook'),' ',
+      el('button',{onclick:()=>exportLeadPack(L,ctx)},'Export Excel (attach this)'),' ',
+      el('button',{onclick:()=>window.print()},'Print / Save PDF'),' ',
+      status)));
+  openDModal(wrap);
+}
+function showLeadAssign(){
+  if(!ppCtx)return;
+  const meta=ppCtx.meta; meta._taskLeads=meta._taskLeads||{};
+  const tasks=[...new Set(ppCtx.items.map(fpTaskOf))].sort(taskCompare);
+  const wrap=el('div',{class:'rep'});
+  wrap.append(el('h1',null,'Reassign tasks to leads'),
+    el('div',{class:'sub'},'Blank uses the Task Manager from the extract. Anything you type here overrides it and is saved with the project.'));
+  const t=el('table');
+  t.append(el('thead',null,el('tr',null,el('th',null,'Task'),el('th',null,'Task Manager on the extract'),el('th',null,'Lead (override)'))));
+  const tb=el('tbody');
+  for(const tk of tasks){
+    const auto=leadOfTask(tk,ppCtx.items,{});
+    const inp=el('input',{class:'rate-in',style:'width:200px;text-align:left',list:'lpLeadList',value:meta._taskLeads[tk]||''});
+    inp.addEventListener('change',()=>{ const v=inp.value.trim(); if(v)meta._taskLeads[tk]=v; else delete meta._taskLeads[tk]; saveState(); });
+    tb.append(el('tr',null,el('td',null,tk),el('td',null,auto),el('td',null,inp)));
+  }
+  t.append(tb); wrap.append(t);
+  const dl=el('datalist',{id:'lpLeadList'});
+  for(const n of [...new Set(tasks.map(tk=>leadOfTask(tk,ppCtx.items,{})))].filter(n=>n&&n!==LEAD_NONE))dl.append(el('option',{value:n}));
+  wrap.append(dl);
+  wrap.append(el('div',{class:'noprint',style:'margin-top:14px'},
+    el('button',{class:'primary',onclick:()=>{ closeDModal(); showLeadPacks(); }},'Back to lead packs')));
+  openDModal(wrap);
+}
+/* ---- Excel ---- */
+function lpStyleSheet(ws,hdrRow,moneyCols){
+  const BRAND='1F4E79',M='"$"#,##0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const rng=XLSX.utils.decode_range(ws['!ref']);
+  for(let C=0;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:hdrRow,c:C})];if(c)c.s=HDR;}
+  if(moneyCols)for(let R=hdrRow+1;R<=rng.e.r;R++)for(const C of moneyCols){const c=ws[XLSX.utils.encode_cell({r:R,c:C})];if(c&&typeof c.v==='number')c.z=M;}
+}
+function lpSafeSheet(name,used){
+  let s=String(name).replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,28).trim()||'Lead';
+  let n=s,i=2; while(used.has(n)){ n=s.slice(0,26)+' '+i; i++; }
+  used.add(n); return n;
+}
+function lpLeadSheets(wb,L,ctx,used,prefix){
+  const cols=ctx.weeks;
+  const a1=[[(prefix||'')+L.lead+' — revenue vs forecast'],[ctx.proj+(ctx.projName?' — '+ctx.projName:'')],
+    ['Actuals through',ctx.law||''],['Generated',fmtDate(new Date())],[],
+    ['Measure','Forecast to date','Achieved to date','Difference','% of forecast'],
+    ['Revenue',L.planRevTD,L.actRevTD,L.actRevTD-L.planRevTD,L.planRevTD?L.actRevTD/L.planRevTD:''],
+    ['Hours',L.planHTD,L.actHTD,L.actHTD-L.planHTD,L.planHTD?L.actHTD/L.planHTD:''],
+    [],
+    ['Forecast revenue, full window',L.planRevAll],
+    ['Forecast revenue still to come',L.toGoRev],
+    ['Forecast hours still to come',L.toGoH],
+    [],
+    ['Task','Forecast to date','Achieved to date','Difference','% of forecast','Still to come']];
+  for(const T of L.taskList)a1.push([T.task,T.planRevTD,T.actRevTD,T.actRevTD-T.planRevTD,T.planRevTD?T.actRevTD/T.planRevTD:'',T.toGoRev]);
+  const ws1=XLSX.utils.aoa_to_sheet(a1);
+  if(ws1['A1'])ws1['A1'].s={font:{bold:true,sz:16,color:{rgb:'1F4E79'}}};
+  lpStyleSheet(ws1,5,[1,2,3]); lpStyleSheet(ws1,13,[1,2,3,5]);
+  ws1['!cols']=[{wch:40},{wch:18},{wch:18},{wch:16},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws1,lpSafeSheet(L.lead+' summary',used));
+  // hours per person per week: forecast, actual, variance side by side
+  const a2=[['Person','Task','Series',...cols.map(w=>'WE '+w),'Total']];
+  for(const P of L.people){
+    if(!P.isLabor)continue;
+    const fc=cols.map((w,i)=>ctx.pastIdx[i]?(P.planH[i]||0):(P.fcH[i]||0));
+    const ac=cols.map((w,i)=>ctx.pastIdx[i]?(P.actH[i]||0):'');
+    a2.push([P.emp,P.task,'Forecast hrs',...fc,fc.reduce((s,v)=>s+v,0)]);
+    a2.push([P.emp,P.task,'Actual hrs',...ac,ac.reduce((s,v)=>s+(+v||0),0)]);
+    a2.push([P.emp,P.task,'Variance',...cols.map((w,i)=>ctx.pastIdx[i]?((P.actH[i]||0)-(P.planH[i]||0)):''),
+      cols.reduce((s,w,i)=>s+(ctx.pastIdx[i]?((P.actH[i]||0)-(P.planH[i]||0)):0),0)]);
+  }
+  const ws2=XLSX.utils.aoa_to_sheet(a2); lpStyleSheet(ws2,0,null);
+  ws2['!cols']=[{wch:24},{wch:34},{wch:13},...cols.map(()=>({wch:11})),{wch:10}];
+  ws2['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(1,a2.length-1),c:2}})};
+  XLSX.utils.book_append_sheet(wb,ws2,lpSafeSheet(L.lead+' hours',used));
+  // weekly revenue for the lead
+  const a3=[['Week ending','Forecast revenue','Achieved revenue','Difference','Forecast hrs','Actual hrs']];
+  cols.forEach((wk,i)=>{ a3.push([wk,L.wkPlanRev[i],ctx.pastIdx[i]?L.wkActRev[i]:'',ctx.pastIdx[i]?L.wkActRev[i]-L.wkPlanRev[i]:'',
+    ctx.pastIdx[i]?L.wkPlanH[i]:L.wkFcH[i],ctx.pastIdx[i]?L.wkActH[i]:'']); });
+  const ws3=XLSX.utils.aoa_to_sheet(a3); lpStyleSheet(ws3,0,[1,2,3]);
+  ws3['!cols']=[{wch:14},{wch:18},{wch:18},{wch:16},{wch:14},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws3,lpSafeSheet(L.lead+' weekly',used));
+}
+function lpDownload(wb,name){
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+  const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:name}); document.body.append(a); a.click(); a.remove();
+}
+function exportLeadPack(L,ctx){
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const wb=XLSX.utils.book_new(), used=new Set();
+  lpLeadSheets(wb,L,ctx,used,'');
+  lpDownload(wb,'lead-pack-'+ctx.proj+'-'+String(L.lead).replace(/[^A-Za-z0-9]+/g,'-')+'.xlsx');
+}
+function exportLeadPacksAll(ctx){
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const wb=XLSX.utils.book_new(), used=new Set();
+  const a=[['Lead packs — '+ctx.proj+(ctx.projName?' — '+ctx.projName:'')],['Actuals through',ctx.law||''],['Generated',fmtDate(new Date())],[],
+    ['Lead','Email','Tasks','People','Forecast to date','Achieved to date','Difference','% of forecast','Hours to go','Revenue to go']];
+  let p=0,ac=0;
+  for(const L of ctx.leads){ p+=L.planRevTD; ac+=L.actRevTD;
+    a.push([L.lead,L.email||'',L.taskList.length,L.people.length,L.planRevTD,L.actRevTD,L.actRevTD-L.planRevTD,
+      L.planRevTD?L.actRevTD/L.planRevTD:'',L.toGoH,L.toGoRev]); }
+  a.push(['TOTAL','','','',p,ac,ac-p,p?ac/p:'','','']);
+  const ws=XLSX.utils.aoa_to_sheet(a); if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:'1F4E79'}}};
+  lpStyleSheet(ws,4,[4,5,6,9]);
+  ws['!cols']=[{wch:26},{wch:26},{wch:8},{wch:8},{wch:18},{wch:18},{wch:16},{wch:14},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,lpSafeSheet('All leads',used));
+  for(const L of ctx.leads)lpLeadSheets(wb,L,ctx,used,'');
+  lpDownload(wb,'lead-packs-'+ctx.proj+'.xlsx');
+}
 /* ---- revenue by discipline / task: weekly short-or-high, printable + Excel ---- */
 function revByDiscipline(){
   const node=ppCtx.node, weeks=ppCtx.visWeeks||[];
@@ -5208,16 +5656,17 @@ function revByDiscipline(){
   const map=new Map();
   for(const it of ppCtx.items){
     const tk=fpTaskOf(it);
-    let g=map.get(tk); if(!g){ g={task:tk,plan:weeks.map(()=>0),act:weeks.map(()=>0),planT:0,actT:0}; map.set(tk,g); }
+    let g=map.get(tk); if(!g){ g={task:tk,plan:weeks.map(()=>0),act:weeks.map(()=>0),planT:0,planTD:0,actT:0}; map.set(tk,g); }
     const nb=!!node.nb[it.label];
     weeks.forEach((wk,i)=>{
       const k=it.label+'|'+wk;
+      const past=wk<=ppCtx.lastActualWeek;
       if(it.isLabor){ const bill=nb?0:billRateOf(it);
-        if(node.baseline[k]!=null){ g.plan[i]+=node.baseline[k]*bill; g.planT+=node.baseline[k]*bill; }
-        if(wk<=ppCtx.lastActualWeek){ const a=(it.hoursW.get(wk)||0)*bill; g.act[i]+=a; g.actT+=a; }
+        if(node.baseline[k]!=null){ g.plan[i]+=node.baseline[k]*bill; g.planT+=node.baseline[k]*bill; if(past)g.planTD+=node.baseline[k]*bill; }
+        if(past){ const a=(it.hoursW.get(wk)||0)*bill; g.act[i]+=a; g.actT+=a; }
       } else { const fct=nb?0:mkup;
-        if(node.baseline[k]!=null){ g.plan[i]+=node.baseline[k]*fct; g.planT+=node.baseline[k]*fct; }
-        if(wk<=ppCtx.lastActualWeek){ const a=(it.costW.get(wk)||0)*fct; g.act[i]+=a; g.actT+=a; }
+        if(node.baseline[k]!=null){ g.plan[i]+=node.baseline[k]*fct; g.planT+=node.baseline[k]*fct; if(past)g.planTD+=node.baseline[k]*fct; }
+        if(past){ const a=(it.costW.get(wk)||0)*fct; g.act[i]+=a; g.actT+=a; }
       }
     });
   }
@@ -5232,15 +5681,20 @@ function showRevByDiscipline(){
     el('div',{class:'sub'},ppCtx.proj+' · Datum · '+fmtDate(new Date())+' · a positive delta means the team earned more than planned that week'));
   // summary first
   const t1=el('table');
-  t1.append(el('thead',null,el('tr',null,el('th',null,'Discipline / task'),el('th',null,'Planned revenue'),el('th',null,'Achieved to date'),el('th',null,'Delta'),el('th',null,'% of plan'))));
-  const b1=el('tbody'); let sp=0,sa=0;
-  for(const g of groups){ sp+=g.planT; sa+=g.actT; const dl=g.actT-g.planT;
-    b1.append(el('tr',null,el('td',null,g.task),el('td',null,fmtMoney(g.planT)),el('td',null,fmtMoney(g.actT)),
+  t1.append(el('thead',null,el('tr',null,el('th',null,'Discipline / task'),el('th',null,'Planned to date'),el('th',null,'Achieved to date'),
+    el('th',null,'Delta'),el('th',null,'% of plan'),el('th',null,'Planned, full window'))));
+  const b1=el('tbody'); let sp=0,sa=0,spA=0;
+  for(const g of groups){ sp+=g.planTD; sa+=g.actT; spA+=g.planT; const dl=g.actT-g.planTD;
+    b1.append(el('tr',null,el('td',null,g.task),el('td',null,fmtMoney(g.planTD)),el('td',null,fmtMoney(g.actT)),
       el('td',{style:'color:'+(dl<-0.5?'#b00020':'#0a7d3f')},(dl>0?'+':'')+fmtMoney(dl)),
-      el('td',null,g.planT?(100*g.actT/g.planT).toFixed(0)+'%':'—'))); }
+      el('td',null,g.planTD?(100*g.actT/g.planTD).toFixed(0)+'%':'—'),
+      el('td',null,fmtMoney(g.planT)))); }
   b1.append(el('tr',null,el('td',null,el('b',null,'TOTAL')),el('td',null,el('b',null,fmtMoney(sp))),el('td',null,el('b',null,fmtMoney(sa))),
-    el('td',null,el('b',null,(sa-sp>0?'+':'')+fmtMoney(sa-sp))),el('td',null,sp?el('b',null,(100*sa/sp).toFixed(0)+'%'):'—')));
-  t1.append(b1); wrap.append(el('h3',null,'Summary'),t1);
+    el('td',null,el('b',null,(sa-sp>0?'+':'')+fmtMoney(sa-sp))),el('td',null,sp?el('b',null,(100*sa/sp).toFixed(0)+'%'):'—'),
+    el('td',null,el('b',null,fmtMoney(spA)))));
+  t1.append(b1); wrap.append(el('h3',null,'Summary'),
+    el('div',{class:'sub'},'Planned to date counts only the forecast weeks already reported (up to week ending '
+      +(ppCtx.lastActualWeek||'—')+'), so it compares like for like with achieved to date.'),t1);
   // weekly delta matrix
   const t2=el('table');
   t2.append(el('thead',null,el('tr',null,el('th',null,'Discipline / task'),...weeks.map(w=>el('th',null,wkLabel(w))),el('th',null,'Total'))));
@@ -5269,12 +5723,13 @@ function exportRevByDiscipline(){
     for(let R=hdrRow+1;R<=rng.e.r;R++)for(let C=moneyFrom;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:R,c:C})];if(c&&typeof c.v==='number')c.z=M;} };
   // summary
   const a1=[['Revenue by discipline — '+ppCtx.proj],['Generated',fmtDate(new Date())],[],
-    ['Discipline / task','Planned revenue','Achieved to date','Delta','% of plan']];
-  let sp=0,sa=0;
-  for(const g of groups){ sp+=g.planT; sa+=g.actT; a1.push([g.task,g.planT,g.actT,g.actT-g.planT,g.planT?g.actT/g.planT:'']); }
-  a1.push(['TOTAL',sp,sa,sa-sp,sp?sa/sp:'']);
+    ['Discipline / task','Planned to date','Achieved to date','Delta','% of plan','Planned, full window']];
+  let sp=0,sa=0,spA=0;
+  for(const g of groups){ sp+=g.planTD; sa+=g.actT; spA+=g.planT;
+    a1.push([g.task,g.planTD,g.actT,g.actT-g.planTD,g.planTD?g.actT/g.planTD:'',g.planT]); }
+  a1.push(['TOTAL',sp,sa,sa-sp,sp?sa/sp:'',spA]);
   const ws1=XLSX.utils.aoa_to_sheet(a1); if(ws1['A1'])ws1['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
-  style(ws1,3,1); ws1['!cols']=[{wch:36},{wch:16},{wch:16},{wch:14},{wch:10}];
+  style(ws1,3,1); ws1['!cols']=[{wch:36},{wch:16},{wch:16},{wch:14},{wch:10},{wch:20}];
   { const rng=XLSX.utils.decode_range(ws1['!ref']); for(let R=4;R<=rng.e.r;R++){ const c=ws1[XLSX.utils.encode_cell({r:R,c:4})]; if(c&&typeof c.v==='number')c.z='0%'; } }
   XLSX.utils.book_append_sheet(wb,ws1,'Summary');
   // weekly sheets
