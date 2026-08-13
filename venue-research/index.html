@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Juniper — Austin Venue Outreach</title>
+<title>Juniper Studio Hub</title>
 <style>
   :root{
     --bg:#faf7f2; --card:#ffffff; --ink:#2f2a26; --muted:#7c7168;
@@ -110,17 +110,118 @@
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
   @media (min-width:560px){ h1{font-size:31px} .card-head{padding:20px} }
+
+  /* ---- Tabs / views ---- */
+  .brandbar{text-align:center;padding:18px 16px 8px}
+  .brandbar .eyebrow{font-size:12px}
+  .brandbar .name{font-family:Georgia,serif;font-size:20px;font-weight:600;margin-top:2px}
+  .tabs{position:sticky;top:0;z-index:30;background:rgba(250,247,242,.94);backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:4px;
+    justify-content:center;padding:7px 8px;overflow-x:auto}
+  .tab{border:none;background:transparent;font:inherit;font-weight:600;font-size:13.5px;color:var(--muted);
+    padding:9px 15px;border-radius:9px;cursor:pointer;white-space:nowrap}
+  .tab.active{background:var(--sage);color:#fff}
+  .view{display:none}
+  .view.active{display:block}
+  .view-head{text-align:center;margin:22px 0 6px}
+  .view-head h1{font-size:25px}
+  .view-head .sub{margin-top:6px}
+
+  /* ---- Forms / panels ---- */
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px;margin-bottom:16px}
+  .panel h3.ph{font-family:Georgia,serif;font-size:16px;font-weight:600;margin:0 0 12px}
+  .field{margin-bottom:12px}
+  .field:last-child{margin-bottom:0}
+  label.fld{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 5px}
+  input[type=text],input[type=date],input[type=email],input[type=number],select.inp,textarea{
+    width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+  input:focus,textarea:focus,select.inp:focus{outline:2px solid #cdd7bf;border-color:var(--sage)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:440px){ .grid2{grid-template-columns:1fr} }
+
+  /* ---- Catalog ---- */
+  .cathead{font-family:Georgia,serif;font-size:15px;font-weight:600;margin:16px 0 2px;color:var(--sage-dark)}
+  .item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+  .item:last-child{border-bottom:none}
+  .item .nm{flex:1 1 auto;font-size:14px;min-width:0}
+  .item .pr{display:flex;align-items:center;gap:2px;color:var(--muted);font-size:14px}
+  .item .pr input{width:66px;padding:6px 6px;font-size:14px;text-align:right}
+  .stepper{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+  .stepper button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#fbf9f5;
+    font-size:17px;line-height:1;cursor:pointer;color:var(--sage-dark);font-weight:700}
+  .stepper button:active{background:#efe8dc}
+  .stepper .qn{width:22px;text-align:center;font-weight:700;font-size:15px}
+  .item.on{background:#fbfaf6}
+  .item.on .nm{font-weight:600}
+
+  /* ---- Totals / payment ---- */
+  .trow{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
+  .trow .lab{color:var(--muted)}
+  .trow.total{font-weight:700;font-size:18px;border-top:1px solid var(--line);margin-top:8px;padding-top:11px;color:var(--ink)}
+  .pay{background:#f6f1e9;border:1px solid var(--line);border-radius:11px;padding:13px;margin-top:14px}
+  .pay .pt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .prow{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;padding:5px 0;gap:10px}
+  .prow .pd{color:var(--muted);font-size:12px}
+  .prow .amt{font-weight:700;font-size:15px;white-space:nowrap}
+  .steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .step{font-size:11.5px;background:#f6f1e9;border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--muted)}
+  .step b{color:var(--sage-dark)}
+
+  .btn{border:1px solid var(--sage);background:var(--sage);color:#fff;font:inherit;font-weight:600;font-size:14px;
+    padding:10px 16px;border-radius:10px;cursor:pointer;transition:background .15s}
+  .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:#fff;color:var(--sage-dark)}
+  .btn.done{background:var(--sage-dark)}
+  .btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .out{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+    line-height:1.55;color:#3d3833;background:#fbf9f5;border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px;overflow-x:auto}
+
+  /* ---- Contract ---- */
+  .disclaim{background:#fbeee9;border:1px solid #e7c9be;color:#8a4b3d;border-radius:12px;padding:12px 14px;font-size:13px;margin-bottom:16px;line-height:1.5}
+  .disclaim b{color:#7a3f32}
+  .contract{font-size:13.5px;line-height:1.62;color:#332e29}
+  .contract h3{font-family:Georgia,serif;font-size:15.5px;margin:18px 0 5px;color:var(--ink)}
+  .contract h3:first-child{margin-top:0}
+  .contract p{margin:7px 0}
+  .contract ol{margin:6px 0 6px 4px;padding-left:20px}
+  .contract li{margin:5px 0}
+  .fillspan{color:var(--sage-dark);font-weight:700;background:#eef2e7;border-radius:4px;padding:0 4px}
+  .clause-e2{background:#f2f6ec;border:1px solid #d5e2c5;border-radius:11px;padding:12px 14px;margin:12px 0}
+  .clause-e2 h3{margin-top:0}
+  .sigrow{display:grid;grid-template-columns:1fr;gap:26px;margin-top:26px}
+  @media (min-width:480px){ .sigrow{grid-template-columns:1fr 1fr;gap:24px} }
+  .sigline{border-top:1.5px solid #b7ab9c;padding-top:5px;font-size:12px;color:var(--muted);margin-top:34px}
+
+  /* ---- Print ---- */
+  @media print{
+    body{background:#fff;padding:0;font-size:12px}
+    .tabs,.brandbar,.no-print,.private-tag{display:none!important}
+    .view{display:none!important}
+    .view.active{display:block!important}
+    .panel{box-shadow:none;border:none;padding:0;margin:0}
+    .disclaim{border:1px solid #ccc;color:#333;background:#f7f7f7}
+    a{color:inherit;text-decoration:none}
+    .view-head{margin-top:0}
+  }
 </style>
 </head>
 <body>
-<header>
+<div class="brandbar">
   <div class="eyebrow">Juniper Floral Studio · Austin</div>
-  <h1>Austin Venue Outreach Board</h1>
-  <p class="sub">Hill Country &amp; Austin wedding venues worth pitching for preferred-vendor placement — screened to exclude in-house florists, sorted by fit. Tap any card for a ready-to-send email.</p>
-  <span class="private-tag">🔒 Private internal tool · not indexed</span>
-</header>
+  <div class="name">Studio Hub</div>
+</div>
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-view="venues">🌿 Venues</button>
+  <button class="tab" data-view="quote">🧾 Quote Builder</button>
+  <button class="tab" data-view="contract">📝 Contract</button>
+</nav>
 
-<div class="wrap">
+<div class="wrap view active" id="view-venues">
+  <div class="view-head">
+    <h1>Austin Venue Outreach Board</h1>
+    <p class="sub">Hill Country &amp; Austin wedding venues worth pitching for preferred-vendor placement — screened to exclude in-house florists, sorted by fit. Tap any card for a ready-to-send email.</p>
+    <span class="private-tag">🔒 Private internal tool · not indexed</span>
+  </div>
   <h2 class="section">At a glance</h2>
   <div class="tablecard">
     <div class="tbl-scroll">
@@ -145,11 +246,114 @@
   <p class="sub" style="text-align:left;margin:0 0 12px;font-size:13.5px">Checked and set aside: each has an in-house or exclusive florist (a dead end), or is otherwise off-limits.</p>
   <div class="tablecard"><ul id="screened" style="list-style:none;margin:0;padding:4px 0"></ul></div>
 
-  <footer>
-    Compiled for Kate Jones · Juniper Floral Studio · Research current as of Aug 2026.<br>
-    Vendor-policy claims link to sources — always re-confirm on a tour before quoting a couple.
-  </footer>
-</div>
+  <p class="sub" style="font-size:12px;margin-top:22px">Research current as of Aug 2026 — vendor-policy claims link to sources; always re-confirm on a tour before quoting a couple.</p>
+</div><!-- /view-venues -->
+
+<div class="wrap view" id="view-quote">
+  <div class="view-head">
+    <h1>Quote Builder</h1>
+    <p class="sub">Build a custom bride quote in minutes — ideally live on the call. Tap to add items, edit any price, and the 50/50 payment schedule fills in automatically.</p>
+  </div>
+
+  <div class="steps no-print" style="justify-content:center">
+    <span class="step"><b>1</b> New bride</span>
+    <span class="step"><b>2</b> Phone call</span>
+    <span class="step"><b>3</b> Listen &amp; add ↓</span>
+    <span class="step"><b>4</b> Custom quote</span>
+    <span class="step"><b>5</b> Review &amp; accept</span>
+    <span class="step"><b>6</b> 50% holds date</span>
+    <span class="step"><b>7</b> 50% two weeks out</span>
+  </div>
+
+  <div class="panel">
+    <h3 class="ph">Wedding details</h3>
+    <div class="grid2">
+      <div class="field"><label class="fld">Couple / bride name(s)</label><input type="text" id="q_names" placeholder="Emma &amp; James"></div>
+      <div class="field"><label class="fld">Client email</label><input type="email" id="q_email" placeholder="bride@email.com"></div>
+      <div class="field"><label class="fld">Wedding date</label><input type="date" id="q_date"></div>
+      <div class="field"><label class="fld">Guest count</label><input type="number" id="q_guests" min="0" placeholder="120"></div>
+    </div>
+    <div class="field"><label class="fld">Venue</label><input type="text" id="q_venue" list="venuelist" placeholder="Start typing…"><datalist id="venuelist"></datalist></div>
+  </div>
+
+  <div class="panel">
+    <h3 class="ph">Floral items <span class="sub" style="font-size:12px;font-weight:400">· tap +/− to add, edit any price</span></h3>
+    <div id="catalog"></div>
+    <div class="cathead">Custom line</div>
+    <div id="customlines"></div>
+    <div class="grid2" style="margin-top:8px">
+      <div class="field"><input type="text" id="c_nm" placeholder="Description (e.g. Chuppah install)"></div>
+      <div class="field" style="display:flex;gap:8px"><input type="number" id="c_pr" placeholder="Price" min="0" step="1"><button class="btn ghost" id="addcustom" style="flex:0 0 auto">Add</button></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 class="ph">Adjustments</h3>
+    <div class="grid2">
+      <div class="field"><label class="fld">Delivery &amp; setup ($)</label><input type="number" id="q_delivery" value="350" min="0" step="1"></div>
+      <div class="field"><label class="fld">Discount ($)</label><input type="number" id="q_discount" value="0" min="0" step="1"></div>
+      <div class="field"><label class="fld">Sales tax (%)</label><input type="number" id="q_tax" value="8.25" min="0" step="0.01"></div>
+      <div class="field"><label class="fld">Deposit to hold date (%)</label><input type="number" id="q_deposit" value="50" min="0" max="100" step="1"></div>
+    </div>
+    <p class="sub" style="text-align:left;font-size:12px;margin-top:2px">Tax applies to goods + delivery, minus discount. Confirm floral/labor taxability with your accountant.</p>
+  </div>
+
+  <div class="panel">
+    <h3 class="ph">Quote summary</h3>
+    <div id="totals"></div>
+    <div class="pay">
+      <div class="pt">Payment schedule</div>
+      <div class="prow"><span>Retainer to reserve date <span class="pd">(due on signing)</span></span><span class="amt" id="pay_deposit">$0.00</span></div>
+      <div class="prow"><span>Balance <span class="pd" id="pay_balance_when">(due 14 days before the wedding)</span></span><span class="amt" id="pay_balance">$0.00</span></div>
+    </div>
+    <div class="btnrow no-print">
+      <button class="btn" id="copyquote">Copy quote</button>
+      <button class="btn ghost" id="printquote">Print / Save PDF</button>
+      <button class="btn ghost" id="tocontract">Use in contract →</button>
+      <button class="btn ghost" id="clearquote">Clear</button>
+    </div>
+    <div class="out" id="quoteout"></div>
+  </div>
+</div><!-- /view-quote -->
+
+<div class="wrap view" id="view-contract">
+  <div class="view-head">
+    <h1>Service Contract</h1>
+    <p class="sub">Wedding floral services agreement, including an E-2 visa contingency clause. Fill the fields (or pull from the current quote), then print or copy.</p>
+  </div>
+
+  <div class="disclaim no-print">
+    <b>⚠️ Draft template — not legal advice.</b> This is a starting point generated for Juniper Floral Studio, not a substitute for a lawyer. Have a licensed <b>Texas attorney</b> review it before use, and have an <b>immigration attorney</b> review the E-2 clause specifically — immigration status and refund/liability terms interact in ways that depend on your exact circumstances.
+  </div>
+
+  <div class="panel no-print">
+    <h3 class="ph">Fill the blanks</h3>
+    <div class="grid2">
+      <div class="field"><label class="fld">Client name(s)</label><input type="text" id="k_client" placeholder="Emma &amp; James"></div>
+      <div class="field"><label class="fld">Event date</label><input type="date" id="k_date"></div>
+      <div class="field"><label class="fld">Venue</label><input type="text" id="k_venue" placeholder="Ma Maison"></div>
+      <div class="field"><label class="fld">Total ($)</label><input type="number" id="k_total" placeholder="0" min="0" step="0.01"></div>
+      <div class="field"><label class="fld">Retainer / deposit ($)</label><input type="number" id="k_deposit" placeholder="0" min="0" step="0.01"></div>
+      <div class="field"><label class="fld">Balance ($)</label><input type="number" id="k_balance" placeholder="0" min="0" step="0.01"></div>
+      <div class="field"><label class="fld">Balance due date</label><input type="date" id="k_baldate"></div>
+      <div class="field"><label class="fld">Agreement date</label><input type="date" id="k_today"></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn ghost" id="pullquote">⤵ Pull from current quote</button>
+      <button class="btn" id="printcontract">Print / Save PDF</button>
+      <button class="btn ghost" id="copycontract">Copy text</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="contract" id="contractdoc"></div>
+  </div>
+</div><!-- /view-contract -->
+
+<footer>
+  Juniper Floral Studio · Kate Jones · Private internal tools — not indexed.<br>
+  Quote &amp; status data saves to this device only (localStorage). The contract is a draft template — obtain legal review before use.
+</footer>
 
 <script>
 /* ============ VENUE DATA ============ */
@@ -540,6 +744,248 @@ function renderScreened(){
 renderSummary();
 renderCards();
 renderScreened();
+
+/* ============ TABS / ROUTING ============ */
+const VIEWS={venues:1,quote:1,contract:1};
+function showView(v){
+  if(!VIEWS[v]) v="venues";
+  document.querySelectorAll(".view").forEach(el=>el.classList.remove("active"));
+  const t=document.getElementById("view-"+v); if(t)t.classList.add("active");
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active", b.dataset.view===v));
+  if(location.hash!=="#"+v){ history.replaceState(null,"","#"+v); }
+  window.scrollTo(0,0);
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.view)));
+window.addEventListener("hashchange",()=>{const h=location.hash.replace("#","");if(VIEWS[h])showView(h);});
+{ const h=location.hash.replace("#",""); if(VIEWS[h]) showView(h); }
+
+/* ============ QUOTE BUILDER ============ */
+const CATALOG=[
+  {group:"Personal flowers", items:[
+    {k:"bridal", nm:"Bridal bouquet", pr:275},
+    {k:"bmaid", nm:"Bridesmaid bouquet", pr:95},
+    {k:"bout", nm:"Boutonnière", pr:22},
+    {k:"corsage", nm:"Corsage (pin / wrist)", pr:35},
+    {k:"crown", nm:"Flower crown", pr:65},
+    {k:"toss", nm:"Toss bouquet", pr:55}
+  ]},
+  {group:"Ceremony", items:[
+    {k:"arch", nm:"Arch / arbor florals", pr:850},
+    {k:"aisle", nm:"Aisle arrangement (each)", pr:75},
+    {k:"altar", nm:"Altar / ground arrangement (each)", pr:185},
+    {k:"petals", nm:"Loose petals (bag)", pr:20}
+  ]},
+  {group:"Reception", items:[
+    {k:"lowcp", nm:"Low centerpiece (each)", pr:110},
+    {k:"tallcp", nm:"Tall centerpiece (each)", pr:225},
+    {k:"garland", nm:"Table garland (per ft)", pr:45},
+    {k:"sweet", nm:"Sweetheart arrangement", pr:175},
+    {k:"cake", nm:"Cake flowers", pr:85},
+    {k:"bar", nm:"Bar / lounge arrangement", pr:135}
+  ]}
+];
+const QKEY="juniper_quote_v1";
+let Q=JSON.parse(localStorage.getItem(QKEY)||"{}");
+Q.qty=Q.qty||{}; Q.price=Q.price||{}; Q.custom=Q.custom||[]; Q.fields=Q.fields||{}; Q.calc=Q.calc||{};
+const FIELD={names:"q_names",email:"q_email",date:"q_date",guests:"q_guests",venue:"q_venue",
+  delivery:"q_delivery",discount:"q_discount",tax:"q_tax",deposit:"q_deposit"};
+const FDEF={delivery:"350",discount:"0",tax:"8.25",deposit:"50"};
+
+function money(n){ n=Math.round((+n||0)*100)/100; return "$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtNum(n){ n=Math.round((+n||0)*100)/100; return n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function round2(n){ return Math.round((+n||0)*100)/100; }
+function num(id){ const e=document.getElementById(id); return parseFloat(e&&e.value)||0; }
+function parseYMD(s){ if(!s)return null; const p=(""+s).split("-"); if(p.length!==3)return null; const d=new Date(+p[0],+p[1]-1,+p[2]); return isNaN(d)?null:d; }
+function fmtDate(d){ return d?d.toLocaleDateString("en-US",{weekday:"short",year:"numeric",month:"short",day:"numeric"}):""; }
+function ymd(d){ if(!d)return ""; const m=("0"+(d.getMonth()+1)).slice(-2), day=("0"+d.getDate()).slice(-2); return d.getFullYear()+"-"+m+"-"+day; }
+function balanceDate(){ const d=parseYMD(document.getElementById("q_date").value); if(!d)return null; const b=new Date(d); b.setDate(b.getDate()-14); return b; }
+
+function renderCatalog(){
+  const c=document.getElementById("catalog"); c.innerHTML="";
+  CATALOG.forEach(g=>{
+    const h=document.createElement("div"); h.className="cathead"; h.textContent=g.group; c.appendChild(h);
+    g.items.forEach(it=>{
+      const q=Q.qty[it.k]||0;
+      const price=(it.k in Q.price)?Q.price[it.k]:it.pr;
+      const row=document.createElement("div"); row.className="item"+(q>0?" on":"");
+      row.innerHTML='<div class="stepper"><button data-a="m">−</button><span class="qn">'+q+'</span><button data-a="p">+</button></div>'+
+        '<div class="nm">'+esc(it.nm)+'</div>'+
+        '<div class="pr">$<input type="number" min="0" step="1" value="'+price+'"></div>';
+      const qn=row.querySelector(".qn");
+      row.querySelector('[data-a="p"]').addEventListener("click",()=>{Q.qty[it.k]=(Q.qty[it.k]||0)+1;qn.textContent=Q.qty[it.k];row.classList.add("on");recalc();});
+      row.querySelector('[data-a="m"]').addEventListener("click",()=>{Q.qty[it.k]=Math.max(0,(Q.qty[it.k]||0)-1);qn.textContent=Q.qty[it.k];row.classList.toggle("on",Q.qty[it.k]>0);recalc();});
+      row.querySelector("input").addEventListener("input",e=>{Q.price[it.k]=parseFloat(e.target.value)||0;recalc();});
+      c.appendChild(row);
+    });
+  });
+}
+function renderCustom(){
+  const c=document.getElementById("customlines"); c.innerHTML="";
+  if(!Q.custom.length){ c.innerHTML='<div class="sub" style="font-size:12.5px;padding:6px 0">No custom lines yet.</div>'; return; }
+  Q.custom.forEach((ln,i)=>{
+    const row=document.createElement("div"); row.className="item on";
+    row.innerHTML='<div class="nm">'+esc(ln.nm)+'</div><div class="pr">$'+fmtNum(ln.pr)+'</div>'+
+      '<button class="stepper" style="border:1px solid var(--line);background:#fbf9f5;width:30px;height:30px;border-radius:8px;cursor:pointer;color:var(--rose)">✕</button>';
+    row.querySelector("button").addEventListener("click",()=>{Q.custom.splice(i,1);renderCustom();recalc();});
+    c.appendChild(row);
+  });
+}
+function recalc(){
+  let lines=[], subtotal=0;
+  CATALOG.forEach(g=>g.items.forEach(it=>{
+    const q=Q.qty[it.k]||0; if(q>0){ const p=(it.k in Q.price)?Q.price[it.k]:it.pr; lines.push({nm:it.nm,q:q,t:q*p}); subtotal+=q*p; }
+  }));
+  Q.custom.forEach(ln=>{ lines.push({nm:ln.nm,q:1,t:ln.pr}); subtotal+=ln.pr; });
+  const delivery=num("q_delivery"), discount=num("q_discount"), taxpct=num("q_tax"), deppct=num("q_deposit");
+  const taxable=Math.max(0, subtotal+delivery-discount);
+  const tax=taxable*taxpct/100;
+  const total=taxable+tax;
+  const deposit=total*deppct/100;
+  const balance=total-deposit;
+  const b=balanceDate(), balStr=fmtDate(b);
+  // totals
+  let th="";
+  lines.forEach(l=>{ th+='<div class="trow"><span class="lab">'+esc(l.q+" × "+l.nm)+'</span><span>'+money(l.t)+'</span></div>'; });
+  if(!lines.length) th+='<div class="trow"><span class="lab">Add items above to build the quote…</span><span></span></div>';
+  th+='<div class="trow"><span class="lab">Subtotal</span><span>'+money(subtotal)+'</span></div>';
+  if(delivery) th+='<div class="trow"><span class="lab">Delivery &amp; setup</span><span>'+money(delivery)+'</span></div>';
+  if(discount) th+='<div class="trow"><span class="lab">Discount</span><span>−'+money(discount)+'</span></div>';
+  if(tax) th+='<div class="trow"><span class="lab">Sales tax ('+taxpct+'%)</span><span>'+money(tax)+'</span></div>';
+  th+='<div class="trow total"><span>Total</span><span>'+money(total)+'</span></div>';
+  document.getElementById("totals").innerHTML=th;
+  document.getElementById("pay_deposit").textContent=money(deposit);
+  document.getElementById("pay_balance").textContent=money(balance);
+  document.getElementById("pay_balance_when").textContent = balStr?("(due "+balStr+", ~2 weeks before)"):"(due ~2 weeks before the wedding)";
+  // persist
+  Object.keys(FIELD).forEach(k=>Q.fields[k]=document.getElementById(FIELD[k]).value);
+  Q.calc={total:total,deposit:deposit,balance:balance,balYMD:ymd(b)};
+  localStorage.setItem(QKEY,JSON.stringify(Q));
+  // client-ready text
+  document.getElementById("quoteout").textContent=buildQuote(lines,subtotal,delivery,discount,taxpct,tax,total,deposit,balance,deppct,balStr);
+}
+function pad(s,n){ s=""+s; return s.length>=n?s:s+" ".repeat(n-s.length); }
+function buildQuote(lines,subtotal,delivery,discount,taxpct,tax,total,deposit,balance,deppct,balStr){
+  const f=Q.fields;
+  const wed=parseYMD(f.date), wedStr=wed?fmtDate(wed):"date TBD";
+  let s="JUNIPER FLORAL STUDIO — WEDDING FLORAL QUOTE\n";
+  s+="Prepared for: "+(f.names||"—")+"\n";
+  s+="Wedding: "+wedStr+(f.venue?"  ·  "+f.venue:"")+(f.guests?"  ·  "+f.guests+" guests":"")+"\n";
+  s+="Quote date: "+fmtDate(new Date())+"   (valid 14 days)\n\nITEMS\n";
+  if(!lines.length) s+="  (add items to build the quote)\n";
+  lines.forEach(l=>{ s+="  "+pad(l.q+" × "+l.nm,34)+money(l.t)+"\n"; });
+  s+="\n"+pad("  Subtotal",36)+money(subtotal)+"\n";
+  if(delivery) s+=pad("  Delivery & setup",36)+money(delivery)+"\n";
+  if(discount) s+=pad("  Discount",36)+"−"+money(discount)+"\n";
+  if(tax) s+=pad("  Sales tax ("+taxpct+"%)",36)+money(tax)+"\n";
+  s+=pad("  TOTAL",36)+money(total)+"\n";
+  s+="\nPAYMENT SCHEDULE\n";
+  s+="  "+deppct+"% retainer to reserve your date (due on signing):  "+money(deposit)+"\n";
+  s+="  Balance"+(balStr?" (due "+balStr+", ~2 weeks before)":" (due ~2 weeks before)")+":  "+money(balance)+"\n";
+  s+="\nWarm thanks,\nKate Jones\nJuniper Floral Studio\nhello@juniperfloralstudio.com · juniperfloralstudio.com\nLookbook: juniperfloralstudio.com/lookbook/view";
+  return s;
+}
+// init fields
+document.getElementById("venuelist").innerHTML=VENUES.map(v=>'<option value="'+esc(v.name)+'">').join("");
+Object.keys(FIELD).forEach(k=>{
+  const el=document.getElementById(FIELD[k]);
+  if(Q.fields[k]!=null && Q.fields[k]!=="") el.value=Q.fields[k];
+  else if(FDEF[k]!=null) el.value=FDEF[k];
+  el.addEventListener("input",recalc);
+});
+document.getElementById("addcustom").addEventListener("click",()=>{
+  const nm=document.getElementById("c_nm").value.trim(), pr=parseFloat(document.getElementById("c_pr").value)||0;
+  if(!nm){ document.getElementById("c_nm").focus(); return; }
+  Q.custom.push({nm:nm,pr:pr}); document.getElementById("c_nm").value=""; document.getElementById("c_pr").value="";
+  renderCustom(); recalc();
+});
+document.getElementById("copyquote").addEventListener("click",e=>copyText(document.getElementById("quoteout").textContent,e.target,"Copy quote"));
+document.getElementById("printquote").addEventListener("click",()=>{ showView("quote"); setTimeout(()=>window.print(),60); });
+document.getElementById("clearquote").addEventListener("click",()=>{
+  if(!confirm("Clear this quote and start a new one?"))return;
+  Q={qty:{},price:{},custom:[],fields:{},calc:{}}; localStorage.setItem(QKEY,JSON.stringify(Q));
+  Object.keys(FIELD).forEach(k=>document.getElementById(FIELD[k]).value=FDEF[k]||"");
+  renderCatalog(); renderCustom(); recalc();
+});
+document.getElementById("tocontract").addEventListener("click",()=>{ pullFromQuote(); showView("contract"); });
+
+/* ============ CONTRACT ============ */
+const KFIELDS=["k_client","k_date","k_venue","k_total","k_deposit","k_balance","k_baldate","k_today"];
+function setv(id,v){ const e=document.getElementById(id); if(e)e.value=(v==null?"":v); }
+function pullFromQuote(){
+  recalc();
+  setv("k_client",Q.fields.names); setv("k_venue",Q.fields.venue); setv("k_date",Q.fields.date);
+  setv("k_total", Q.calc.total?round2(Q.calc.total):"");
+  setv("k_deposit", Q.calc.deposit?round2(Q.calc.deposit):"");
+  setv("k_balance", Q.calc.balance?round2(Q.calc.balance):"");
+  setv("k_baldate", Q.calc.balYMD||"");
+  if(!document.getElementById("k_today").value) setv("k_today", ymd(new Date()));
+  renderContract();
+}
+function fillD(id){ const d=parseYMD(document.getElementById(id).value); const s=d?fmtDate(d):""; return blank(s); }
+function fillT(id){ return blank((document.getElementById(id).value||"").trim()); }
+function fillM(id){ const v=document.getElementById(id).value; return blank(v!==""?("$"+fmtNum(parseFloat(v)||0)):""); }
+function blank(s){ return s?'<span class="fillspan">'+esc(s)+'</span>':'<span class="fillspan">__________</span>'; }
+function plain(id){ const v=(document.getElementById(id).value||"").trim(); return v||"__________"; }
+function renderContract(){
+  const doc=document.getElementById("contractdoc");
+  doc.innerHTML=
+  '<h3>Wedding Floral Services Agreement</h3>'+
+  '<p>This Wedding Floral Services Agreement (the “Agreement”) is entered into as of '+fillD("k_today")+' by and between <b>Juniper Floral Studio</b>, a family-owned floral design studio operating in Austin, Texas, and its principal <b>Kate Jones</b> (together, the “Studio”), and '+fillT("k_client")+' (the “Client”).</p>'+
+  '<h3>1. Event</h3>'+
+  '<p>The Studio will provide wedding floral design and related services for the Client’s event on '+fillD("k_date")+' at '+fillT("k_venue")+' (the “Event”), as described in the floral proposal/quote provided to the Client (the “Proposal”), which is incorporated into this Agreement by reference.</p>'+
+  '<h3>2. Services &amp; Proposal</h3>'+
+  '<p>The Studio will design, prepare, and deliver the floral goods and services set out in the Proposal. Any change to the scope, item counts, or design must be agreed in writing and may adjust the total price. The total contract price is '+fillM("k_total")+'.</p>'+
+  '<h3>3. Payment</h3>'+
+  '<ol>'+
+  '<li>A retainer of '+fillM("k_deposit")+' (the “Retainer”) is due on signing to reserve the Event date. The Studio does not hold or guarantee a date until the Retainer is received.</li>'+
+  '<li>Except as expressly provided in Section 7 (Immigration / E-2 Visa Contingency), the Retainer is non-refundable, as it compensates the Studio for reserving the date and declining other work.</li>'+
+  '<li>The remaining balance of '+fillM("k_balance")+' is due no later than '+fillD("k_baldate")+', which is approximately two (2) weeks before the Event. The Studio is not obligated to perform if the balance is not paid when due.</li>'+
+  '</ol>'+
+  '<h3>4. Cancellation &amp; Rescheduling by Client</h3>'+
+  '<p>If the Client cancels, the Studio retains the Retainer, and any additional payments made for goods and services not yet rendered are refundable less the Studio’s costs and committed expenses. The Client may request to reschedule subject to the Studio’s availability; a new date is not confirmed until the Studio agrees in writing.</p>'+
+  '<h3>5. Substitutions</h3>'+
+  '<p>Flowers are natural, seasonal, and subject to market availability. The Studio may substitute flowers, greenery, or materials of equal or greater value and comparable style when necessary to maintain quality, and such substitutions do not constitute a breach of this Agreement.</p>'+
+  '<h3>6. Force Majeure</h3>'+
+  '<p>The Studio is not liable for failure or delay in performance caused by events beyond its reasonable control, including acts of God, severe weather, illness, government action, venue closure, or other emergencies. Where reasonably possible, the parties will work in good faith to reschedule or adjust services.</p>'+
+  '<div class="clause-e2">'+
+  '<h3>7. Immigration / E-2 Visa Contingency</h3>'+
+  '<p>The Studio operates in the United States under an <b>E-2 Treaty Investor visa</b> held by its principal, Kate Jones. If, before the Event, the Studio’s principal loses the legal right to operate the Studio in the United States due to the expiration, denial, revocation, or non-renewal of E-2 visa status, or any other governmental immigration action that prevents the Studio from lawfully performing (an “Immigration Event”), the following apply:</p>'+
+  '<ol>'+
+  '<li><b>Notice.</b> The Studio will notify the Client in writing as promptly as reasonably practicable after becoming aware of the Immigration Event.</li>'+
+  '<li><b>Client refund.</b> The Studio will refund to the Client all amounts the Client has paid for floral goods and services not yet delivered as of the date of the Immigration Event, <b>including the Retainer to the extent it relates to services not yet rendered</b>. This refund is the Client’s sole and exclusive remedy for an Immigration Event.</li>'+
+  '<li><b>Limitation.</b> Notwithstanding anything to the contrary in this Agreement, the Studio shall not be liable for any incidental, consequential, or replacement-cost damages arising from an Immigration Event — including, without limitation, any difference in price charged by a substitute florist — and the Studio’s total liability shall not exceed the total amounts actually paid by the Client to the Studio.</li>'+
+  '<li><b>Transition help.</b> At the Client’s request and at no additional charge, the Studio will use commercially reasonable efforts to help the Client identify a substitute florist and to share usable design plans, but does not guarantee the availability, pricing, or performance of any substitute vendor.</li>'+
+  '<li><b>Not a breach.</b> An Immigration Event is treated as a form of force majeure and does not constitute a breach of this Agreement by the Studio.</li>'+
+  '</ol></div>'+
+  '<h3>8. Limitation of Liability</h3>'+
+  '<p>To the maximum extent permitted by law, the Studio’s total liability under this Agreement for any cause whatsoever shall not exceed the total amounts paid by the Client to the Studio, and the Studio shall not be liable for indirect, incidental, or consequential damages.</p>'+
+  '<h3>9. Photography &amp; Portfolio</h3>'+
+  '<p>The Studio retains the right to photograph its floral work at the Event and to use those images for portfolio, website, social-media, and marketing purposes. The Studio will not publish the Client’s private contact information.</p>'+
+  '<h3>10. Governing Law</h3>'+
+  '<p>This Agreement is governed by the laws of the State of Texas. Any dispute shall be resolved in the state or federal courts located in Travis County, Texas.</p>'+
+  '<h3>11. Entire Agreement</h3>'+
+  '<p>This Agreement and the Proposal are the entire agreement between the parties and supersede any prior discussions. Any amendment must be in writing and signed by both parties. If any provision is held unenforceable, the remaining provisions remain in effect.</p>'+
+  '<div class="sigrow">'+
+    '<div><div class="sigline">Kate Jones — Juniper Floral Studio</div><div class="sigline">Date</div></div>'+
+    '<div><div class="sigline">'+plain("k_client")+' — Client</div><div class="sigline">Date</div></div>'+
+  '</div>';
+}
+KFIELDS.forEach(id=>{ const e=document.getElementById(id); if(e)e.addEventListener("input",renderContract); });
+if(!document.getElementById("k_today").value) setv("k_today", ymd(new Date()));
+document.getElementById("pullquote").addEventListener("click",pullFromQuote);
+document.getElementById("printcontract").addEventListener("click",()=>{ showView("contract"); setTimeout(()=>window.print(),60); });
+document.getElementById("copycontract").addEventListener("click",e=>copyText(document.getElementById("contractdoc").innerText,e.target,"Copy text"));
+
+/* shared copy helper */
+function copyText(text,btn,label){
+  const done=()=>{ const o=btn.textContent; btn.textContent="Copied ✓"; btn.classList.add("done"); setTimeout(()=>{btn.textContent=label||o;btn.classList.remove("done");},1700); };
+  (navigator.clipboard?navigator.clipboard.writeText(text):Promise.reject()).then(done).catch(()=>{
+    const ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}ta.remove();done();
+  });
+}
+
+// initial render
+renderCatalog(); renderCustom(); recalc(); renderContract();
 </script>
 </body>
 </html>
