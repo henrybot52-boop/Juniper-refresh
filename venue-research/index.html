@@ -246,6 +246,40 @@
   .qline .qn2{color:#4a433d}
   .signhint{font-size:12.5px;color:var(--muted);margin-top:16px;text-align:center;background:#f6f1e9;border:1px dashed var(--line);border-radius:10px;padding:10px}
 
+  /* ---- Org chart ---- */
+  .org-top{display:flex;flex-direction:column;align-items:center}
+  .org-node{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px 18px;text-align:center;max-width:360px;width:100%}
+  .org-node .oi{font-size:25px}
+  .org-node .ot{font-family:Georgia,serif;font-size:17px;font-weight:600;margin-top:3px}
+  .org-node .os{font-size:12px;color:var(--muted);margin-top:2px}
+  .org-node.ceo{border-color:#e4d3a8;background:linear-gradient(#fff,#fdf8ee)}
+  .org-node.cos{border-color:#cdd7bf}
+  .org-connector{width:2px;height:20px;background:linear-gradient(var(--gold),var(--sage))}
+  .org-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);font-weight:700;margin:8px 0 12px;text-align:center}
+  .agent-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:520px){ .agent-grid{grid-template-columns:1fr} }
+  .agent{background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);overflow:hidden}
+  .agent-head{padding:14px;cursor:pointer}
+  .agent .ai{font-size:22px}
+  .agent .arole{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-top:6px}
+  .agent .atitle{font-family:Georgia,serif;font-size:16px;font-weight:600;margin:1px 0 4px}
+  .agent .amand{font-size:13px;color:#4a433d}
+  .agent-expand{font-size:11.5px;color:var(--muted);margin-top:9px;font-weight:600}
+  .agent-body{display:none;padding:0 14px 14px;font-size:13px}
+  .agent.open .agent-body{display:block}
+  .agent.open .agent-expand .caret{transform:rotate(180deg);display:inline-block}
+  .agent-body .lbl{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:12px 0 5px}
+  .agent-body ul{margin:0;padding-left:18px}
+  .agent-body li{margin:3px 0;color:#4a433d}
+  .uses{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+  .uses .u{font-size:11px;background:#f1f5eb;border:1px solid #dbe6cc;color:var(--sage-dark);border-radius:999px;padding:2px 9px}
+  .handsto{margin-top:11px;font-size:12.5px;color:var(--sage-dark)}
+  .pipeline{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center}
+  .pipe{font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;box-shadow:var(--shadow)}
+  .pipe-arrow{color:var(--gold);font-weight:700;font-size:13px}
+  .guardrail{background:#f2f6ec;border:1px solid #d5e2c5;border-radius:12px;padding:14px 16px;font-size:13.5px;color:#3f5a2c;line-height:1.55}
+  .guardrail b{color:var(--sage-dark)}
+
   /* ---- Print ---- */
   @media print{
     body{background:#fff;padding:0;font-size:12px}
@@ -270,6 +304,7 @@
   <button class="tab" data-view="quote">🧾 Quote Builder</button>
   <button class="tab" data-view="contract">📝 Contract</button>
   <button class="tab" data-view="portal">📋 Portal</button>
+  <button class="tab" data-view="org">🏢 Org</button>
 </nav>
 
 <div class="wrap view active" id="view-venues">
@@ -450,6 +485,23 @@
     <div id="proposalList"></div>
   </div>
 </div><!-- /view-portal -->
+
+<div class="wrap view" id="view-org">
+  <div class="view-head">
+    <h1>Juniper, Inc.</h1>
+    <p class="sub">A boutique studio that runs like a full company — a team of AI agents, each with one clear job, all reporting to you. They draft; you approve. You stay the CEO.</p>
+  </div>
+  <div class="panel">
+    <div class="org-top" id="orgTop"></div>
+    <div class="org-label">The departments</div>
+    <div class="agent-grid" id="agentGrid"></div>
+    <p class="sub" style="font-size:12px;margin-top:14px;text-align:center">Tap any department to see what it does, the tools it uses, and who it hands off to.</p>
+  </div>
+  <h2 class="section">How a wedding flows through the company</h2>
+  <div class="panel"><div class="pipeline" id="pipeline"></div></div>
+  <h2 class="section">Who stays in charge</h2>
+  <div class="guardrail" id="guardrail"></div>
+</div><!-- /view-org -->
 
 <div class="overlay" id="proposalOverlay"><div class="sheet" id="proposalSheet"></div></div>
 
@@ -849,7 +901,7 @@ renderCards();
 renderScreened();
 
 /* ============ TABS / ROUTING ============ */
-const VIEWS={venues:1,journey:1,quote:1,contract:1,portal:1};
+const VIEWS={venues:1,journey:1,quote:1,contract:1,portal:1,org:1};
 function showView(v){
   if(!VIEWS[v]) v="venues";
   document.querySelectorAll(".view").forEach(el=>el.classList.remove("active"));
@@ -1245,8 +1297,84 @@ document.getElementById("createPortalBtn").addEventListener("click",async()=>{
 });
 document.querySelector('.tab[data-view="portal"]').addEventListener("click",portalInit);
 
+/* ============ AI ORG CHART ============ */
+const CHIEF = {
+  icon:"🧭", role:"Orchestrator", title:"Chief of Staff",
+  mandate:"Runs the day, routes work to the right agent, and keeps you briefed.",
+  does:["Sends a daily brief: what needs you today","Assigns leads, follow-ups and tasks","Watches deadlines across every wedding","Escalates anything that needs your call"],
+  uses:["Calendar","Every agent's output"], handsTo:"Everyone"
+};
+const AGENTS = [
+  { icon:"🔭", role:"Sales & Outreach", title:"Business Development",
+    mandate:"Fills the pipeline with the right venues and couples.",
+    does:["Researches & screens Austin venues (no in-house florists)","Drafts tailored preferred-vendor pitches","Tracks outreach: Not sent / Sent / Replied","Nudges warm leads and books intro calls"],
+    uses:["Venues board","Outreach emails"], handsTo:"Client Experience" },
+  { icon:"💌", role:"Concierge", title:"Client Experience",
+    mandate:"Makes every couple feel like the only couple.",
+    does:["Replies to inquiries within a day","Schedules the discovery call","Sends the couple portal & mood board","Milestone touches: countdown, day-before note, thank-you"],
+    uses:["Couple portal","Experience journey"], handsTo:"Design Studio" },
+  { icon:"🎨", role:"Creative Lead", title:"Design Studio",
+    mandate:"Turns the vision into a design couples fall for.",
+    does:["Builds a private mood board from the call","Recommends seasonal, venue-tuned blooms","Drafts the itemized floral design","Revises until it feels exactly right"],
+    uses:["Quote Builder","Seasonal bloom guide"], handsTo:"Deal Desk" },
+  { icon:"🧾", role:"Quotes & Contracts", title:"Deal Desk",
+    mandate:"Gets the yes — cleanly and correctly.",
+    does:["Assembles the custom quote","Generates the contract (with cancellation clause)","Creates the couple portal for e-sign","Confirms acceptance & signature"],
+    uses:["Quote Builder","Contract","Portal"], handsTo:"Finance" },
+  { icon:"💳", role:"CFO", title:"Finance",
+    mandate:"Protects the cash and the margins.",
+    does:["Invoices the 50% retainer to hold the date","Reminds & collects the balance two weeks out","Tracks deposits, expenses and per-wedding margin","Flags underpriced quotes before they go out"],
+    uses:["Payment schedule","Portal status"], handsTo:"Operations" },
+  { icon:"🚚", role:"COO · Logistics", title:"Operations",
+    mandate:"Makes the wedding day run like clockwork.",
+    does:["Builds the production & sourcing schedule","Orders flowers to the design + guest count","Plans delivery, setup and strike","Writes the day-of run sheet"],
+    uses:["Design spec","Venue details"], handsTo:"Client Experience (day-of)" },
+  { icon:"📣", role:"CMO · Brand", title:"Marketing",
+    mandate:"Keeps Juniper the name couples remember.",
+    does:["Plans social & seasonal campaigns","Curates the portfolio / lookbook","Requests and showcases reviews","Grows local SEO and referrals"],
+    uses:["Lookbook","Real weddings"], handsTo:"Business Development" },
+  { icon:"🛡️", role:"Risk & Records", title:"Compliance & Admin",
+    mandate:"Keeps the business safe and buttoned-up.",
+    does:["Watches the E-2 visa renewal timeline — reminds you early","Tracks insurance, licenses & vendor agreements","Keeps signed contracts and audit records","Guards client data & privacy"],
+    uses:["Contract records","Signature audit trail"], handsTo:"Chief of Staff" }
+];
+const PIPELINE = [
+  ["🔭","Lead in"],["💌","Discovery call"],["🎨","Design & mood board"],["🧾","Quote & contract"],
+  ["💳","Booked · deposit"],["🚚","Produced & delivered"],["🌸","Delighted & reviewed"]
+];
+function agentBody(a){
+  return '<div class="agent-body">'+
+    '<div class="lbl">What it does</div><ul>'+a.does.map(d=>'<li>'+esc(d)+'</li>').join("")+'</ul>'+
+    '<div class="lbl">Tools it uses</div><div class="uses">'+a.uses.map(u=>'<span class="u">'+esc(u)+'</span>').join("")+'</div>'+
+    '<div class="handsto">→ Hands off to <b>'+esc(a.handsTo)+'</b></div>'+
+  '</div>';
+}
+function renderOrg(){
+  document.getElementById("orgTop").innerHTML=
+    '<div class="org-node ceo"><div class="oi">👑</div><div class="ot">Kate Jones</div><div class="os">Founder &amp; Creative Director — final say on everything</div></div>'+
+    '<div class="org-connector"></div>'+
+    '<div class="org-node cos"><div class="oi">'+CHIEF.icon+'</div><div class="ot">'+esc(CHIEF.title)+'</div><div class="os">'+esc(CHIEF.mandate)+'</div></div>'+
+    '<div class="org-connector"></div>';
+  const grid=document.getElementById("agentGrid");
+  grid.innerHTML=AGENTS.map(a=>
+    '<div class="agent"><div class="agent-head">'+
+      '<div class="ai">'+a.icon+'</div><div class="arole">'+esc(a.role)+'</div>'+
+      '<div class="atitle">'+esc(a.title)+'</div><div class="amand">'+esc(a.mandate)+'</div>'+
+      '<div class="agent-expand">Details <span class="caret">▾</span></div></div>'+
+      agentBody(a)+
+    '</div>').join("");
+  grid.querySelectorAll(".agent").forEach(el=>{
+    el.querySelector(".agent-head").addEventListener("click",()=>el.classList.toggle("open"));
+  });
+  document.getElementById("pipeline").innerHTML=PIPELINE.map((s,i)=>
+    '<span class="pipe">'+s[0]+' '+esc(s[1])+'</span>'+(i<PIPELINE.length-1?'<span class="pipe-arrow">→</span>':'')
+  ).join("");
+  document.getElementById("guardrail").innerHTML=
+    '<b>You stay the CEO.</b> Every agent drafts; you approve. Anything that moves money, signs a contract, touches your E-2 / visa status, or emails a real couple pauses for your yes — nothing goes out on its own. The Chief of Staff keeps the whole company pointed at one goal: couples who feel cared for, and a studio that runs itself.';
+}
+
 // initial render
-renderCatalog(); renderCustom(); recalc(); renderContract(); renderJourney();
+renderCatalog(); renderCustom(); recalc(); renderContract(); renderJourney(); renderOrg();
 if(location.hash.replace("#","")==="portal") portalInit();
 </script>
 </body>
