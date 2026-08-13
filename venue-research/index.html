@@ -186,8 +186,8 @@
   .contract ol{margin:6px 0 6px 4px;padding-left:20px}
   .contract li{margin:5px 0}
   .fillspan{color:var(--sage-dark);font-weight:700;background:#eef2e7;border-radius:4px;padding:0 4px}
-  .clause-e2{background:#f2f6ec;border:1px solid #d5e2c5;border-radius:11px;padding:12px 14px;margin:12px 0}
-  .clause-e2 h3{margin-top:0}
+  .clause-cancel{background:#f2f6ec;border:1px solid #d5e2c5;border-radius:11px;padding:12px 14px;margin:12px 0}
+  .clause-cancel h3{margin-top:0}
   .sigrow{display:grid;grid-template-columns:1fr;gap:26px;margin-top:26px}
   @media (min-width:480px){ .sigrow{grid-template-columns:1fr 1fr;gap:24px} }
   .sigline{border-top:1.5px solid #b7ab9c;padding-top:5px;font-size:12px;color:var(--muted);margin-top:34px}
@@ -319,11 +319,11 @@
 <div class="wrap view" id="view-contract">
   <div class="view-head">
     <h1>Service Contract</h1>
-    <p class="sub">Wedding floral services agreement, including an E-2 visa contingency clause. Fill the fields (or pull from the current quote), then print or copy.</p>
+    <p class="sub">Wedding floral services agreement, including a clause covering what happens if the studio must cancel. Fill the fields (or pull from the current quote), then print or copy.</p>
   </div>
 
   <div class="disclaim no-print">
-    <b>⚠️ Draft template — not legal advice.</b> This is a starting point generated for Juniper Floral Studio, not a substitute for a lawyer. Have a licensed <b>Texas attorney</b> review it before use, and have an <b>immigration attorney</b> review the E-2 clause specifically — immigration status and refund/liability terms interact in ways that depend on your exact circumstances.
+    <b>⚠️ Draft template — not legal advice.</b> This is a starting point generated for Juniper Floral Studio, not a substitute for a lawyer. Have a licensed <b>Texas attorney</b> review it before use — refund, cancellation, and liability terms should be tailored to your exact circumstances before you rely on them.
   </div>
 
   <div class="panel no-print">
@@ -938,7 +938,7 @@ function renderContract(){
   '<h3>3. Payment</h3>'+
   '<ol>'+
   '<li>A retainer of '+fillM("k_deposit")+' (the “Retainer”) is due on signing to reserve the Event date. The Studio does not hold or guarantee a date until the Retainer is received.</li>'+
-  '<li>Except as expressly provided in Section 7 (Immigration / E-2 Visa Contingency), the Retainer is non-refundable, as it compensates the Studio for reserving the date and declining other work.</li>'+
+  '<li>Except as expressly provided in Section 7 (Cancellation by the Studio), the Retainer is non-refundable, as it compensates the Studio for reserving the date and declining other work.</li>'+
   '<li>The remaining balance of '+fillM("k_balance")+' is due no later than '+fillD("k_baldate")+', which is approximately two (2) weeks before the Event. The Studio is not obligated to perform if the balance is not paid when due.</li>'+
   '</ol>'+
   '<h3>4. Cancellation &amp; Rescheduling by Client</h3>'+
@@ -947,15 +947,15 @@ function renderContract(){
   '<p>Flowers are natural, seasonal, and subject to market availability. The Studio may substitute flowers, greenery, or materials of equal or greater value and comparable style when necessary to maintain quality, and such substitutions do not constitute a breach of this Agreement.</p>'+
   '<h3>6. Force Majeure</h3>'+
   '<p>The Studio is not liable for failure or delay in performance caused by events beyond its reasonable control, including acts of God, severe weather, illness, government action, venue closure, or other emergencies. Where reasonably possible, the parties will work in good faith to reschedule or adjust services.</p>'+
-  '<div class="clause-e2">'+
-  '<h3>7. Immigration / E-2 Visa Contingency</h3>'+
-  '<p>The Studio operates in the United States under an <b>E-2 Treaty Investor visa</b> held by its principal, Kate Jones. If, before the Event, the Studio’s principal loses the legal right to operate the Studio in the United States due to the expiration, denial, revocation, or non-renewal of E-2 visa status, or any other governmental immigration action that prevents the Studio from lawfully performing (an “Immigration Event”), the following apply:</p>'+
+  '<div class="clause-cancel">'+
+  '<h3>7. Cancellation by the Studio</h3>'+
+  '<p>If, before the Event, the Studio must cancel or otherwise becomes unable to perform the services under this Agreement for reasons outside the Client’s control (a “Studio Cancellation”), the following apply:</p>'+
   '<ol>'+
-  '<li><b>Notice.</b> The Studio will notify the Client in writing as promptly as reasonably practicable after becoming aware of the Immigration Event.</li>'+
-  '<li><b>Client refund.</b> The Studio will refund to the Client all amounts the Client has paid for floral goods and services not yet delivered as of the date of the Immigration Event, <b>including the Retainer to the extent it relates to services not yet rendered</b>. This refund is the Client’s sole and exclusive remedy for an Immigration Event.</li>'+
-  '<li><b>Limitation.</b> Notwithstanding anything to the contrary in this Agreement, the Studio shall not be liable for any incidental, consequential, or replacement-cost damages arising from an Immigration Event — including, without limitation, any difference in price charged by a substitute florist — and the Studio’s total liability shall not exceed the total amounts actually paid by the Client to the Studio.</li>'+
+  '<li><b>Notice.</b> The Studio will notify the Client in writing as promptly as reasonably practicable after becoming aware that a Studio Cancellation is necessary.</li>'+
+  '<li><b>Client refund.</b> The Studio will refund to the Client all amounts the Client has paid for floral goods and services not yet delivered as of the date of the Studio Cancellation, <b>including the Retainer to the extent it relates to services not yet rendered</b>. This refund is the Client’s sole and exclusive remedy for a Studio Cancellation.</li>'+
+  '<li><b>Limitation.</b> Notwithstanding anything to the contrary in this Agreement, the Studio shall not be liable for any incidental, consequential, or replacement-cost damages arising from a Studio Cancellation — including, without limitation, any difference in price charged by a substitute florist — and the Studio’s total liability shall not exceed the total amounts actually paid by the Client to the Studio.</li>'+
   '<li><b>Transition help.</b> At the Client’s request and at no additional charge, the Studio will use commercially reasonable efforts to help the Client identify a substitute florist and to share usable design plans, but does not guarantee the availability, pricing, or performance of any substitute vendor.</li>'+
-  '<li><b>Not a breach.</b> An Immigration Event is treated as a form of force majeure and does not constitute a breach of this Agreement by the Studio.</li>'+
+  '<li><b>Not a breach.</b> A Studio Cancellation is treated as a form of force majeure and does not constitute a breach of this Agreement by the Studio.</li>'+
   '</ol></div>'+
   '<h3>8. Limitation of Liability</h3>'+
   '<p>To the maximum extent permitted by law, the Studio’s total liability under this Agreement for any cause whatsoever shall not exceed the total amounts paid by the Client to the Studio, and the Studio shall not be liable for indirect, incidental, or consequential damages.</p>'+
