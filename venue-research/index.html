@@ -192,6 +192,47 @@
   @media (min-width:480px){ .sigrow{grid-template-columns:1fr 1fr;gap:24px} }
   .sigline{border-top:1.5px solid #b7ab9c;padding-top:5px;font-size:12px;color:var(--muted);margin-top:34px}
 
+  /* ---- Journey infographic ---- */
+  .jhero{text-align:center;margin:2px 0 16px}
+  .jhero .k{font-family:Georgia,serif;font-style:italic;color:var(--sage-dark);font-size:15px;line-height:1.5}
+  .timeline{position:relative;margin:6px 0}
+  .tl-item{position:relative;display:flex;gap:14px}
+  .tl-rail{flex:0 0 auto;display:flex;flex-direction:column;align-items:center}
+  .tl-node{width:46px;height:46px;border-radius:50%;background:var(--card);border:2px solid var(--sage);
+    display:flex;align-items:center;justify-content:center;font-size:21px;box-shadow:var(--shadow);z-index:2}
+  .tl-line{flex:1 1 auto;width:2px;background:linear-gradient(var(--sage),#d9cbb3);margin:3px 0;min-height:26px}
+  .tl-item:last-child .tl-line{display:none}
+  .tl-body{flex:1 1 auto;min-width:0;padding-bottom:22px}
+  .tl-item:last-child .tl-body{padding-bottom:2px}
+  .tl-step{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--gold);font-weight:700}
+  .tl-title{font-family:Georgia,serif;font-size:17px;font-weight:600;margin:1px 0 3px}
+  .tl-desc{font-size:13.5px;color:#4a433d}
+  .tl-touch{margin-top:8px;font-size:12.5px;color:var(--sage-dark);background:#f1f5eb;border:1px solid #dbe6cc;
+    border-radius:9px;padding:7px 10px;display:flex;gap:7px;align-items:flex-start}
+  .tl-touch b{font-size:12.5px}
+  .exp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+  @media (max-width:440px){ .exp-grid{grid-template-columns:1fr} }
+  .exp{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px;box-shadow:var(--shadow)}
+  .exp .ei{font-size:21px}
+  .exp .et{font-weight:600;font-size:14px;margin:6px 0 3px}
+  .exp .ed{font-size:12.5px;color:var(--muted);line-height:1.5}
+
+  /* ---- Proposal preview overlay ---- */
+  .overlay{position:fixed;inset:0;background:rgba(47,42,38,.55);z-index:60;display:none;padding:18px 12px;overflow:auto}
+  .overlay.on{display:block}
+  .sheet{max-width:620px;margin:0 auto;background:#fffdfa;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.32);overflow:hidden}
+  .sheet-hero{position:relative;background:linear-gradient(135deg,#6f7d5f,#586448);color:#fff;padding:28px 22px;text-align:center}
+  .sheet-hero .eye{font-size:11px;letter-spacing:.18em;text-transform:uppercase;opacity:.85}
+  .sheet-hero h2{font-family:Georgia,serif;font-weight:600;font-size:23px;margin:9px 0 5px;color:#fff}
+  .sheet-hero .dt{font-size:13.5px;opacity:.92}
+  .closex{position:absolute;top:10px;right:12px;background:rgba(255,255,255,.22);color:#fff;border:none;
+    border-radius:50%;width:32px;height:32px;font-size:20px;line-height:1;cursor:pointer}
+  .sheet-body{padding:20px 22px}
+  .sheet-body .welcome{font-family:Georgia,serif;font-style:italic;color:#4a433d;font-size:15px;line-height:1.6;margin:0 0 16px}
+  .qline{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .qline .qn2{color:#4a433d}
+  .signhint{font-size:12.5px;color:var(--muted);margin-top:16px;text-align:center;background:#f6f1e9;border:1px dashed var(--line);border-radius:10px;padding:10px}
+
   /* ---- Print ---- */
   @media print{
     body{background:#fff;padding:0;font-size:12px}
@@ -212,6 +253,7 @@
 </div>
 <nav class="tabs" id="tabs">
   <button class="tab active" data-view="venues">🌿 Venues</button>
+  <button class="tab" data-view="journey">✨ Experience</button>
   <button class="tab" data-view="quote">🧾 Quote Builder</button>
   <button class="tab" data-view="contract">📝 Contract</button>
 </nav>
@@ -308,6 +350,7 @@
     </div>
     <div class="btnrow no-print">
       <button class="btn" id="copyquote">Copy quote</button>
+      <button class="btn ghost" id="previewproposal">👁 Preview couple's view</button>
       <button class="btn ghost" id="printquote">Print / Save PDF</button>
       <button class="btn ghost" id="tocontract">Use in contract →</button>
       <button class="btn ghost" id="clearquote">Clear</button>
@@ -349,6 +392,22 @@
     <div class="contract" id="contractdoc"></div>
   </div>
 </div><!-- /view-contract -->
+
+<div class="wrap view" id="view-journey">
+  <div class="view-head">
+    <h1>The Juniper Experience</h1>
+    <p class="sub">The couple's journey, from first hello to their final bouquet — and the little touches that make it feel special. Share it with couples, or keep it as your service map.</p>
+  </div>
+  <div class="panel">
+    <div class="jhero"><span class="k">&ldquo;From first hello to your final bouquet — you're looked after the whole way.&rdquo;</span></div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+  <h2 class="section">Little touches that make couples feel special</h2>
+  <div class="exp-grid" id="expgrid"></div>
+  <p class="sub" style="font-size:12px;margin-top:16px">Tip: the numbered steps mirror your booking flow — steps 4–6 are exactly what the Quote Builder and Contract tabs handle.</p>
+</div><!-- /view-journey -->
+
+<div class="overlay" id="proposalOverlay"><div class="sheet" id="proposalSheet"></div></div>
 
 <footer>
   Juniper Floral Studio · Kate Jones · Private internal tools — not indexed.<br>
@@ -746,7 +805,7 @@ renderCards();
 renderScreened();
 
 /* ============ TABS / ROUTING ============ */
-const VIEWS={venues:1,quote:1,contract:1};
+const VIEWS={venues:1,journey:1,quote:1,contract:1};
 function showView(v){
   if(!VIEWS[v]) v="venues";
   document.querySelectorAll(".view").forEach(el=>el.classList.remove("active"));
@@ -984,8 +1043,71 @@ function copyText(text,btn,label){
   });
 }
 
+/* ============ EXPERIENCE / JOURNEY ============ */
+const JOURNEY=[
+  {icon:"💌",step:"Step 1",title:"Say hello",desc:"You reach out with your date and venue — and hear back from Kate personally, usually within a day.",touch:"A real, warm reply from a person — never a form letter."},
+  {icon:"🌿",step:"Step 2",title:"A relaxed call",desc:"We hop on a call to dream out loud about your day and the flowers you picture.",touch:"We come prepared, having already looked up your venue."},
+  {icon:"💐",step:"Step 3",title:"We listen",desc:"You share your colors, the blooms you love, and the feeling you want to walk into.",touch:"We turn it into a private mood board made just for you."},
+  {icon:"🧾",step:"Step 4",title:"Your custom quote",desc:"We design a proposal for your day alone — never a cookie-cutter package.",touch:"Every stem chosen for your venue, palette, and season."},
+  {icon:"🔍",step:"Step 5",title:"Review together",desc:"You look it over and we refine the design until it feels exactly right.",touch:"Gentle, unhurried tweaks — zero pressure to decide."},
+  {icon:"📅",step:"Step 6",title:"Reserve your date",desc:"A 50% retainer holds your date and makes it official.",touch:"From here, the flowers are ours to worry about — not yours."},
+  {icon:"🌸",step:"Step 7",title:"Your wedding day",desc:"The balance is due two weeks out; then we deliver, set up, and style everything on the day.",touch:"We hand you your bouquet in person and quietly make it perfect."}
+];
+const TOUCHES=[
+  {i:"💌",t:"Personal welcome",d:"A same-day, human reply and a warm intro call."},
+  {i:"🖼️",t:"Private mood board",d:"A lookbook built around your colors and venue."},
+  {i:"📍",t:"Venue-tuned design",d:"We know Austin venues and design to fit yours."},
+  {i:"🌷",t:"Seasonal bloom guide",d:"What's beautiful and in-season for your date."},
+  {i:"💳",t:"Stress-free 50/50",d:"Half to hold the date, half two weeks out — with friendly reminders."},
+  {i:"🎀",t:"Day-of styling",d:"We set up, style, and hand you your bouquet in person."},
+  {i:"🪷",t:"Keepsake option",d:"Preserve your wedding bouquet as a lasting memento."},
+  {i:"✉️",t:"After the day",d:"A thank-you note — and a nudge for anniversary flowers."}
+];
+function renderJourney(){
+  document.getElementById("timeline").innerHTML=JOURNEY.map(s=>
+    '<div class="tl-item"><div class="tl-rail"><div class="tl-node">'+s.icon+'</div><div class="tl-line"></div></div>'+
+    '<div class="tl-body"><div class="tl-step">'+esc(s.step)+'</div><div class="tl-title">'+esc(s.title)+'</div>'+
+    '<div class="tl-desc">'+esc(s.desc)+'</div><div class="tl-touch"><span>'+esc(s.touch)+'</span></div></div></div>').join("");
+  document.getElementById("expgrid").innerHTML=TOUCHES.map(t=>
+    '<div class="exp"><div class="ei">'+t.i+'</div><div class="et">'+esc(t.t)+'</div><div class="ed">'+esc(t.d)+'</div></div>').join("");
+}
+
+/* ============ COUPLE'S PROPOSAL PREVIEW ============ */
+function renderProposal(){
+  recalc();
+  const f=Q.fields;
+  let lines=[], total=0;
+  CATALOG.forEach(g=>g.items.forEach(it=>{const q=Q.qty[it.k]||0;if(q>0){const p=(it.k in Q.price)?Q.price[it.k]:it.pr;lines.push({nm:it.nm,q:q,t:q*p});total+=q*p;}}));
+  Q.custom.forEach(l=>{lines.push({nm:l.nm,q:1,t:l.pr});total+=l.pr;});
+  const c=Q.calc||{};
+  const wed=parseYMD(f.date), wedStr=wed?fmtDate(wed):"your wedding day";
+  const names=(f.names||"").trim()||"there";
+  const venue=(f.venue||"").trim();
+  const b=balanceDate(), balStr=fmtDate(b);
+  let body='<p class="welcome">Dear '+esc(names)+', we can’t wait to bring flowers to '+esc(wedStr)+(venue?' at '+esc(venue):'')+'. Here’s everything we dreamed up together — chosen just for you. 🤍</p>';
+  if(!lines.length){ body+='<p class="qn2" style="color:var(--muted)">Add items in the Quote Builder to see them here.</p>'; }
+  lines.forEach(l=>{ body+='<div class="qline"><span class="qn2">'+esc(l.q+' × '+l.nm)+'</span><span>'+money(l.t)+'</span></div>'; });
+  body+='<div class="qline" style="font-weight:700;border-bottom:none;font-size:16px;margin-top:6px"><span>Your floral total</span><span>'+money(c.total||0)+'</span></div>';
+  body+='<div class="pay" style="margin-top:16px"><div class="pt">Your payment plan</div>'+
+    '<div class="prow"><span>To reserve your date today (50%)</span><span class="amt">'+money(c.deposit||0)+'</span></div>'+
+    '<div class="prow"><span>Balance '+(balStr?'(due '+esc(balStr)+')':'(two weeks before)')+'</span><span class="amt">'+money(c.balance||0)+'</span></div></div>';
+  body+='<div class="signhint">✨ In your private couple portal, this is where you’ll review, accept &amp; sign — launching soon.</div>';
+  body+='<p style="text-align:center;font-family:Georgia,serif;font-style:italic;color:var(--sage-dark);margin-top:14px">With love, Kate &amp; the Juniper team</p>';
+  document.getElementById("proposalSheet").innerHTML=
+    '<div class="sheet-hero"><button class="closex" id="proposalClose" aria-label="Close">×</button>'+
+      '<div class="eye">Juniper Floral Studio</div><h2>'+esc(names==="there"?"Your Wedding Florals":names)+'</h2>'+
+      '<div class="dt">'+esc(wedStr)+(venue?' · '+esc(venue):'')+'</div></div>'+
+    '<div class="sheet-body">'+body+'</div>';
+  document.getElementById("proposalClose").addEventListener("click",closeProposal);
+}
+function openProposal(){ renderProposal(); document.getElementById("proposalOverlay").classList.add("on"); document.body.style.overflow="hidden"; }
+function closeProposal(){ document.getElementById("proposalOverlay").classList.remove("on"); document.body.style.overflow=""; }
+document.getElementById("previewproposal").addEventListener("click",openProposal);
+document.getElementById("proposalOverlay").addEventListener("click",e=>{ if(e.target.id==="proposalOverlay") closeProposal(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeProposal(); });
+
 // initial render
-renderCatalog(); renderCustom(); recalc(); renderContract();
+renderCatalog(); renderCustom(); recalc(); renderContract(); renderJourney();
 </script>
 </body>
 </html>
