@@ -133,8 +133,21 @@
   .field{margin-bottom:12px}
   .field:last-child{margin-bottom:0}
   label.fld{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 5px}
-  input[type=text],input[type=date],input[type=email],input[type=number],select.inp,textarea{
+  input[type=text],input[type=date],input[type=email],input[type=number],input[type=password],select.inp,textarea{
     width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+  /* Portal dashboard */
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:14px;margin-bottom:10px}
+  .pcard .pn{font-family:Georgia,serif;font-size:16px;font-weight:600}
+  .pcard .pmeta{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .pstatus{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+  .ps-sent{background:#eee3df;color:#8a6a5f}
+  .ps-viewed{background:#f3ead6;color:#8a6a1f}
+  .ps-accepted{background:#e6efe0;color:#43602f}
+  .plink{font-size:12.5px;color:var(--sage-dark);word-break:break-all;background:#fbf9f5;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:10px}
+  .prow-btns{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+  .minibtn{border:1px solid var(--line);background:#fbf9f5;color:var(--sage-dark);font:inherit;font-weight:600;font-size:12.5px;padding:6px 11px;border-radius:8px;cursor:pointer}
+  .minibtn.danger{color:var(--rose)}
+  .banner-ok{background:#eef5e6;border:1px solid #c3d8b3;color:#3f5a2c;border-radius:10px;padding:11px 13px;font-size:13.5px;margin-top:12px}
   input:focus,textarea:focus,select.inp:focus{outline:2px solid #cdd7bf;border-color:var(--sage)}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media (max-width:440px){ .grid2{grid-template-columns:1fr} }
@@ -256,6 +269,7 @@
   <button class="tab" data-view="journey">✨ Experience</button>
   <button class="tab" data-view="quote">🧾 Quote Builder</button>
   <button class="tab" data-view="contract">📝 Contract</button>
+  <button class="tab" data-view="portal">📋 Portal</button>
 </nav>
 
 <div class="wrap view active" id="view-venues">
@@ -406,6 +420,36 @@
   <div class="exp-grid" id="expgrid"></div>
   <p class="sub" style="font-size:12px;margin-top:16px">Tip: the numbered steps mirror your booking flow — steps 4–6 are exactly what the Quote Builder and Contract tabs handle.</p>
 </div><!-- /view-journey -->
+
+<div class="wrap view" id="view-portal">
+  <div class="view-head">
+    <h1>Couple Portal</h1>
+    <p class="sub">Send a couple their private proposal, track who's viewed and signed, and keep every wedding organized in one place.</p>
+  </div>
+
+  <div class="panel" id="portalLogin">
+    <h3 class="ph">Studio sign in</h3>
+    <div class="field"><label class="fld">Password</label><input type="password" id="studioPw" placeholder="••••••••" autocomplete="current-password"></div>
+    <div class="btnrow"><button class="btn" id="studioLoginBtn">Sign in</button></div>
+    <div id="loginMsg"></div>
+    <p class="sub" style="font-size:12px;margin-top:10px">Private studio access. Couples never see this — they only get their own proposal link.</p>
+  </div>
+
+  <div id="portalDash" style="display:none">
+    <div class="panel">
+      <h3 class="ph">New couple portal</h3>
+      <p class="sub" style="text-align:left;font-size:13px;margin-top:0">Creates a private proposal from your <b>current Quote Builder + Contract</b>. Fill those in first, then send the couple their link.</p>
+      <div class="btnrow">
+        <button class="btn" id="createPortalBtn">✨ Create portal from current quote</button>
+        <button class="btn ghost" id="refreshBtn">↻ Refresh</button>
+        <button class="btn ghost" id="logoutBtn">Sign out</button>
+      </div>
+      <div id="createMsg"></div>
+    </div>
+    <h2 class="section">Your couples</h2>
+    <div id="proposalList"></div>
+  </div>
+</div><!-- /view-portal -->
 
 <div class="overlay" id="proposalOverlay"><div class="sheet" id="proposalSheet"></div></div>
 
@@ -805,7 +849,7 @@ renderCards();
 renderScreened();
 
 /* ============ TABS / ROUTING ============ */
-const VIEWS={venues:1,journey:1,quote:1,contract:1};
+const VIEWS={venues:1,journey:1,quote:1,contract:1,portal:1};
 function showView(v){
   if(!VIEWS[v]) v="venues";
   document.querySelectorAll(".view").forEach(el=>el.classList.remove("active"));
@@ -1106,8 +1150,104 @@ document.getElementById("previewproposal").addEventListener("click",openProposal
 document.getElementById("proposalOverlay").addEventListener("click",e=>{ if(e.target.id==="proposalOverlay") closeProposal(); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeProposal(); });
 
+/* ============ STUDIO PORTAL DASHBOARD ============ */
+function getQuoteData(){
+  recalc();
+  let lines=[];
+  CATALOG.forEach(g=>g.items.forEach(it=>{const q=Q.qty[it.k]||0;if(q>0){const p=(it.k in Q.price)?Q.price[it.k]:it.pr;lines.push({nm:it.nm,qty:q,total:q*p});}}));
+  Q.custom.forEach(l=>lines.push({nm:l.nm,qty:1,total:l.pr}));
+  const c=Q.calc||{}, b=balanceDate();
+  return { lines, delivery:num("q_delivery"), discount:num("q_discount"), taxPct:num("q_tax"),
+    depositPct:num("q_deposit"), total:c.total||0, deposit:c.deposit||0, balance:c.balance||0, balanceDate:b?fmtDate(b):"" };
+}
+function coupleData(){
+  const f=Q.fields||{};
+  return { names:(f.names||document.getElementById("k_client").value||"").trim(), email:f.email||"",
+    weddingDate:f.date||"", venue:f.venue||"", guests:f.guests||"" };
+}
+function pStatusLabel(s){ return s==="accepted"?"Signed":(s==="viewed"?"Viewed":"Sent"); }
+function pStatusClass(s){ return s==="accepted"?"ps-accepted":(s==="viewed"?"ps-viewed":"ps-sent"); }
+function errBanner(t){ return '<div class="banner-ok" style="background:#fbeee9;border-color:#e7c9be;color:#8a4b3d">'+esc(t)+'</div>'; }
+
+function setPortalAuthed(authed){
+  document.getElementById("portalLogin").style.display = authed?"none":"block";
+  document.getElementById("portalDash").style.display = authed?"block":"none";
+  if(authed) loadProposals();
+}
+async function portalInit(){
+  try{ const r=await fetch("/api/session"); const d=await r.json(); setPortalAuthed(!!d.authed); }
+  catch(e){ setPortalAuthed(false); }
+}
+function mailtoLink(p){
+  const url=location.origin+"/portal.html?t="+p.token;
+  const subj=encodeURIComponent("Your Juniper Floral proposal 🤍");
+  const body=encodeURIComponent("Hi "+(p.names||"there")+",\n\nHere is your private proposal and agreement — you can review everything and sign right from the link below:\n\n"+url+"\n\nWith love,\nKate\nJuniper Floral Studio");
+  return "mailto:"+p.email+"?subject="+subj+"&body="+body;
+}
+async function loadProposals(){
+  const list=document.getElementById("proposalList");
+  list.innerHTML='<p class="sub" style="font-size:13px">Loading…</p>';
+  try{
+    const r=await fetch("/api/proposals");
+    if(r.status===401){ setPortalAuthed(false); return; }
+    const d=await r.json(); const ps=d.proposals||[];
+    if(!ps.length){ list.innerHTML='<p class="sub" style="font-size:13px">No couples yet — create your first portal above.</p>'; return; }
+    list.innerHTML=ps.map(p=>{
+      const url=location.origin+"/portal.html?t="+p.token;
+      const wed=p.weddingDate?fmtDate(parseYMD(p.weddingDate)):"date TBD";
+      return '<div class="pcard"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">'+
+        '<div><div class="pn">'+esc(p.names||"(no name)")+'</div>'+
+        '<div class="pmeta">'+esc(wed)+(p.venue?" · "+esc(p.venue):"")+" · "+money(p.total)+'</div>'+
+        (p.signedAt?'<div class="pmeta">✍️ Signed by '+esc(p.signedBy||"")+' · '+esc(fmtDate(new Date(p.signedAt)))+'</div>':'')+
+        '</div><span class="pstatus '+pStatusClass(p.status)+'">'+pStatusLabel(p.status)+'</span></div>'+
+        '<div class="plink">'+esc(url)+'</div>'+
+        '<div class="prow-btns">'+
+          '<button class="minibtn" data-copy="'+esc(url)+'">Copy link</button>'+
+          '<a class="minibtn" href="'+esc(url)+'" target="_blank" rel="noopener">Open</a>'+
+          (p.email?'<a class="minibtn" href="'+mailtoLink(p)+'">Email couple</a>':'')+
+          '<button class="minibtn danger" data-del="'+esc(p.token)+'">Delete</button>'+
+        '</div></div>';
+    }).join("");
+    list.querySelectorAll("[data-copy]").forEach(btn=>btn.addEventListener("click",()=>copyText(btn.getAttribute("data-copy"),btn,"Copy link")));
+    list.querySelectorAll("[data-del]").forEach(btn=>btn.addEventListener("click",async()=>{
+      if(!confirm("Delete this couple's portal? Their link will stop working."))return;
+      await fetch("/api/proposal?token="+encodeURIComponent(btn.getAttribute("data-del")),{method:"DELETE"});
+      loadProposals();
+    }));
+  }catch(e){ list.innerHTML='<p class="sub" style="font-size:13px">Could not load — try Refresh.</p>'; }
+}
+document.getElementById("studioLoginBtn").addEventListener("click",async()=>{
+  const pw=document.getElementById("studioPw").value; const msg=document.getElementById("loginMsg"); msg.innerHTML="";
+  try{
+    const r=await fetch("/api/studio-login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({password:pw})});
+    const d=await r.json();
+    if(!r.ok){ msg.innerHTML='<div style="margin-top:10px">'+errBanner(d.error||"Sign in failed.")+'</div>'; return; }
+    document.getElementById("studioPw").value=""; setPortalAuthed(true);
+  }catch(e){ msg.innerHTML='<div style="margin-top:10px">'+errBanner("Network error.")+'</div>'; }
+});
+document.getElementById("studioPw").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("studioLoginBtn").click(); });
+document.getElementById("logoutBtn").addEventListener("click",async()=>{ await fetch("/api/studio-logout",{method:"POST"}); setPortalAuthed(false); });
+document.getElementById("refreshBtn").addEventListener("click",loadProposals);
+document.getElementById("createPortalBtn").addEventListener("click",async()=>{
+  const msg=document.getElementById("createMsg"); msg.innerHTML="";
+  pullFromQuote();
+  const couple=coupleData();
+  if(!couple.names){ msg.innerHTML=errBanner("Add the couple's name in the Quote Builder first."); return; }
+  const payload={ couple, quote:getQuoteData(), contractText:document.getElementById("contractdoc").innerText };
+  const btn=document.getElementById("createPortalBtn"); btn.disabled=true; btn.textContent="Creating…";
+  try{
+    const r=await fetch("/api/proposals",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!r.ok){ msg.innerHTML=errBanner(d.error||"Could not create."); }
+    else{ msg.innerHTML='<div class="banner-ok">✨ Portal created for <b>'+esc(couple.names)+'</b>. Their private link is ready below — copy it or email it to them.</div>'; loadProposals(); }
+  }catch(e){ msg.innerHTML=errBanner("Network error."); }
+  btn.disabled=false; btn.textContent="✨ Create portal from current quote";
+});
+document.querySelector('.tab[data-view="portal"]').addEventListener("click",portalInit);
+
 // initial render
 renderCatalog(); renderCustom(); recalc(); renderContract(); renderJourney();
+if(location.hash.replace("#","")==="portal") portalInit();
 </script>
 </body>
 </html>

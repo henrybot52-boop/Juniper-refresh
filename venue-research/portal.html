@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Your Juniper Proposal</title>
+<style>
+  :root{
+    --bg:#faf7f2; --card:#fffdfa; --ink:#2f2a26; --muted:#7c7168;
+    --line:#e7ded2; --sage:#6f7d5f; --sage-dark:#586448; --gold:#a8894f;
+    --shadow:0 1px 3px rgba(60,50,40,.08),0 10px 30px rgba(60,50,40,.08);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;font-size:16px;padding:16px 12px 48px}
+  .sheet{max-width:620px;margin:0 auto;background:var(--card);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+  .hero{background:linear-gradient(135deg,#6f7d5f,#586448);color:#fff;padding:34px 24px;text-align:center}
+  .hero .eye{font-size:11px;letter-spacing:.2em;text-transform:uppercase;opacity:.85}
+  .hero h1{font-family:Georgia,serif;font-weight:600;font-size:27px;margin:12px 0 6px;line-height:1.2}
+  .hero .dt{font-size:14px;opacity:.92}
+  .hero .count{margin-top:12px;display:inline-block;font-size:12.5px;background:rgba(255,255,255,.16);
+    border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:5px 13px}
+  .body{padding:22px 24px}
+  .welcome{font-family:Georgia,serif;font-style:italic;color:#4a433d;font-size:15.5px;line-height:1.62;margin:0 0 20px}
+  h2.sec{font-family:Georgia,serif;font-size:18px;font-weight:600;margin:22px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  .qline{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14.5px}
+  .qline .n{color:#4a433d}
+  .qline.tot{font-weight:700;font-size:16.5px;border-bottom:none;margin-top:6px}
+  .pay{background:#f6f1e9;border:1px solid var(--line);border-radius:12px;padding:15px;margin-top:14px}
+  .pay .pt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:8px}
+  .prow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;font-size:14.5px}
+  .prow .amt{font-weight:700;white-space:nowrap}
+  details.contract{margin-top:10px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fbf9f5}
+  details.contract summary{cursor:pointer;padding:13px 15px;font-weight:600;font-size:14.5px;color:var(--sage-dark);list-style:none}
+  details.contract summary::-webkit-details-marker{display:none}
+  details.contract summary::after{content:"  ▼";font-size:11px;color:var(--muted)}
+  details.contract[open] summary::after{content:"  ▲"}
+  .ctext{white-space:pre-wrap;font-size:13px;line-height:1.6;color:#3d3833;padding:0 15px 15px;max-height:none}
+  .signbox{margin-top:22px;border:1.5px solid #d5e2c5;background:#f2f6ec;border-radius:14px;padding:18px}
+  .signbox h3{font-family:Georgia,serif;font-size:17px;margin:0 0 4px}
+  .signbox p.sm{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  label.fld{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 5px}
+  input[type=text]{width:100%;font:inherit;font-size:16px;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+  input[type=text]:focus{outline:2px solid #cdd7bf;border-color:var(--sage)}
+  .consent{display:flex;gap:10px;align-items:flex-start;margin:14px 0;font-size:13.5px;color:#4a433d}
+  .consent input{margin-top:3px;width:18px;height:18px;flex:0 0 auto;accent-color:var(--sage)}
+  .btn{width:100%;border:none;background:var(--sage);color:#fff;font:inherit;font-weight:700;font-size:16px;
+    padding:14px;border-radius:12px;cursor:pointer;transition:background .15s}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn:active{transform:translateY(1px)}
+  .msg{font-size:13.5px;margin-top:12px;padding:10px 12px;border-radius:9px}
+  .msg.err{background:#fbeee9;border:1px solid #e7c9be;color:#8a4b3d}
+  .signed{margin-top:22px;border:1.5px solid #c3d8b3;background:#eef5e6;border-radius:14px;padding:20px;text-align:center}
+  .signed .chk{font-size:34px}
+  .signed h3{font-family:Georgia,serif;font-size:19px;margin:8px 0 6px}
+  .signed p{font-size:14px;color:#4a433d;margin:6px 0}
+  .foot{text-align:center;color:var(--muted);font-size:12px;margin:18px 0 0}
+  .foot a{color:var(--sage-dark)}
+  .loading{max-width:620px;margin:60px auto;text-align:center;color:var(--muted)}
+  .fine{font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">Loading your proposal…</div></div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get("t") || params.get("token") || "";
+const app = document.getElementById("app");
+
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function money(n){ n=Math.round((+n||0)*100)/100; return "$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function parseYMD(s){ if(!s)return null; const p=(""+s).split("-"); if(p.length!==3)return null; const d=new Date(+p[0],+p[1]-1,+p[2]); return isNaN(d)?null:d; }
+function fmtDate(d){ return d?d.toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"}):""; }
+function fmtShort(iso){ try{ return new Date(iso).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}); }catch(e){ return iso; } }
+function countdown(d){ if(!d) return ""; const ms=d - new Date(); const days=Math.ceil(ms/864e5); return days>0?days+" days to go 🤍":(days===0?"It's today! 🤍":""); }
+
+function fail(msg){ app.innerHTML='<div class="loading">'+esc(msg)+'</div>'; }
+
+async function load(){
+  if(!TOKEN){ return fail("This link is missing its code. Please check the link your florist sent you."); }
+  let data;
+  try{
+    const r = await fetch("/api/proposal?token="+encodeURIComponent(TOKEN));
+    data = await r.json();
+    if(!r.ok) return fail(data.error || "We couldn't open this proposal.");
+  }catch(e){ return fail("Something went wrong loading your proposal. Please try again."); }
+  render(data.proposal);
+}
+
+function render(p){
+  const q = p.quote || {};
+  const wed = parseYMD(p.weddingDate);
+  const wedStr = wed ? fmtDate(wed) : "your wedding day";
+  const names = (p.names||"").trim() || "there";
+  const lines = (q.lines||[]);
+  let itemsHtml = lines.length
+    ? lines.map(l=>'<div class="qline"><span class="n">'+esc((l.qty||1)+" × "+l.nm)+'</span><span>'+money(l.total)+'</span></div>').join("")
+    : '<div class="qline"><span class="n" style="color:var(--muted)">Your florals will appear here.</span><span></span></div>';
+
+  const balDate = q.balanceDate ? esc(q.balanceDate) : "two weeks before the wedding";
+
+  let signSection;
+  if(p.signature){
+    signSection =
+      '<div class="signed"><div class="chk">✓</div><h3>All signed — thank you!</h3>'+
+      '<p>Signed by <b>'+esc(p.signature.name)+'</b> on '+esc(fmtShort(p.signature.at))+'.</p>'+
+      '<p>We\'ll be in touch shortly about your 50% retainer to lock in your date. We can\'t wait. 🌸</p></div>';
+  } else {
+    signSection =
+      '<div class="signbox"><h3>Reserve your date</h3>'+
+      '<p class="sm">Love it? Type your full name to accept the proposal and agreement above. A 50% retainer (below) reserves your date once you\'ve signed.</p>'+
+      '<label class="fld">Full name</label>'+
+      '<input type="text" id="signName" placeholder="Your full name" autocomplete="name">'+
+      '<label class="consent"><input type="checkbox" id="consent"><span>I\'ve read the proposal and the floral services agreement, and I agree to them. I understand typing my name is my electronic signature.</span></label>'+
+      '<button class="btn" id="signBtn">Accept &amp; sign</button>'+
+      '<div id="signMsg"></div>'+
+      '<p class="fine">By signing you agree to the terms shown above. Your name, the date, and your device details are recorded with your signature.</p></div>';
+  }
+
+  app.innerHTML =
+    '<div class="sheet">'+
+      '<div class="hero"><div class="eye">Juniper Floral Studio</div>'+
+        '<h1>'+esc(names==="there"?"Your Wedding Florals":names)+'</h1>'+
+        '<div class="dt">'+esc(wedStr)+(p.venue?' · '+esc(p.venue):'')+'</div>'+
+        (wed&&countdown(wed)?'<div class="count">'+esc(countdown(wed))+'</div>':'')+
+      '</div>'+
+      '<div class="body">'+
+        '<p class="welcome">Dear '+esc(names)+', we can\'t wait to bring flowers to '+esc(wedStr)+(p.venue?' at '+esc(p.venue):'')+'. Here\'s everything we dreamed up together — chosen just for you. 🤍</p>'+
+        '<h2 class="sec">Your florals</h2>'+
+        itemsHtml+
+        '<div class="qline tot"><span>Floral total</span><span>'+money(q.total)+'</span></div>'+
+        '<div class="pay"><div class="pt">Your payment plan</div>'+
+          '<div class="prow"><span>To reserve your date (50%)</span><span class="amt">'+money(q.deposit)+'</span></div>'+
+          '<div class="prow"><span>Balance (due '+balDate+')</span><span class="amt">'+money(q.balance)+'</span></div>'+
+        '</div>'+
+        '<h2 class="sec">The agreement</h2>'+
+        '<details class="contract"><summary>Read the full floral services agreement</summary>'+
+          '<div class="ctext">'+esc(p.contractText||"Your agreement will appear here.")+'</div></details>'+
+        signSection+
+      '</div>'+
+    '</div>'+
+    '<p class="foot">Juniper Floral Studio · <a href="https://juniperfloralstudio.com">juniperfloralstudio.com</a><br>Questions? Email <a href="mailto:hello@juniperfloralstudio.com">hello@juniperfloralstudio.com</a></p>';
+
+  if(!p.signature){
+    const btn=document.getElementById("signBtn");
+    btn.addEventListener("click", async ()=>{
+      const name=document.getElementById("signName").value.trim();
+      const consent=document.getElementById("consent").checked;
+      const msg=document.getElementById("signMsg");
+      msg.innerHTML="";
+      if(!name){ msg.innerHTML='<div class="msg err">Please type your full name to sign.</div>'; return; }
+      if(!consent){ msg.innerHTML='<div class="msg err">Please tick the box to agree before signing.</div>'; return; }
+      btn.disabled=true; btn.textContent="Signing…";
+      try{
+        const r=await fetch("/api/sign?token="+encodeURIComponent(TOKEN),{
+          method:"POST",headers:{"content-type":"application/json"},
+          body:JSON.stringify({name,consent:true})
+        });
+        const d=await r.json();
+        if(!r.ok){ msg.innerHTML='<div class="msg err">'+esc(d.error||"Sorry, that didn\'t go through. Please try again.")+'</div>'; btn.disabled=false; btn.textContent="Accept & sign"; return; }
+        p.signature={name:d.signature.name,at:d.signature.at};
+        render(p);
+        window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
+      }catch(e){ msg.innerHTML='<div class="msg err">Network error — please try again.</div>'; btn.disabled=false; btn.textContent="Accept & sign"; }
+    });
+  }
+}
+load();
+</script>
+</body>
+</html>
