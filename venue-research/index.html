@@ -1041,19 +1041,6 @@ function buildQuote(lines,subtotal,delivery,discount,taxpct,tax,total,deposit,ba
   s+="\nWarm thanks,\nKate Jones\nJuniper Floral Studio\nhello@juniperfloralstudio.com · juniperfloralstudio.com\nLookbook: juniperfloralstudio.com/lookbook/view";
   return s;
 }
-// prefill via link: ?prefill=<base64url JSON {qty,price,custom,fields}> loads a quote onto this device
-(function(){
-  const pf=new URLSearchParams(location.search).get("prefill");
-  if(!pf) return;
-  try{
-    const raw=atob(pf.replace(/-/g,"+").replace(/_/g,"/"));
-    const data=JSON.parse(decodeURIComponent(escape(raw)));
-    Q={qty:data.qty||{},price:data.price||{},custom:Array.isArray(data.custom)?data.custom:[],fields:data.fields||{},calc:{}};
-    localStorage.setItem(QKEY,JSON.stringify(Q));
-    history.replaceState(null,"",location.pathname+"#quote");
-    showView("quote");
-  }catch(e){ /* bad prefill — ignore and load normally */ }
-})();
 // init fields
 document.getElementById("venuelist").innerHTML=VENUES.map(v=>'<option value="'+esc(v.name)+'">').join("");
 Object.keys(FIELD).forEach(k=>{
@@ -1391,6 +1378,32 @@ function renderOrg(){
 // initial render
 renderCatalog(); renderCustom(); recalc(); renderContract(); renderJourney(); renderOrg();
 if(location.hash.replace("#","")==="portal") portalInit();
+
+/* ---- shared quote links: short ?draft=<token> (server-stored) or inline ?prefill=<base64url> ---- */
+(function(){
+  const sp=new URLSearchParams(location.search);
+  const pf=sp.get("prefill"), dr=sp.get("draft");
+  if(!pf && !dr) return;
+  function apply(data){
+    Q={qty:data.qty||{},price:data.price||{},custom:Array.isArray(data.custom)?data.custom:[],fields:data.fields||{},calc:{}};
+    localStorage.setItem(QKEY,JSON.stringify(Q));
+    Object.keys(FIELD).forEach(k=>{const el=document.getElementById(FIELD[k]);
+      el.value=(Q.fields[k]!=null&&Q.fields[k]!=="")?String(Q.fields[k]):(FDEF[k]||"");});
+    renderCatalog(); renderCustom(); recalc();
+    history.replaceState(null,"",location.pathname+"#quote");
+    showView("quote");
+  }
+  function fail(msg){ history.replaceState(null,"",location.pathname); alert(msg); }
+  if(pf){
+    try{ apply(JSON.parse(decodeURIComponent(escape(atob(pf.replace(/-/g,"+").replace(/_/g,"/")))))); }
+    catch(e){ fail("This quote link looks incomplete — long links sometimes get cut off when shared. Ask for a fresh short link and it'll open right up."); }
+    return;
+  }
+  fetch("/api/draft?token="+encodeURIComponent(dr))
+    .then(r=>r.json().then(d=>({ok:r.ok,d})))
+    .then(({ok,d})=>{ if(!ok||!d.draft){ fail((d&&d.error)||"Couldn't load this quote link."); } else apply(d.draft); })
+    .catch(()=>fail("Couldn't load this quote — check your connection and try again."));
+})();
 </script>
 </body>
 </html>

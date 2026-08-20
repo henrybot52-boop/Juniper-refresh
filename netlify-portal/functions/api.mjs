@@ -189,6 +189,25 @@ export default async (req) => {
       return json({ ok: true, signature: { name: p.signature.name, at: p.signature.at } });
     }
 
+    // ---------- quote drafts: short shareable prefill links ----------
+    if (path === "/api/draft" && method === "POST") {
+      if (!studioAuthed(req)) return json({ error: "Unauthorized" }, 401);
+      const data = await req.json().catch(() => null);
+      if (!data || typeof data !== "object") return json({ error: "Invalid payload" }, 400);
+      const t = newToken();
+      const drafts = getStore("drafts");
+      await drafts.setJSON(t, { data, createdAt: new Date().toISOString() });
+      return json({ ok: true, token: t, url: `${url.origin}/?draft=${t}` });
+    }
+    if (path === "/api/draft" && method === "GET") {
+      const t = url.searchParams.get("token");
+      if (!t) return json({ error: "Missing token" }, 400);
+      const drafts = getStore("drafts");
+      const rec = await drafts.get(t, { type: "json", consistency: "strong" });
+      if (!rec) return json({ error: "This quote link wasn't found — it may have been deleted. Ask for a fresh one." }, 404);
+      return json({ draft: rec.data });
+    }
+
     return json({ error: "Not found" }, 404);
   } catch (e) {
     return json({ error: "Server error", detail: String((e && e.message) || e) }, 500);
