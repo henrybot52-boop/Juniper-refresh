@@ -365,6 +365,7 @@
       <div class="field"><label class="fld">Guest count</label><input type="number" id="q_guests" min="0" placeholder="120"></div>
     </div>
     <div class="field"><label class="fld">Venue</label><input type="text" id="q_venue" list="venuelist" placeholder="Start typing…"><datalist id="venuelist"></datalist></div>
+    <div class="field"><label class="fld">Design notes</label><textarea id="q_notes" rows="3" placeholder="Style, palette, key flowers, special requests…"></textarea></div>
   </div>
 
   <div class="panel">
@@ -942,7 +943,7 @@ const CATALOG=[
 const QKEY="juniper_quote_v1";
 let Q=JSON.parse(localStorage.getItem(QKEY)||"{}");
 Q.qty=Q.qty||{}; Q.price=Q.price||{}; Q.custom=Q.custom||[]; Q.fields=Q.fields||{}; Q.calc=Q.calc||{};
-const FIELD={names:"q_names",email:"q_email",date:"q_date",guests:"q_guests",venue:"q_venue",
+const FIELD={names:"q_names",email:"q_email",date:"q_date",guests:"q_guests",venue:"q_venue",notes:"q_notes",
   delivery:"q_delivery",discount:"q_discount",tax:"q_tax",deposit:"q_deposit"};
 const FDEF={delivery:"350",discount:"0",tax:"8.25",deposit:"50"};
 
@@ -1036,9 +1037,23 @@ function buildQuote(lines,subtotal,delivery,discount,taxpct,tax,total,deposit,ba
   s+="\nPAYMENT SCHEDULE\n";
   s+="  "+deppct+"% retainer to reserve your date (due on signing):  "+money(deposit)+"\n";
   s+="  Balance"+(balStr?" (due "+balStr+", ~2 weeks before)":" (due ~2 weeks before)")+":  "+money(balance)+"\n";
+  if((f.notes||"").trim()) s+="\nDESIGN NOTES\n  "+f.notes.trim().replace(/\n/g,"\n  ")+"\n";
   s+="\nWarm thanks,\nKate Jones\nJuniper Floral Studio\nhello@juniperfloralstudio.com · juniperfloralstudio.com\nLookbook: juniperfloralstudio.com/lookbook/view";
   return s;
 }
+// prefill via link: ?prefill=<base64url JSON {qty,price,custom,fields}> loads a quote onto this device
+(function(){
+  const pf=new URLSearchParams(location.search).get("prefill");
+  if(!pf) return;
+  try{
+    const raw=atob(pf.replace(/-/g,"+").replace(/_/g,"/"));
+    const data=JSON.parse(decodeURIComponent(escape(raw)));
+    Q={qty:data.qty||{},price:data.price||{},custom:Array.isArray(data.custom)?data.custom:[],fields:data.fields||{},calc:{}};
+    localStorage.setItem(QKEY,JSON.stringify(Q));
+    history.replaceState(null,"",location.pathname+"#quote");
+    showView("quote");
+  }catch(e){ /* bad prefill — ignore and load normally */ }
+})();
 // init fields
 document.getElementById("venuelist").innerHTML=VENUES.map(v=>'<option value="'+esc(v.name)+'">').join("");
 Object.keys(FIELD).forEach(k=>{
