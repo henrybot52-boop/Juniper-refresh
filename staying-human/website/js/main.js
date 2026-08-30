@@ -1,5 +1,5 @@
 // Staying Human — small, hand-written script. Reveal-on-scroll only.
-// (Rule 6 of the manifesto: machines can assist; they may not replace the circle.)
+// Machines can assist; they may not replace the circle.
 
 (function () {
   "use strict";
