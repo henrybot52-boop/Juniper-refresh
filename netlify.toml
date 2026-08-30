@@ -1,0 +1,4 @@
+# Netlify config for the Staying Human static site.
+# The site is plain HTML/CSS/JS — no build step needed.
+[build]
+  publish = "staying-human/website"
