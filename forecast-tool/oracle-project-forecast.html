@@ -473,10 +473,11 @@
     <div class="chartbox"><canvas id="chPlan"></canvas></div>
   </div>
   <div class="card">
-    <h2>Cost $ by week — actual vs updated vs original</h2>
+    <h2>Cost &amp; revenue by week — actual vs forecast</h2>
     <div class="row" style="margin-bottom:8px">
-      <label class="hint"><input type="checkbox" id="costCum"> Cumulative (check for the budget burn curve)</label>
-      <span class="hint">Actual = Total Cost charged, straight from the extract · forecast = hours × burdened cost rate, plus cost rows at face value. Rates from the Rate Table tab.</span>
+      <label class="hint"><input type="checkbox" id="costCum"> Cumulative (check for the burn curve)</label>
+      <label class="hint"><input type="checkbox" id="costShowRev" checked> Show revenue</label>
+      <span class="hint">Cost = Total Cost charged / hours × burdened cost rate · Revenue = hours × bill rate, subs &amp; expenses at cost + markup. The gap between the green and red series is your margin.</span>
     </div>
     <div class="chartbox" style="height:320px"><canvas id="chCost"></canvas></div>
     <div class="hint" id="costInfo"></div>
@@ -2118,6 +2119,7 @@ function setupProjectPages(){
   $('#btnApLead').addEventListener('click',showLeadPacks);
   $('#revCum').addEventListener('change',updateRevChart);
   $('#costCum').addEventListener('change',updateCostChart);
+  $('#costShowRev').addEventListener('change',updateCostChart);
   $$('button.modebtn').forEach(b=>b.addEventListener('click',()=>setPpMode(b.dataset.mode)));
   $('#btnApExpand').addEventListener('click',()=>{ if(ppCtx){ apCollapsed[ppCtx.proj]=new Set(); renderActualsPage(); } });
   $('#btnApCollapse').addEventListener('click',()=>{ if(!ppCtx)return; const s=apCollapsedSet(); for(const it of ppCtx.items)s.add(fpTaskOf(it)); renderActualsPage(); });
@@ -3338,29 +3340,37 @@ function updateCostChart(){
     let m=subW.get(v); if(!m){ m=new Map(); subW.set(v,m); }
     m.set(wk,(m.get(wk)||0)+r.totalCost);
   }
-  const A=[],U=[],B=[],SUBS=new Map(); let ca=0,cu=0,cb=0,caTD=0,cbTD=0;
+  const showRev=!!($('#costShowRev')&&$('#costShowRev').checked);
+  const mkup=1+(Number(ppCtx.meta._nlMarkup)||0)/100;
+  const A=[],U=[],B=[],RA=[],RU=[],SUBS=new Map(); let ca=0,cu=0,cb=0,caTD=0,cbTD=0,cra=0,cru=0,craTD=0;
   for(const [v] of subW)SUBS.set(v,[]);
   for(const wk of visWeeks){
-    let a=0,u=0,b=0;
+    let a=0,u=0,b=0,ra=0,ru=0;
     for(const it of ppCtx.items){
+      const nb=!!node.nb[it.label];
       a+=it.costW.get(wk)||0;
       const k=it.label+'|'+wk;
       if(it.isLabor){
-        const rate=costRateOf(it);
-        if(node.current[k]!=null)u+=node.current[k]*rate;
+        const rate=costRateOf(it), bill=nb?0:billRateOf(it);
+        if(node.current[k]!=null){ u+=node.current[k]*rate; ru+=node.current[k]*bill; }
         if(node.baseline[k]!=null)b+=node.baseline[k]*rate;
+        ra+=(it.hoursW.get(wk)||0)*bill;
       } else {
-        if(node.current[k]!=null)u+=node.current[k];
+        const f=nb?0:mkup;
+        if(node.current[k]!=null){ u+=node.current[k]; ru+=node.current[k]*f; }
         if(node.baseline[k]!=null)b+=node.baseline[k];
+        ra+=(it.costW.get(wk)||0)*f;
       }
     }
     let sc=0; for(const m of subW.values())sc+=m.get(wk)||0;
     const past=wk<=ppCtx.lastActualWeek;
-    ca+=a; cu+=u; cb+=b;
-    if(past){ caTD+=a; cbTD+=b; }
+    ca+=a; cu+=u; cb+=b; cra+=ra; cru+=ru;
+    if(past){ caTD+=a; cbTD+=b; craTD+=ra; }
     A.push(past?Math.round(cum?ca:a-sc):null);
     U.push(Math.round(cum?cu:u));
     B.push(node.baselineAt?Math.round(cum?cb:b):null);
+    RA.push(past?Math.round(cum?cra:ra):null);
+    RU.push(Math.round(cum?cru:ru));
     for(const [v,m] of subW)SUBS.get(v).push(past&&!cum?Math.round(m.get(wk)||0):null);
   }
   const labels=visWeeks.map(wkLabel);
@@ -3369,12 +3379,20 @@ function updateCostChart(){
     if(node.baselineAt)ds.push({label:'Original forecast cost',data:B,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',tension:.2,pointRadius:0,borderWidth:2});
     ds.push({label:'Updated forecast cost',data:U,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',borderDash:[6,5],tension:.2,pointRadius:0,borderWidth:2});
     ds.push({label:'Actual cost',data:A,borderColor:'#f87171',backgroundColor:'rgba(248,113,113,.15)',type:'line',tension:.2,pointRadius:0,borderWidth:2.5,fill:true});
+    if(showRev){
+      ds.push({label:'Updated forecast revenue',data:RU,borderColor:'#34d399',backgroundColor:'#34d399',type:'line',borderDash:[6,5],tension:.2,pointRadius:0,borderWidth:2});
+      ds.push({label:'Actual revenue',data:RA,borderColor:'#34d399',backgroundColor:'rgba(52,211,153,.12)',type:'line',tension:.2,pointRadius:0,borderWidth:2.5,fill:true});
+    }
     drawChart('chCost',{type:'line',data:{labels,datasets:ds},options:chartOpts()});
   } else {
     ds.push({label:subW.size?'Actual cost — staff':'Actual cost',data:A,backgroundColor:'#f87171',type:'bar',stack:'act'});
     for(const [v] of subW)ds.push({label:'Actual cost — '+v,type:'bar',stack:'act',backgroundColor:subColorFor(v),data:SUBS.get(v)});
     ds.push({label:'Updated forecast cost',data:U,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',stack:'fc-u',borderDash:[6,5],tension:.2,pointRadius:2});
     if(node.baselineAt)ds.push({label:'Original forecast cost',data:B,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',stack:'fc-b',tension:.2,pointRadius:2});
+    if(showRev){
+      ds.push({label:'Updated forecast revenue',data:RU,borderColor:'#34d399',backgroundColor:'#34d399',type:'line',stack:'fc-r',borderDash:[6,5],tension:.2,pointRadius:2});
+      ds.push({label:'Actual revenue',data:RA,borderColor:'#34d399',backgroundColor:'#34d399',type:'line',stack:'act-r',tension:.2,pointRadius:2});
+    }
     const opts=chartOpts();
     opts.scales.x.stacked=true; opts.scales.y.stacked=true;
     drawChart('chCost',{type:'bar',data:{labels,datasets:ds},options:opts});
@@ -3382,7 +3400,8 @@ function updateCostChart(){
   const inf=$('#costInfo');
   if(inf){
     const varTxt=node.baselineAt?' · actual vs planned to date: '+((caTD-cbTD)>=0?'+':'')+fmtMoney(caTD-cbTD)+((caTD-cbTD)>0.5?' over':''):'';
-    inf.textContent='Actual cost to date '+fmtMoney(caTD)+' · updated forecast total '+fmtMoney(cu)+varTxt;
+    const revTxt=showRev?' · revenue to date '+fmtMoney(craTD)+' · margin to date '+fmtMoney(craTD-caTD)+' ('+(craTD?(100*(craTD-caTD)/craTD).toFixed(0)+'%':'—')+')':'';
+    inf.textContent='Actual cost to date '+fmtMoney(caTD)+' · updated forecast total '+fmtMoney(cu)+varTxt+revTxt;
   }
 }
 function updateRevChart(){

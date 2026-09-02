@@ -95,6 +95,31 @@ function run() {
   check('info reports actual cost to date', /\$6,300/.test(info), info);   // 1000+500+1200 + 1200+1800 + 600
   check('info reports the to-date variance vs baseline', /planned to date/.test(info), info);
 
+  // ---- revenue series on the same chart ----
+  const ra = ds.find(d => d.label === 'Actual revenue');
+  const ru = ds.find(d => d.label === 'Updated forecast revenue');
+  check('revenue series shown by default', !!ra && !!ru, names.join(' | '));
+  // actual revenue = charged hours x bill 200; expenses at cost (markup 0): w1 = 10x200 + 500 = 2500
+  check('week 1 actual revenue = hours x bill + expenses at markup', ra.data[iw(w1)] === 2500, ra.data[iw(w1)]);
+  check('week 2 actual revenue', ra.data[iw(w2)] === 2400, ra.data[iw(w2)]);
+  check('updated forecast revenue = current hrs x bill', ru.data[iw(w3)] === 1600 && ru.data[iw(fut[0])] === 1600,
+    ru.data[iw(w3)] + '/' + ru.data[iw(fut[0])]);
+  check('actual revenue stops at the last actual week', ra.data[iw(fut[0])] === null);
+  check('revenue lines are lines with their own stacks', ra.type === 'line' && ru.type === 'line' &&
+    ra.stack !== 'act' && ru.stack !== ra.stack, ra.stack + '/' + ru.stack);
+  const info0 = g.$('#costInfo').textContent;
+  // rev TD = 2500 + 2400 + (6x200=1200) + subs? sub timesheet rows are labor items: w1 8h, w2 12h with no bill rate -> $0
+  check('info reports revenue and margin to date', /revenue to date \$6,100/.test(info0) && /margin to date -\$200/.test(info0), info0);
+  // toggle revenue off
+  g.$('#costShowRev').checked = false;
+  g.$('#costShowRev').dispatchEvent(new w.Event('change'));
+  const dsOff = w.__charts['chCost'].data.datasets;
+  check('unchecking hides the revenue series', !dsOff.some(d => /revenue/i.test(d.label)),
+    dsOff.map(d => d.label).join(' | '));
+  check('info drops revenue when hidden', !/revenue to date/.test(g.$('#costInfo').textContent));
+  g.$('#costShowRev').checked = true;
+  g.$('#costShowRev').dispatchEvent(new w.Event('change'));
+
   // ---- cumulative mode: the budget burn curve ----
   g.$('#costCum').checked = true;
   g.$('#costCum').dispatchEvent(new w.Event('change'));
@@ -104,6 +129,9 @@ function run() {
   const act2 = cfg2.data.datasets.find(d => d.label === 'Actual cost');
   check('cumulative actual includes subs in one line', !!act2 &&
     !cfg2.data.datasets.some(d => /Acme/.test(d.label)), cfg2.data.datasets.map(d => d.label).join(' | '));
+  const ra2 = cfg2.data.datasets.find(d => d.label === 'Actual revenue');
+  check('cumulative mode carries revenue too', !!ra2 && ra2.data.filter(v => v != null).pop() === 6100,
+    ra2 && ra2.data.filter(v => v != null).pop());
   const lastVal = act2.data.filter(v => v != null).pop();
   check('cumulative actual ends at total cost to date', lastVal === 6300, lastVal);
   check('cumulative actual is monotonic', (() => { let p = -1; for (const v of act2.data) { if (v == null) continue; if (v < p) return false; p = v; } return true; })());
