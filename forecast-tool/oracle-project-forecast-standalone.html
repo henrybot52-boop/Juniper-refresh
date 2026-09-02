@@ -494,6 +494,15 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
     <div class="chartbox"><canvas id="chPlan"></canvas></div>
   </div>
   <div class="card">
+    <h2>Cost $ by week — actual vs updated vs original</h2>
+    <div class="row" style="margin-bottom:8px">
+      <label class="hint"><input type="checkbox" id="costCum"> Cumulative (check for the budget burn curve)</label>
+      <span class="hint">Actual = Total Cost charged, straight from the extract · forecast = hours × burdened cost rate, plus cost rows at face value. Rates from the Rate Table tab.</span>
+    </div>
+    <div class="chartbox" style="height:320px"><canvas id="chCost"></canvas></div>
+    <div class="hint" id="costInfo"></div>
+  </div>
+  <div class="card">
     <h2>Revenue — planned vs actual <span class="hint">cumulative, by week</span></h2>
     <div class="row" style="margin-bottom:8px">
       <label class="hint"><input type="checkbox" id="revCum" checked> Cumulative (uncheck for per-week)</label>
@@ -2129,6 +2138,7 @@ function setupProjectPages(){
   $('#btnApRevDist').addEventListener('click',showRevByDiscipline);
   $('#btnApLead').addEventListener('click',showLeadPacks);
   $('#revCum').addEventListener('change',updateRevChart);
+  $('#costCum').addEventListener('change',updateCostChart);
   $$('button.modebtn').forEach(b=>b.addEventListener('click',()=>setPpMode(b.dataset.mode)));
   $('#btnApExpand').addEventListener('click',()=>{ if(ppCtx){ apCollapsed[ppCtx.proj]=new Set(); renderActualsPage(); } });
   $('#btnApCollapse').addEventListener('click',()=>{ if(!ppCtx)return; const s=apCollapsedSet(); for(const it of ppCtx.items)s.add(fpTaskOf(it)); renderActualsPage(); });
@@ -3329,7 +3339,72 @@ function updatePlanChart(){
   const opts=chartOpts();
   opts.scales.x.stacked=true; opts.scales.y.stacked=true;
   drawChart('chPlan',{type:'bar',data:{labels,datasets:ds},options:opts});
+  updateCostChart();
   updateRevChart();
+}
+// Same picture as the hours chart, in dollars: actual cost charged each week (staff bar plus
+// one stacked bar per subcontractor timesheet vendor), against the updated and original
+// forecast priced at burdened cost rates. Cumulative mode switches to the budget burn curve.
+function updateCostChart(){
+  if(!ppCtx||ppCtx.mode!=='a')return;
+  if(!$('#chCost'))return;
+  const node=ppCtx.node, visWeeks=ppCtx.visWeeks||[];
+  const cum=!!($('#costCum')&&$('#costCum').checked);
+  // subcontractor timesheet cost, per vendor per week
+  const subW=new Map();
+  for(const r of ppCtx.projRows){
+    if(!r._subTS||!r.totalCost)continue;
+    const d=r.transactionDate||r.glDate; if(!d)continue;
+    const wk=wkKey(d), v=r._subVendor||'Subcontractor';
+    let m=subW.get(v); if(!m){ m=new Map(); subW.set(v,m); }
+    m.set(wk,(m.get(wk)||0)+r.totalCost);
+  }
+  const A=[],U=[],B=[],SUBS=new Map(); let ca=0,cu=0,cb=0,caTD=0,cbTD=0;
+  for(const [v] of subW)SUBS.set(v,[]);
+  for(const wk of visWeeks){
+    let a=0,u=0,b=0;
+    for(const it of ppCtx.items){
+      a+=it.costW.get(wk)||0;
+      const k=it.label+'|'+wk;
+      if(it.isLabor){
+        const rate=costRateOf(it);
+        if(node.current[k]!=null)u+=node.current[k]*rate;
+        if(node.baseline[k]!=null)b+=node.baseline[k]*rate;
+      } else {
+        if(node.current[k]!=null)u+=node.current[k];
+        if(node.baseline[k]!=null)b+=node.baseline[k];
+      }
+    }
+    let sc=0; for(const m of subW.values())sc+=m.get(wk)||0;
+    const past=wk<=ppCtx.lastActualWeek;
+    ca+=a; cu+=u; cb+=b;
+    if(past){ caTD+=a; cbTD+=b; }
+    A.push(past?Math.round(cum?ca:a-sc):null);
+    U.push(Math.round(cum?cu:u));
+    B.push(node.baselineAt?Math.round(cum?cb:b):null);
+    for(const [v,m] of subW)SUBS.get(v).push(past&&!cum?Math.round(m.get(wk)||0):null);
+  }
+  const labels=visWeeks.map(wkLabel);
+  const ds=[];
+  if(cum){
+    if(node.baselineAt)ds.push({label:'Original forecast cost',data:B,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',tension:.2,pointRadius:0,borderWidth:2});
+    ds.push({label:'Updated forecast cost',data:U,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',borderDash:[6,5],tension:.2,pointRadius:0,borderWidth:2});
+    ds.push({label:'Actual cost',data:A,borderColor:'#f87171',backgroundColor:'rgba(248,113,113,.15)',type:'line',tension:.2,pointRadius:0,borderWidth:2.5,fill:true});
+    drawChart('chCost',{type:'line',data:{labels,datasets:ds},options:chartOpts()});
+  } else {
+    ds.push({label:subW.size?'Actual cost — staff':'Actual cost',data:A,backgroundColor:'#f87171',type:'bar',stack:'act'});
+    for(const [v] of subW)ds.push({label:'Actual cost — '+v,type:'bar',stack:'act',backgroundColor:subColorFor(v),data:SUBS.get(v)});
+    ds.push({label:'Updated forecast cost',data:U,borderColor:'#fbbf24',backgroundColor:'#fbbf24',type:'line',stack:'fc-u',borderDash:[6,5],tension:.2,pointRadius:2});
+    if(node.baselineAt)ds.push({label:'Original forecast cost',data:B,borderColor:'#a78bfa',backgroundColor:'#a78bfa',type:'line',stack:'fc-b',tension:.2,pointRadius:2});
+    const opts=chartOpts();
+    opts.scales.x.stacked=true; opts.scales.y.stacked=true;
+    drawChart('chCost',{type:'bar',data:{labels,datasets:ds},options:opts});
+  }
+  const inf=$('#costInfo');
+  if(inf){
+    const varTxt=node.baselineAt?' · actual vs planned to date: '+((caTD-cbTD)>=0?'+':'')+fmtMoney(caTD-cbTD)+((caTD-cbTD)>0.5?' over':''):'';
+    inf.textContent='Actual cost to date '+fmtMoney(caTD)+' · updated forecast total '+fmtMoney(cu)+varTxt;
+  }
 }
 function updateRevChart(){
   if(!ppCtx||ppCtx.mode!=='a')return;
