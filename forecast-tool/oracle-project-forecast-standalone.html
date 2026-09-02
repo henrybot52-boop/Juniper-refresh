@@ -712,6 +712,23 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
     <div class="hint" id="bpInfo" style="margin-top:8px"></div>
     <div class="chartbox" style="height:300px;margin-top:10px"><canvas id="chBp"></canvas></div>
   </div>
+  <div class="card" id="rqCard">
+    <h2>Revenue QC <span class="hint">— earned vs invoiced at a date</span></h2>
+    <div class="row">
+      <label>Compare through: <input type="date" id="rqDate"></label>
+      <button id="btnRqXlsx" class="small">Export Excel</button>
+      <span class="hint">Earned = every transaction dated on or before the cut-off, priced by the same rule as the Dashboard and Project Plan.
+        Invoiced = submitted + paid invoices from the log below, by invoice date. The gap is your unbilled WIP — or the amount billed ahead.</span>
+    </div>
+    <div class="kpis" id="rqKpis" style="margin-top:10px"></div>
+    <div class="hint" id="rqVerdict" style="margin:2px 0 8px"></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:420px"><h3 style="margin:6px 0">By month</h3>
+        <div class="tablewrap" style="max-height:300px"><table id="rqMonths"></table></div></div>
+      <div style="flex:1;min-width:420px"><h3 style="margin:6px 0">By task <span class="hint">— where the earned revenue sits</span></h3>
+        <div class="tablewrap" style="max-height:300px"><table id="rqTasks"></table></div></div>
+    </div>
+  </div>
   <div class="card"><div class="tablewrap" style="max-height:520px"><table id="blTable"></table></div><div class="hint" id="blInfo" style="margin-top:8px"></div>
     <datalist id="bpNameList"></datalist></div>
   <div class="card">
@@ -4773,6 +4790,8 @@ function setupBillingTab(){
   });
   $('#btnBpClear').addEventListener('click',()=>{ if(!ppCtx)return;
     if(confirm('Delete every billing period for '+ppCtx.proj+'? Invoices in the log are not touched.')){ ppCtx.meta._blPeriods=[]; saveState(); renderBillingTab(); } });
+  $('#rqDate').addEventListener('change',()=>{ if(!ppCtx)return; ppCtx.meta._rqDate=$('#rqDate').value; saveState(); renderBillingTab(); });
+  $('#btnRqXlsx').addEventListener('click',exportRevQcXlsx);
   spLinkSetup('blSpLink','blSpOpen','billing');
 }
 function renderBillingTab(){
@@ -4806,7 +4825,118 @@ function renderBillingTab(){
   t.append(tb);
   $('#blInfo').textContent=bills.length+' invoice'+(bills.length===1?'':'s')+' · invoiced '+fmtMoney(invoiced)+' · outstanding '+fmtMoney(outstanding);
   renderBpTable();
+  renderRevQc();
   renderCashFlow();
+}
+/* ---- revenue QC: earned revenue vs invoices at a cut-off date ---- */
+function rqCutoff(meta){
+  if(meta._rqDate)return meta._rqDate;
+  let d='';
+  for(const b of (meta._bills||[])) if((b.status==='Submitted'||b.status==='Paid')&&b.date&&b.date>d)d=b.date;
+  if(!d&&ppCtx){ let mx=null; for(const r of ppCtx.projRows){ const x=r.transactionDate||r.glDate; if(x&&(!mx||x>mx))mx=x; } if(mx)d=fmtDate(mx); }
+  return d||fmtDate(new Date());
+}
+function rqBuild(){
+  const meta=ppCtx.meta, cutS=rqCutoff(meta), cut=parseDateVal(cutS);
+  const mo=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const months=new Map(), tasks=new Map();
+  const gm=m=>{ let g=months.get(m); if(!g){ g={earned:0,ex:0,inv:0}; months.set(m,g); } return g; };
+  let earned=0, exBilled=0, undated=0;
+  for(const r of ppCtx.projRows){
+    const d=r.transactionDate||r.glDate;
+    if(!d){ undated++; continue; }
+    if(cut&&d>cut)continue;
+    const rv=rowRevenue(r);
+    earned+=rv; gm(mo(d)).earned+=rv;
+    const tk=((r.taskNumber||'')+' '+(r.taskName||'')).trim()||'(no task)';
+    let t=tasks.get(tk); if(!t){ t={task:tk,earned:0,ex:0}; tasks.set(tk,t); }
+    t.earned+=rv;
+    if(state.mapping.billedStatus&&isBilled(r.billedStatus)){ exBilled+=rv; gm(mo(d)).ex+=rv; t.ex+=rv; }
+  }
+  let inv=0, invDraft=0, invUndated=0;
+  for(const b of (meta._bills||[])){
+    const amt=+b.amount||0; if(!amt)continue;
+    if(b.status!=='Submitted'&&b.status!=='Paid'){ invDraft+=amt; continue; }
+    const bd=parseDateVal(b.date);
+    if(!bd){ inv+=amt; invUndated+=amt; continue; }       // a real invoice — counted, but flagged
+    if(cut&&bd>cut)continue;
+    inv+=amt; gm(mo(bd)).inv+=amt;
+  }
+  return {cutS,earned,exBilled,inv,invDraft,invUndated,undated,
+    months:[...months.entries()].sort((a,b)=>a[0].localeCompare(b[0])),
+    tasks:[...tasks.values()].sort((a,b)=>taskCompare(a.task,b.task)),
+    hasBilledCol:!!state.mapping.billedStatus};
+}
+function renderRevQc(){
+  if(!$('#rqCard')||!ppCtx)return;
+  const q=rqBuild();
+  $('#rqDate').value=q.cutS;
+  const k=$('#rqKpis'); k.innerHTML='';
+  const kpi=(l,v,sub,col)=>{const e2=el('div',{class:'kpi'},el('div',{class:'lbl'},l),el('div',{class:'val'},v),sub?el('div',{class:'sub'},sub):null);if(col)e2.querySelector('.val').style.color=col;k.append(e2);};
+  const gap=q.earned-q.inv;
+  kpi('Earned through '+q.cutS.slice(5),fmtMoney(q.earned),'priced like the Dashboard');
+  kpi('Invoiced',fmtMoney(q.inv),q.earned?(100*q.inv/q.earned).toFixed(1)+'% of earned':'');
+  kpi(gap>=0?'Unbilled WIP':'Billed ahead of earned',fmtMoney(Math.abs(gap)),'earned − invoiced',Math.abs(gap)>0.005*Math.max(q.earned,1)?'var(--warn)':'var(--good)');
+  if(q.hasBilledCol)kpi('Billed per extract',fmtMoney(q.exBilled),'revenue value of rows the extract marks billed — a cross-check on the invoice log');
+  const pct=q.earned?100*Math.abs(gap)/q.earned:0;
+  const bits=[];
+  bits.push(pct<=2? '✓ Earned revenue reconciles with invoicing within '+pct.toFixed(1)+'% at this date.'
+    : '⚠ '+fmtMoney(Math.abs(gap))+' ('+pct.toFixed(1)+'%) '+(gap>0?'earned but not invoiced':'invoiced above earned')+' at this date — check the months below to see where it opened up.');
+  if(q.invDraft>0.5)bits.push(fmtMoney(q.invDraft)+' of draft invoices excluded.');
+  if(q.invUndated>0.5)bits.push('⚠ '+fmtMoney(q.invUndated)+' of invoices have no invoice date — counted regardless of the cut-off; add dates for an accurate comparison.');
+  if(q.undated)bits.push(q.undated+' undated transaction(s) excluded.');
+  $('#rqVerdict').textContent=bits.join('  ');
+  // by month, cumulative so the divergence point is obvious
+  const tm=$('#rqMonths'); tm.innerHTML='';
+  tm.append(el('thead',null,el('tr',null,...['Month','Earned','Invoiced','Cum. earned','Cum. invoiced','Cum. gap'].map((h,i)=>el('th',{class:i?'num':''},h)))));
+  const tbm=el('tbody'); let ce=0,ci=0;
+  for(const [m,g] of q.months){
+    ce+=g.earned; ci+=g.inv; const cg=ce-ci;
+    tbm.append(el('tr',null,el('td',null,m),el('td',{class:'num'},g.earned?fmtMoney(g.earned):''),
+      el('td',{class:'num'},g.inv?fmtMoney(g.inv):''),el('td',{class:'num'},fmtMoney(ce)),el('td',{class:'num'},fmtMoney(ci)),
+      el('td',{class:'num'+(Math.abs(cg)>0.5?(cg>0?' neg':' pos'):'')},fmtMoney(cg))));
+  }
+  if(!q.months.length)tbm.append(el('tr',null,el('td',{colspan:6,class:'hint',style:'padding:10px'},'No transactions or invoices on or before this date.')));
+  tm.append(tbm);
+  // by task
+  const tt=$('#rqTasks'); tt.innerHTML='';
+  const heads=q.hasBilledCol?['Task','Earned','Billed per extract','Unbilled']:['Task','Earned'];
+  tt.append(el('thead',null,el('tr',null,...heads.map((h,i)=>el('th',{class:i?'num':''},h)))));
+  const tbt=el('tbody');
+  for(const t of q.tasks){
+    if(Math.abs(t.earned)<0.5&&Math.abs(t.ex)<0.5)continue;
+    const cells=[el('td',null,t.task),el('td',{class:'num'},fmtMoney(t.earned))];
+    if(q.hasBilledCol){ const u=t.earned-t.ex;
+      cells.push(el('td',{class:'num'},fmtMoney(t.ex)),el('td',{class:'num'+(u>0.5?' neg':'')},fmtMoney(u))); }
+    tbt.append(el('tr',null,...cells));
+  }
+  tt.append(tbt);
+}
+function exportRevQcXlsx(){
+  if(!ppCtx){alert('Open a project first.');return;} if(typeof XLSX==='undefined'){alert('Excel library not loaded.');return;}
+  const q=rqBuild(); const BRAND='1F4E79',M='"$"#,##0';
+  const HDR={font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:BRAND}},alignment:{vertical:'center'}};
+  const aoa=[['Revenue QC — '+ppCtx.proj],['Compared through',q.cutS],['Generated',fmtDate(new Date())],[],
+    ['Earned revenue',Math.round(q.earned)],['Invoiced (submitted + paid)',Math.round(q.inv)],
+    ['Gap (earned − invoiced)',Math.round(q.earned-q.inv)]];
+  if(q.hasBilledCol)aoa.push(['Billed per extract',Math.round(q.exBilled)]);
+  if(q.invDraft>0.5)aoa.push(['Draft invoices (excluded)',Math.round(q.invDraft)]);
+  aoa.push([],['Month','Earned','Invoiced','Cum. earned','Cum. invoiced','Cum. gap']);
+  const hdr2=aoa.length-1; let ce=0,ci=0;
+  for(const [m,g] of q.months){ ce+=g.earned; ci+=g.inv;
+    aoa.push([m,Math.round(g.earned),Math.round(g.inv),Math.round(ce),Math.round(ci),Math.round(ce-ci)]); }
+  aoa.push([],q.hasBilledCol?['Task','Earned','Billed per extract','Unbilled']:['Task','Earned']);
+  const hdr3=aoa.length-1;
+  for(const t of q.tasks){ if(Math.abs(t.earned)<0.5&&Math.abs(t.ex)<0.5)continue;
+    aoa.push(q.hasBilledCol?[t.task,Math.round(t.earned),Math.round(t.ex),Math.round(t.earned-t.ex)]:[t.task,Math.round(t.earned)]); }
+  const ws=XLSX.utils.aoa_to_sheet(aoa); if(ws['A1'])ws['A1'].s={font:{bold:true,sz:16,color:{rgb:BRAND}}};
+  const rng=XLSX.utils.decode_range(ws['!ref']);
+  for(const hr of [hdr2,hdr3])for(let C=0;C<=rng.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:hr,c:C})];if(c)c.s=HDR;}
+  for(let R=4;R<=rng.e.r;R++)for(let C=1;C<=5;C++){const c=ws[XLSX.utils.encode_cell({r:R,c:C})];if(c&&typeof c.v==='number')c.z=M;}
+  ws['!cols']=[{wch:34},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Revenue QC');
+  const out=XLSX.write(wb,{type:'array',bookType:'xlsx'}); const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:'revenue-qc-'+ppCtx.proj+'-'+q.cutS+'.xlsx'}); document.body.append(a); a.click(); a.remove();
 }
 /* ---- billing periods: the accounting calendar, theoretical vs actual ---- */
 const BP_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
