@@ -2232,11 +2232,14 @@ function ppBuild(mode){
   for(const r of projRows){
     const label=ppItemLabel(r,level);
     let it=items.get(label);
-    if(!it){ it={label,emp:hasEmp?(r.employee||'(blank)'):null,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[]}; items.set(label,it); }
+    if(!it){ it={label,emp:hasEmp?(r.employee||'(blank)'):null,hoursW:new Map(),costW:new Map(),revW:new Map(),hours:0,cost:0,rows:[]}; items.set(label,it); }
     const d=r.transactionDate||r.glDate;
     if(d){ const wk=wkKey(d);
       it.hoursW.set(wk,(it.hoursW.get(wk)||0)+(r.hours||0));
       it.costW.set(wk,(it.costW.get(wk)||0)+(r.totalCost||0));
+      // actual revenue is priced ONCE, per transaction, by the same rule the Dashboard uses
+      // (rowRevenue) — so the plan tab, its charts and the lead packs can never disagree with it
+      it.revW.set(wk,(it.revW.get(wk)||0)+rowRevenue(r));
     } else undated++;
     it.hours+=r.hours||0; it.cost+=r.totalCost||0; it.sal=(it.sal||0)+(r.salaries||0); it.rows.push(r);
     if(!(r.hours||r.salaries)) it.nlCost=(it.nlCost||0)+(r.totalCost||0); // expense/subs charges inside a labor row
@@ -2246,14 +2249,14 @@ function ppBuild(mode){
   node.manual=node.manual||[];
   for(const m of node.manual){
     if(items.has(m.label)){ items.get(m.label)._manual=true; continue; }
-    items.set(m.label,{label:m.label,emp:m.emp||null,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[],isLabor:m.isLabor!==false,_manual:true});
+    items.set(m.label,{label:m.label,emp:m.emp||null,hoursW:new Map(),costW:new Map(),revW:new Map(),hours:0,cost:0,rows:[],isLabor:m.isLabor!==false,_manual:true});
   }
   // rows that exist only in saved plan/baseline keys
   for(const store of [node.current,node.baseline]){
     for(const k of Object.keys(store)){
       const label=k.slice(0,k.lastIndexOf('|'));
       if(!label||items.has(label))continue;
-      items.set(label,{label,emp:hasEmp?label.split(' · ').pop():null,hoursW:new Map(),costW:new Map(),hours:0,cost:0,rows:[],isLabor:true,_manual:true});
+      items.set(label,{label,emp:hasEmp?label.split(' · ').pop():null,hoursW:new Map(),costW:new Map(),revW:new Map(),hours:0,cost:0,rows:[],isLabor:true,_manual:true});
     }
   }
   const itemList=[...items.values()];
@@ -3044,10 +3047,9 @@ function updatePlanTotals(){
         const k=it.label+'|'+wk;
         if(it.isLabor){ const bill=nb?0:billRateOf(it);
           if(node.baseline[k]!=null)p+=node.baseline[k]*bill;
-          a+=(it.hoursW.get(wk)||0)*bill;
         } else { const f=nb?0:mkup;
-          if(node.baseline[k]!=null)p+=node.baseline[k]*f;
-          a+=(it.costW.get(wk)||0)*f; }
+          if(node.baseline[k]!=null)p+=node.baseline[k]*f; }
+        a+=nb?0:(it.revW.get(wk)||0);
       }
       const past=wk<=ppCtx.lastActualWeek;
       sp+=p; if(past)sa+=a;
@@ -3375,13 +3377,12 @@ function updateCostChart(){
         const rate=costRateOf(it), bill=nb?0:billRateOf(it);
         if(node.current[k]!=null){ u+=node.current[k]*rate; ru+=node.current[k]*bill; }
         if(node.baseline[k]!=null)b+=node.baseline[k]*rate;
-        ra+=(it.hoursW.get(wk)||0)*bill;
       } else {
         const f=nb?0:mkup;
         if(node.current[k]!=null){ u+=node.current[k]; ru+=node.current[k]*f; }
         if(node.baseline[k]!=null)b+=node.baseline[k];
-        ra+=(it.costW.get(wk)||0)*f;
       }
+      ra+=nb?0:(it.revW.get(wk)||0);         // actuals priced by rowRevenue — same rule as the Dashboard
     }
     let sc=0; for(const m of subW.values())sc+=m.get(wk)||0;
     const past=wk<=ppCtx.lastActualWeek;
@@ -3443,13 +3444,12 @@ function updateRevChart(){
         if(!bill&&!nb&&!seenNoBill.has(it.label)){ seenNoBill.add(it.label); missing++; }
         if(node.baseline[k]!=null)p+=node.baseline[k]*bill;
         if(node.current[k]!=null)u+=node.current[k]*bill;
-        a+=(it.hoursW.get(wk)||0)*bill;
       } else {
         const f=nb?0:mkup;
         if(node.baseline[k]!=null)p+=node.baseline[k]*f;
         if(node.current[k]!=null)u+=node.current[k]*f;
-        a+=(it.costW.get(wk)||0)*f;
       }
+      a+=nb?0:(it.revW.get(wk)||0);          // actuals priced by rowRevenue — same rule as the Dashboard
     }
     cp+=p; cu+=u; ca+=a;
     const past = wk<=ppCtx.lastActualWeek;
@@ -3467,8 +3467,13 @@ function updateRevChart(){
   drawChart('chRev',{type:cum?'line':'bar',data:{labels,datasets:ds},options:chartOpts()});
   const inf=$('#revInfo');
   if(inf){
+    // whole-project actual revenue (every dated week), so window clipping is visible, not silent
+    let caAll=0;
+    for(const it of ppCtx.items){ if(node.nb[it.label])continue; for(const v of it.revW.values())caAll+=v; }
+    const clip=Math.abs(caAll-ca)>0.5;
     const varTxt = node.baselineAt? ' · actual vs planned to date: '+((ca-cp)>=0?'+':'')+fmtMoney(ca-cp) : '';
-    inf.textContent='Actual revenue to date '+fmtMoney(ca)+' · forecast at completion '+fmtMoney(cu)+varTxt
+    inf.textContent='Actual revenue to date '+fmtMoney(ca)+(clip?' in the visible window (all weeks: '+fmtMoney(caAll)+' — matches the Dashboard; weeks before the plan start sit in the Earlier column — set the plan start earlier on the Project Forecast tab to chart them)':'')
+      +' · forecast at completion '+fmtMoney(cu)+varTxt
       +(missing? ' · ⚠ '+missing+' labor row(s) have no bill rate (counted as $0) — set them on the Rate Table tab':'');
   }
 }
@@ -5367,6 +5372,7 @@ function leadPacks(){
     weeks.forEach((wk,i)=>{
       const k=it.label+'|'+wk;
       const bp=node.baseline[k], cp=node.current[k], past=pastIdx[i];
+      const arv=(past&&!nb)?(it.revW.get(wk)||0):0;   // actual revenue by the Dashboard's rule
       if(it.isLabor){
         const ah=it.hoursW.get(wk)||0;
         if(bp!=null){
@@ -5375,18 +5381,17 @@ function leadPacks(){
           if(past){ P.planHTD+=bp; P.planRevTD+=bp*bill; T.planHTD+=bp; T.planRevTD+=bp*bill; L.planHTD+=bp; L.planRevTD+=bp*bill; }
         }
         if(past&&ah){
-          P.actH[i]=ah; P.actHTD+=ah; P.actRevTD+=ah*bill;
-          T.actHTD+=ah; T.actRevTD+=ah*bill; T.act[i]+=ah*bill;
-          L.actHTD+=ah; L.actRevTD+=ah*bill; L.wkActRev[i]+=ah*bill; L.wkActH[i]+=ah;
+          P.actH[i]=ah; P.actHTD+=ah;
+          T.actHTD+=ah;
+          L.actHTD+=ah; L.wkActH[i]+=ah;
         }
         if(!past&&cp!=null){ P.fcH[i]=cp; P.toGoH+=cp; P.toGoRev+=cp*bill; L.wkFcH[i]+=cp; L.toGoH+=cp; L.toGoRev+=cp*bill; T.toGoRev+=cp*bill; }
       } else {
-        const ac=it.costW.get(wk)||0;
         if(bp!=null){ L.planRevAll+=bp*fct; T.planRevAll+=bp*fct; T.plan[i]+=bp*fct; L.wkPlanRev[i]+=bp*fct;
           if(past){ P.planRevTD+=bp*fct; T.planRevTD+=bp*fct; L.planRevTD+=bp*fct; } }
-        if(past&&ac){ P.actRevTD+=ac*fct; T.actRevTD+=ac*fct; T.act[i]+=ac*fct; L.actRevTD+=ac*fct; L.wkActRev[i]+=ac*fct; }
         if(!past&&cp!=null){ P.toGoRev+=cp*fct; L.toGoRev+=cp*fct; T.toGoRev+=cp*fct; }
       }
+      if(arv){ P.actRevTD+=arv; T.actRevTD+=arv; T.act[i]+=arv; L.actRevTD+=arv; L.wkActRev[i]+=arv; }
     });
     if(P.planHAll||P.actHTD||P.planRevTD||P.actRevTD||P.toGoH||P.toGoRev)L.people.push(P);
   }
@@ -5789,11 +5794,10 @@ function revByDiscipline(){
       const past=wk<=ppCtx.lastActualWeek;
       if(it.isLabor){ const bill=nb?0:billRateOf(it);
         if(node.baseline[k]!=null){ g.plan[i]+=node.baseline[k]*bill; g.planT+=node.baseline[k]*bill; if(past)g.planTD+=node.baseline[k]*bill; }
-        if(past){ const a=(it.hoursW.get(wk)||0)*bill; g.act[i]+=a; g.actT+=a; }
       } else { const fct=nb?0:mkup;
         if(node.baseline[k]!=null){ g.plan[i]+=node.baseline[k]*fct; g.planT+=node.baseline[k]*fct; if(past)g.planTD+=node.baseline[k]*fct; }
-        if(past){ const a=(it.costW.get(wk)||0)*fct; g.act[i]+=a; g.actT+=a; }
       }
+      if(past&&!nb){ const a=it.revW.get(wk)||0; g.act[i]+=a; g.actT+=a; }
     });
   }
   return {weeks,groups:[...map.values()].sort((a,b)=>taskCompare(a.task,b.task))};
