@@ -1223,6 +1223,7 @@ function pStatusLabel(s){ return s==="accepted"?"Signed":(s==="viewed"?"Viewed":
 function pStatusClass(s){ return s==="accepted"?"ps-accepted":(s==="viewed"?"ps-viewed":"ps-sent"); }
 function errBanner(t){ return '<div class="banner-ok" style="background:#fbeee9;border-color:#e7c9be;color:#8a4b3d">'+esc(t)+'</div>'; }
 
+let lastCreated=null; // pins a just-created portal to the list while the server listing catches up
 function setPortalAuthed(authed){
   document.getElementById("portalLogin").style.display = authed?"none":"block";
   document.getElementById("portalDash").style.display = authed?"block":"none";
@@ -1245,6 +1246,7 @@ async function loadProposals(){
     const r=await fetch("/api/proposals");
     if(r.status===401){ setPortalAuthed(false); return; }
     const d=await r.json(); const ps=d.proposals||[];
+    if(lastCreated && !ps.some(x=>x.token===lastCreated.token)) ps.unshift(lastCreated);
     if(!ps.length){ list.innerHTML='<p class="sub" style="font-size:13px">No couples yet — create your first portal above.</p>'; return; }
     list.innerHTML=ps.map(p=>{
       const url=location.origin+"/portal.html?t="+p.token;
@@ -1293,7 +1295,18 @@ document.getElementById("createPortalBtn").addEventListener("click",async()=>{
     const r=await fetch("/api/proposals",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
     const d=await r.json();
     if(!r.ok){ msg.innerHTML=errBanner(d.error||"Could not create."); }
-    else{ msg.innerHTML='<div class="banner-ok">✨ Portal created for <b>'+esc(couple.names)+'</b>. Their private link is ready below — copy it or email it to them.</div>'; loadProposals(); }
+    else{
+      const q=payload.quote||{};
+      lastCreated={ token:d.token, names:couple.names, email:couple.email, weddingDate:couple.weddingDate,
+        venue:couple.venue, total:q.total||0, status:"sent", createdAt:new Date().toISOString(), signedAt:null, signedBy:null };
+      msg.innerHTML='<div class="banner-ok">✨ Portal created for <b>'+esc(couple.names)+'</b> — here\'s their private link:'+
+        '<div class="plink">'+esc(d.url)+'</div>'+
+        '<div class="prow-btns"><button class="minibtn" data-copy="'+esc(d.url)+'">Copy link</button>'+
+        '<a class="minibtn" href="'+esc(d.url)+'" target="_blank" rel="noopener">Open</a></div></div>';
+      const cb=msg.querySelector("[data-copy]");
+      if(cb) cb.addEventListener("click",()=>copyText(cb.getAttribute("data-copy"),cb,"Copy link"));
+      loadProposals();
+    }
   }catch(e){ msg.innerHTML=errBanner("Network error."); }
   btn.disabled=false; btn.textContent="✨ Create portal from current quote";
 });

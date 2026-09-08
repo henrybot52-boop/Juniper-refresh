@@ -87,7 +87,7 @@ export default async (req) => {
       const out = [];
       for (const bl of blobs) {
         const p = await s.get(bl.key, { type: "json", consistency: "strong" });
-        if (!p) continue;
+        if (!p || !p.token) continue; // skip non-proposal junk records
         out.push({
           token: p.token,
           names: p.couple?.names || "",
