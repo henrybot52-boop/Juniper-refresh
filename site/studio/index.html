@@ -211,6 +211,28 @@ let carPick=[];   // ids in the order they were tapped — carousel order matter
 // Items acted on stay visible until the filter changes or Refresh is pressed.
 let STICKY=new Set();
 
+// Grid cells are ~400px wide; the originals are the 300-500KB files Instagram
+// publishing needs. Netlify's image CDN serves a right-sized webp instead —
+// only for gallery paths, so blob-served uploads (/p/…) keep their real URL.
+function thumb(u,w){
+  try{
+    const p=new URL(u,location.origin);
+    if(p.origin===location.origin && p.pathname.startsWith('/images/'))
+      return '/.netlify/images?url='+encodeURIComponent(p.pathname)+'&w='+w+'&fm=webp&q=75';
+  }catch(_){}
+  return u;
+}
+
+// Recompute the header counts and filter chips from local state, so a tap
+// doesn't need a full server round-trip just to refresh two numbers.
+function recount(){
+  const c={posted:0,approved:0,pending:0,skipped:0};
+  for(const i of ITEMS) c[i.status]=(c[i.status]||0)+1;
+  document.getElementById('counts').textContent=
+    `${c.posted||0} posted · ${c.approved||0} approved · ${c.pending||0} to review · ${c.skipped||0} skipped`;
+  renderFilters(c);
+}
+
 const api=(method,body)=>fetch(API,{method,
   headers:{'x-studio-key':KEY,'content-type':'application/json'},
   body:body?JSON.stringify(body):undefined}).then(async r=>{
@@ -236,7 +258,7 @@ async function load(){
     const b=document.getElementById('statusBanner');
     b.className='banner'+(d.postingEnabled?' live':'');
     b.innerHTML=d.postingEnabled
-      ? '<b>Posting is live.</b> One approved post goes out each morning at 9am (catch-up cadence — back to Tue/Fri after the first couple of weeks).'
+      ? '<b>Posting is live.</b> One approved post goes out Tuesday and Friday mornings at 9am.'
       : '<b>Posting is paused.</b> Nothing will publish on schedule until <code>IG_POSTING_ENABLED</code> is set to <code>true</code> in Netlify. You can still approve here, and “Post now” still works.';
     // Pinterest is optional — the panel only appears once a token is set
     // (and say so at the top, because the per-card panel is easy to miss)
@@ -307,9 +329,10 @@ function render(){
   list.forEach(item=>{
     const card=document.createElement('div');
     card.className='card'+(item.status==='skipped'?' is-skipped':'');
+    card.dataset.id=item.id;
 
     const img=document.createElement('img');
-    img.src=item.image; img.loading='lazy'; img.alt=item.wedding;
+    img.src=thumb(item.image,560); img.loading='lazy'; img.alt=item.wedding;
     card.appendChild(img);
 
     const body=document.createElement('div'); body.className='body';
@@ -439,8 +462,9 @@ function render(){
           }
           // Keep the card visible in the "To pin" queue so the green
           // "Pinned to N boards" state is seen, rather than the card vanishing.
+          PINNED[item.id]=[...new Set([...(PINNED[item.id]||[]),...boardIds])];
           STICKY.add(item.id);
-          await load();
+          recount(); render();
         };
         box.appendChild(pBtn);
         body.appendChild(box);
@@ -464,9 +488,9 @@ function render(){
         if(ta.value!==item.caption){ await api('POST',{action:'update',id:item.id,caption:ta.value}); item.caption=ta.value; }
         const res=await api('POST',{action:'update',id:item.id,status:next});
         if(res && res.error){ alert('Could not save: '+res.error); ok.disabled=false; return; }
-        item.status=next; STICKY.add(item.id); await load();
+        item.status=next; STICKY.add(item.id); recount(); render();
         // the card is still on screen — say plainly what happened
-        const card2=[...document.querySelectorAll('#grid .card')].find(c=>c.querySelector('img') && c.querySelector('img').src===item.image);
+        const card2=[...document.querySelectorAll('#grid .card')].find(c=>c.dataset.id===item.id);
         const n2=card2 && card2.querySelector('.saved');
         if(n2){ n2.textContent = next==='approved' ? 'Approved — it will post on the next slot' : 'Moved back to review'; }
       };
@@ -478,7 +502,7 @@ function render(){
         const next=item.status==='skipped'?'pending':'skipped';
         const res=await api('POST',{action:'update',id:item.id,status:next});
         if(res && res.error){ alert('Could not save: '+res.error); skip.disabled=false; return; }
-        STICKY.add(item.id); await load(); };
+        item.status=next; STICKY.add(item.id); recount(); render(); };
       actions.appendChild(skip);
 
       const now=document.createElement('button');
@@ -518,8 +542,8 @@ document.getElementById('approveAll').onclick=async()=>{
   if(!confirm(`Approve ${ids.length} post${ids.length===1?'':'s'}?`))return;
   const res=await api('POST',{action:'bulk',ids,status:'approved'});
   if(res && res.error){ alert('Could not save: '+res.error); return; }
-  ids.forEach(i=>STICKY.add(i));
-  await load();
+  ids.forEach(id=>{ const it=ITEMS.find(x=>x.id===id); if(it) it.status='approved'; STICKY.add(id); });
+  recount(); render();
 };
 
 // ---- photo upload: resize + re-encode as JPEG in the browser ----
@@ -686,7 +710,7 @@ function renderCarousels(){
     const f=document.createElement('figure');
     const pos=carPick.indexOf(it.id);
     if(pos>-1) f.className='on';
-    const im=document.createElement('img'); im.src=it.image; im.loading='lazy'; im.alt='';
+    const im=document.createElement('img'); im.src=thumb(it.image,320); im.loading='lazy'; im.alt='';
     f.appendChild(im);
     if(pos>-1){ const b=document.createElement('span'); b.className='num'; b.textContent=pos+1; f.appendChild(b); }
     f.onclick=()=>{
@@ -716,7 +740,7 @@ function renderCarousels(){
     head.innerHTML='<span class="pill '+c.status+'">'+c.status+'</span><span><b>'+c.wedding+'</b></span><span>'+c.images.length+' photos</span>';
     card.appendChild(head);
     const strip=document.createElement('div'); strip.className='car-strip'; strip.style.margin='10px 0';
-    for(const u of c.images){ const im=document.createElement('img'); im.src=u; im.loading='lazy'; im.alt=''; strip.appendChild(im); }
+    for(const u of c.images){ const im=document.createElement('img'); im.src=thumb(u,320); im.loading='lazy'; im.alt=''; strip.appendChild(im); }
     card.appendChild(strip);
     const ta=document.createElement('textarea'); ta.value=c.caption; ta.disabled=c.status==='posted';
     card.appendChild(ta);

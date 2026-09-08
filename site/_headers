@@ -20,3 +20,8 @@
 
 /lookbook/pages/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Wedding photos never change once published — let browsers keep them for a
+# month instead of re-checking every one on each visit.
+/images/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=604800
